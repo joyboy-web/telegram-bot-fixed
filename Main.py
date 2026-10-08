@@ -30,19 +30,13 @@ Hello {name},
 
 *Connecting buyers and sellers, bridging the gap with trust. Building confidence one transaction at a time.*
 
-PayLock protects your money until you get what you paid for. No more scams, no more stories.
+PayLock protects your money until you get what you paid for.
 
 *Why PayLock?*
-• 🔒 Bank-grade escrow protection
-• 🤝 Verified buyers & sellers
-• ⚡ Instant release after delivery
-• 🇳🇬 100% Naira (₦) transactions
-
-*How it works:*
-1. Buyer funds escrow
-2. Seller ships item
-3. Buyer confirms delivery
-4. Funds released securely
+- 🔒 Bank-grade escrow protection
+- 🤝 Verified buyers & sellers
+- ⚡ Instant release after delivery
+- 🇳🇬 100% Naira (₦) transactions
 
 Tap Home to enter your secure dashboard 👇
 """
@@ -60,15 +54,27 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if query.data == "sell":
-        await query.message.reply_text("🏪 Sell: Open Home Dashboard and tap + New to list your item for escrow.")
+        await query.message.reply_text("🏪 Sell: Open Home Dashboard → Sell tab → Add your first product.")
     elif query.data == "buy":
-        await query.message.reply_text("🛍️ Buy: All verified deals are inside your Home Dashboard.")
+        await query.message.reply_text("🛍️ Buy: Open Home Dashboard → Buy tab to see marketplace.")
     elif query.data == "wallet":
-        await query.message.reply_text("👛 Wallet: Your protected balance is ₦3,850.00 - Open Home for full breakdown.")
+        await query.message.reply_text("👛 Wallet: Balance ₦0.00 — Fund your wallet inside Home Dashboard.")
+
+async def error_handler(update, context):
+    print(f"Bot error: {context.error}")
+
+# This runs BEFORE polling and kills the ghost bot causing Conflict
+async def post_init(application):
+    await application.bot.delete_webhook(drop_pending_updates=True)
+    print("Webhook cleared — ready for polling")
 
 if __name__ == "__main__":
     Thread(target=run_flask, daemon=True).start()
-    tg_app = ApplicationBuilder().token(BOT_TOKEN).build()
+    print("Starting Flask + Telegram Bot...")
+
+    tg_app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
     tg_app.add_handler(CommandHandler("start", start))
     tg_app.add_handler(CallbackQueryHandler(button_handler))
-    tg_app.run_polling()
+    tg_app.add_error_handler(error_handler)
+    
+    tg_app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
