@@ -7,36 +7,51 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif}
-body{background:#f6f6f6;color:#111;padding-bottom:90px}
-.header{padding:20px 20px 10px;display:flex;align-items:center;gap:12px}
-.logo{width:44px;height:44px;border:2px solid #111;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px}
+body{background:#f5f5f7;color:#111;padding-bottom:110px}
+.header{padding:22px 20px 10px;display:flex;align-items:center;gap:12px}
+.logo{width:46px;height:46px;border:1.8px solid #111;border-radius:13px;display:flex;align-items:center;justify-content:center;background:transparent}
+.logo svg{width:22px;height:22px}
 .brand{font-size:32px;font-weight:900;letter-spacing:-1px}
-.greet{padding:0 20px}
-.greet h2{font-size:22px;font-weight:700}
-.greet p{color:#666;font-size:13px;margin-top:2px}
-.card{background:#fff;margin:16px;border-radius:20px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,0.05)}
+.greet{padding:2px 20px}
+.greet h2{font-size:22px;font-weight:700;text-transform:capitalize}
+.greet p{color:#777;font-size:13px;margin-top:3px}
+.card{background:#fff;margin:16px;border-radius:22px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #eee}
 .card-top{display:flex;justify-content:space-between;align-items:center}
-.card-top span{color:#777;font-size:13px}
-.card h1{font-size:36px;margin:8px 0;font-weight:900}
-.card small{display:flex;align-items:center;gap:6px;color:#444;font-size:13px}
-.btn-new{border:1px solid #ddd;background:#fff;padding:8px 16px;border-radius:20px;font-weight:600;cursor:pointer}
-.section{padding:0 20px;margin-top:10px}
-.section h3{font-size:18px;font-weight:800;margin-bottom:12px}
-.empty{background:#fff;border-radius:20px;padding:30px;text-align:center;color:#777}
-.empty b{color:#111;display:block;margin-bottom:8px}
-.nav{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#e9e9e9;border-radius:30px;display:flex;gap:6px;padding:6px;box-shadow:0 4px 20px rgba(0,0,0,0.15)}
-.nav button{border:0;background:transparent;padding:10px 22px;border-radius:24px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:600;cursor:pointer;color:#666}
+.card-top span{color:#888;font-size:13px}
+.card h1{font-size:38px;margin:8px 0;font-weight:900}
+.card small{display:flex;align-items:center;gap:6px;color:#666;font-size:13px}
+.btn-new{border:1px solid #e0e0e0;background:#fff;padding:8px 18px;border-radius:22px;font-weight:700;cursor:pointer;font-size:13px}
+.section{padding:0 20px;margin-top:12px}
+.section h3{font-size:19px;font-weight:800;margin-bottom:12px}
+.empty{background:#fff;border-radius:22px;padding:28px 20px;text-align:center;color:#888;border:1px solid #eee}
+.empty b{color:#111;display:block;margin-bottom:8px;font-size:15px}
+.view{display:none}.view.active{display:block}
+.input{width:100%;padding:14px 16px;border:1px solid #e5e5e5;border-radius:12px;margin:8px 0;font-size:15px;background:#fafafa}
+.btn-primary{width:100%;background:#111;color:#fff;border:0;padding:14px;border-radius:14px;font-weight:700;font-size:15px;margin-top:10px;cursor:pointer}
+.nav{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(232,232,232,0.92);backdrop-filter:blur(12px);border-radius:34px;display:flex;gap:4px;padding:6px;box-shadow:0 8px 30px rgba(0,0,0,0.18);border:1px solid rgba(0,0,0,0.06)}
+.nav button{border:0;background:transparent;padding:10px 24px;border-radius:28px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:600;cursor:pointer;color:#777;min-width:72px}
+.nav button svg{width:20px;height:20px;stroke-width:1.6}
 .nav button.active{background:#111;color:#fff}
-.view{display:none}
-.view.active{display:block}
-.input{width:100%;padding:14px;border:1px solid #ddd;border-radius:12px;margin:10px 0;font-size:15px}
-.btn-primary{width:100%;background:#111;color:#fff;border:0;padding:14px;border-radius:12px;font-weight:700;font-size:15px;margin-top:10px;cursor:pointer}
+.nav button.active svg{stroke:#fff}
+#termsOverlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(5px);z-index:999;display:none;align-items:flex-end;justify-content:center;padding:12px}
+#termsBox{background:#fff;border-radius:24px 24px 20px 20px;width:100%;max-width:480px;max-height:90vh;overflow:auto;padding:22px;animation:slideUp .3s ease}
+@keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
+#termsBox h2{font-size:18px;font-weight:900;margin-bottom:4px}
+#termsBox .sub{font-size:12px;color:#888;margin-bottom:14px}
+.terms-content{font-size:13px;line-height:1.6;color:#333;background:#f9f9f9;border-radius:12px;padding:14px;border:1px solid #eee;height:280px;overflow:auto}
+.terms-content b{color:#111}
+.agreeRow{display:flex;gap:10px;align-items:flex-start;margin:14px 0;font-size:13px;background:#fff;border:1.5px solid #111;border-radius:12px;padding:12px}
+.agreeRow input{margin-top:3px;width:18px;height:18px}
+.btn-agree{width:100%;background:#111;color:#fff;border:0;padding:15px;border-radius:14px;font-weight:800;font-size:15px;opacity:0.35;pointer-events:none;transition:.2s}
+.btn-agree.enabled{opacity:1;pointer-events:auto}
 </style>
 </head>
 <body>
 
 <div class="header">
-<div class="logo">🔒</div>
+<div class="logo">
+<svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1.5" fill="#111"/></svg>
+</div>
 <div class="brand">PayLock</div>
 </div>
 
@@ -45,14 +60,12 @@ body{background:#f6f6f6;color:#111;padding-bottom:90px}
 <p>Secure • Held • Protected</p>
 </div>
 
-<!-- HOME VIEW -->
 <div id="view-home" class="view active">
 <div class="card">
 <div class="card-top"><span>Funds in Escrow</span><button class="btn-new" onclick="switchView('sell')">+ New</button></div>
 <h1>₦0.00</h1>
 <small>🔒 Protected until release</small>
 </div>
-
 <div class="section">
 <h3>Active Escrows</h3>
 <div class="empty">
@@ -61,41 +74,32 @@ You haven't created any escrow. Be the first to add or upload a product for sale
 <button class="btn-primary" onclick="switchView('sell')">+ Add First Product</button>
 </div>
 </div>
-
 <div class="section">
 <h3>Recommended for You</h3>
-<div class="empty">
-<b>No products yet</b>
-Products you add will appear here.
-</div>
+<div class="empty"><b>No products yet</b>Products you add will appear here.</div>
 </div>
 </div>
 
-<!-- SELL VIEW -->
 <div id="view-sell" class="view">
 <div class="card">
-<h3 style="margin-bottom:10px">Sell - Add Product</h3>
-<p style="color:#666;font-size:14px">Be the first to upload a product. Your item will be protected by PayLock escrow.</p>
+<h3 style="font-size:20px;font-weight:800">Sell - Add Product</h3>
+<p style="color:#777;font-size:13px;margin:8px 0 12px">Be the first to upload a product. Your item will be protected by PayLock escrow.</p>
 <input class="input" id="pName" placeholder="Product name e.g. iPhone 15">
-<input class="input" id="pPrice" type="number" placeholder="Price in Naira (₦) e.g. 500000">
+<input class="input" id="pPrice" type="number" placeholder="Price in Naira (₦)">
 <input class="input" id="pDesc" placeholder="Description">
 <button class="btn-primary" onclick="addProduct()">Publish Product</button>
 <div id="sellList" style="margin-top:20px"></div>
+<div style="margin-top:18px;text-align:center"><a href="#" onclick="showTermsAgain()" style="font-size:11px;color:#999;text-decoration:underline">View Terms & Privacy</a></div>
 </div>
 </div>
 
-<!-- BUY VIEW -->
 <div id="view-buy" class="view">
 <div class="section">
 <h3>Buy</h3>
-<div class="empty" id="buyList">
-<b>Marketplace empty</b>
-No products listed yet. Check back after sellers upload.
-</div>
+<div class="empty" id="buyList"><b>Marketplace empty</b>No products listed yet.</div>
 </div>
 </div>
 
-<!-- WALLET VIEW -->
 <div id="view-wallet" class="view">
 <div class="card">
 <div class="card-top"><span>Your Wallet</span></div>
@@ -106,80 +110,32 @@ No products listed yet. Check back after sellers upload.
 <button class="btn-primary" style="flex:1;background:#fff;color:#111;border:1px solid #ddd">Withdraw</button>
 </div>
 </div>
-<div class="section">
-<h3>Transaction History</h3>
-<div class="empty">No transactions yet.</div>
-</div>
+<div class="section"><h3>Transaction History</h3><div class="empty">No transactions yet.</div></div>
 </div>
 
 <div class="nav">
-<button id="btn-home" class="active" onclick="switchView('home')"><span>🏠</span>Home</button>
-<button id="btn-sell" onclick="switchView('sell')"><span>🛒</span>Sell</button>
-<button id="btn-buy" onclick="switchView('buy')"><span>🛍️</span>Buy</button>
-<button id="btn-wallet" onclick="switchView('wallet')"><span>👛</span>Wallet</button>
+<button id="btn-home" class="active" onclick="switchView('home')">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 10L12 3l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</button>
+<button id="btn-sell" onclick="switchView('sell')">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>Sell</button>
+<button id="btn-buy" onclick="switchView('buy')">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Buy</button>
+<button id="btn-wallet" onclick="switchView('wallet')">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Wallet</button>
 </div>
 
-<script>
-const tg = window.Telegram.WebApp;
-tg.ready();
-tg.expand();
-
-let user = tg.initDataUnsafe?.user;
-let displayName = "there";
-let username = "";
-if(user){
-  displayName = user.first_name || user.username || "there";
-  username = user.username ? "@"+user.username : (user.first_name || "");
-} else {
-  displayName = "there";
-}
-
-// Greeting by time
-const hour = new Date().getHours();
-let timeGreet = "Good morning";
-if(hour >= 12 && hour < 17) timeGreet = "Good afternoon";
-else if(hour >= 17) timeGreet = "Good evening";
-
-document.getElementById("greetName").innerText = `${timeGreet}, ${displayName}`;
-document.getElementById("walletUser").innerText = username ? `${displayName} • ${username} • Protected` : `${displayName} • Protected`;
-
-function switchView(name){
-  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
-  document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));
-  document.getElementById("view-"+name).classList.add("active");
-  document.getElementById("btn-"+name).classList.add("active");
-  tg.HapticFeedback?.impactOccurred('light');
-}
-
-let products = [];
-function addProduct(){
-  const name = document.getElementById("pName").value.trim();
-  const price = document.getElementById("pPrice").value.trim();
-  if(!name || !price){ tg.showAlert("Enter product name and price"); return; }
-  const p = {name, price};
-  products.push(p);
-  document.getElementById("pName").value="";
-  document.getElementById("pPrice").value="";
-  document.getElementById("pDesc").value="";
-  renderProducts();
-  tg.showAlert(`Published: ${name} for ₦${price}`);
-  switchView('buy');
-}
-
-function renderProducts(){
-  const sellList = document.getElementById("sellList");
-  const buyList = document.getElementById("buyList");
-  if(products.length===0){
-    buyList.innerHTML = "<b>Marketplace empty</b>No products listed yet.";
-    return;
-  }
-  let html = "";
-  products.forEach((p,i)=>{
-    html += `<div class="card" style="margin:10px 0"><b>${p.name}</b><br>₦${Number(p.price).toLocaleString()}<br><small>Seller: ${username || displayName} • Just now</small></div>`;
-  });
-  sellList.innerHTML = html;
-  buyList.innerHTML = html;
-}
-</script>
-</body>
-                                                    </html>
+<div id="termsOverlay">
+<div id="termsBox">
+<h2>📜 PayLock Seller Agreement</h2>
+<div class="sub">Read and consent before selling — Telegram compliance required</div>
+<div class="terms-content">
+<b>1. Prohibited by Telegram — Instant Bot Ban</b><br>
+Telegram will ban bots that allow these. Zero tolerance:<br>
+- ❌ Nudes, pornographic files, sexual content involving minors, escort services<br>
+- ❌ Drugs, narcotics, weapons, explosives<br>
+- ❌ Counterfeit goods, pirated software, cracked accounts, stolen data / logs / cards<br>
+- ❌ Fake files, misleading files, empty zip, files that don't match description<br>
+- ❌ Hate speech, harassment, illegal services<br>
+- ❌ Gambling, Ponzi schemes, unlicensed financial services<br><br>
+<b>2. No Fake Product Rule</b><br>
+Sellers must deliver exactly what was described. Selling fake files, fake proof,
