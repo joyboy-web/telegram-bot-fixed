@@ -18,14 +18,13 @@ async def start(update, context):
 def run_flask():
     flask_app.run(host="0.0.0.0", port=PORT)
 
-if __name__ == "__main__":
-    # Flask in background thread
-    flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-    
-    # Telegram in MAIN thread (fixes set_wakeup_fd error)
+def run_telegram():
     print("Starting Telegram polling...")
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.run_polling()
+
+if __name__ == "__main__":
+    flask_thread = Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    run_telegram()
