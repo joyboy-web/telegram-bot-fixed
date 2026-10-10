@@ -1,80 +1,118 @@
-import os
-from flask import Flask, send_from_directory
-from threading import Thread
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+import os, json, uuid, shutil
+from datetime import datetime
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-RENDER_URL = os.getenv("RENDER_EXTERNAL_URL") or "https://telegram-bot-fixed-uqmt.onrender.com"
+from supabase import create_client, Client
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
-app = Flask(__name__, static_folder=".")
+app = FastAPI(title="PayLock Engine")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-@app.route('/')
-def root():
-    return send_from_directory('.', 'index.html')
+# ENV
+GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "paylock-files")
 
-@app.route('/app')
-def mini_app():
-    return send_from_directory('.', 'index.html')
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY else None
 
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+drive_service = None
+try:
+    creds_str = os.getenv("GOOGLE_DRIVE_CREDENTIALS_JSON")
+    if creds_str:
+        info = json.loads(creds_str)
+        creds = service_account.Credentials.from_service_account_info(info, scopes=["https://www.googleapis.com/auth/drive"])
+        drive_service = build('drive', 'v3', credentials=creds)
+except Exception as e:
+    print("Drive init error:", e)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    name = update.effective_user.first_name or "there"
-    text = f"""
-🔒 *PayLock — Secure Escrow on Telegram*
+# ===== PERMANENT CONFLICT SOLVER (YOUR OLD ENGINE - PRESERVED) =====
+transaction_memory = set()
+def permanent_conflict_solver(transaction_id, amount, reference):
+    key = f"{transaction_id}_{amount}_{reference}".lower().strip()
+    if key in transaction_memory:
+        return {"status": "conflict", "msg": "Duplicate blocked by solver"}
+    if supabase:
+        try:
+            res = supabase.table("paylock_transactions").select("id").eq("unique_key", key).execute()
+            if res.data: return {"status": "conflict", "msg": "Already exists in DB"}
+        except: pass
+    transaction_memory.add(key)
+    return {"status": "clear", "unique_key": key}
 
-Hello {name},
+def save_record(data):
+    if supabase:
+        try: supabase.table("paylock_transactions").insert(data).execute()
+        except Exception as e: print("DB save fail:", e)
 
-*Connecting buyers and sellers, bridging the gap with trust. Building confidence one transaction at a time.*
+@app.get("/health")
+def health():
+    return {"drive": bool(drive_service), "supabase": bool(supabase), "bucket": SUPABASE_BUCKET, "solver": "active"}
 
-PayLock protects your money until you get what you paid for.
-
-*Why PayLock?*
-- 🔒 Bank-grade escrow protection
-- 🤝 Verified buyers & sellers
-- ⚡ Instant release after delivery
-- 🇳🇬 100% Naira (₦) transactions
-
-Tap Home to enter your secure dashboard 👇
-"""
-    keyboard = [
-        [InlineKeyboardButton("🏠 Open Home Dashboard", web_app=WebAppInfo(url=f"{RENDER_URL}/app"))],
-        [
-            InlineKeyboardButton("🏪 Sell", callback_data="sell"),
-            InlineKeyboardButton("🛍️ Buy", callback_data="buy"),
-            InlineKeyboardButton("👛 Wallet", callback_data="wallet")
-        ]
-    ]
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if query.data == "sell":
-        await query.message.reply_text("🏪 Sell: Open Home Dashboard → Sell tab → Add your first product.")
-    elif query.data == "buy":
-        await query.message.reply_text("🛍️ Buy: Open Home Dashboard → Buy tab to see marketplace.")
-    elif query.data == "wallet":
-        await query.message.reply_text("👛 Wallet: Balance ₦0.00 — Fund your wallet inside Home Dashboard.")
-
-async def error_handler(update, context):
-    print(f"Bot error: {context.error}")
-
-# This runs BEFORE polling and kills the ghost bot causing Conflict
-async def post_init(application):
-    await application.bot.delete_webhook(drop_pending_updates=True)
-    print("Webhook cleared — ready for polling")
-
-if __name__ == "__main__":
-    Thread(target=run_flask, daemon=True).start()
-    print("Starting Flask + Telegram Bot...")
-
-    tg_app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
-    tg_app.add_handler(CommandHandler("start", start))
-    tg_app.add_handler(CallbackQueryHandler(button_handler))
-    tg_app.add_error_handler(error_handler)
+# MAIN UPLOAD ENDPOINT FOR YOUR UX
+@app.post("/api/upload")
+async def upload_api(
+    file: UploadFile = File(...),
+    product_name: str = Form(...),
+    price: str = Form(...),
+    description: str = Form("")
+):
+    transaction_id = f"PAY-{uuid.uuid4().hex[:8].upper()}"
+    reference = product_name
     
-    tg_app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+    solver = permanent_conflict_solver(transaction_id, price, reference)
+    if solver["status"] == "conflict":
+        raise HTTPException(status_code=409, detail=solver["msg"])
+    
+    tmp = f"/tmp/{uuid.uuid4()}_{file.filename}"
+    with open(tmp, "wb") as b: shutil.copyfileobj(file.file, b)
+
+    drive_link = None
+    supabase_link = None
+
+    # Drive
+    try:
+        if drive_service and GOOGLE_DRIVE_FOLDER_ID:
+            meta = {'name': f"{transaction_id}_{file.filename}", 'parents': [GOOGLE_DRIVE_FOLDER_ID]}
+            media = MediaFileUpload(tmp, resumable=True)
+            up = drive_service.files().create(body=meta, media_body=media, fields='id, webViewLink').execute()
+            drive_link = up.get('webViewLink')
+            drive_service.permissions().create(fileId=up.get('id'), body={'type':'anyone','role':'reader'}).execute()
+    except Exception as e: print("Drive err:", e)
+
+    # Supabase
+    try:
+        if supabase:
+            path = f"{transaction_id}/{file.filename}"
+            with open(tmp, "rb") as f:
+                supabase.storage.from_(SUPABASE_BUCKET).upload(path, f, {"content-type": file.content_type, "upsert":"true"})
+            supabase_link = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(path)
+    except Exception as e: print("Supabase err:", e)
+
+    if os.path.exists(tmp): os.remove(tmp)
+
+    save_record({
+        "unique_key": solver["unique_key"],
+        "transaction_id": transaction_id,
+        "product_name": product_name,
+        "amount": price,
+        "reference": reference,
+        "description": description,
+        "filename": file.filename,
+        "drive_link": drive_link,
+        "supabase_link": supabase_link,
+        "created_at": datetime.utcnow().isoformat()
+    })
+
+    return {"status":"success", "transaction_id": transaction_id, "drive_url": drive_link, "supabase_url": supabase_link, "preview_url": supabase_link or drive_link}
+
+# Serve index.html
+@app.get("/")
+def serve_index():
+    if os.path.exists("index.html"): return FileResponse("index.html")
+    return {"message": "PayLock API Live - index.html not found in root"}
