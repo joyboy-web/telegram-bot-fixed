@@ -36,79 +36,66 @@ body{background:#f5f5f7;color:#111;padding-bottom:120px}
 #termsOverlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(5px);z-index:9999;display:none;align-items:flex-end;justify-content:center;padding:12px}
 #termsBox{background:#fff;border-radius:24px 24px 20px 20px;width:100%;max-width:480px;max-height:90vh;overflow:auto;padding:22px}
 #termsBox h2{font-size:18px;font-weight:900;margin-bottom:4px}
-#termsBox .sub{font-size:12px;color:#888;margin-bottom:14px}
+#termsBox.sub{font-size:12px;color:#888;margin-bottom:14px}
 .terms-content{font-size:13px;line-height:1.6;color:#333;background:#f9f9f9;border-radius:12px;padding:14px;border:1px solid #eee;height:280px;overflow:auto}
 .terms-content b{color:#111}
 .agreeRow{display:flex;gap:10px;align-items:flex-start;margin:14px 0;font-size:13px;background:#fff;border:1.5px solid #111;border-radius:12px;padding:12px}
 .agreeRow input{margin-top:3px;width:18px;height:18px;flex-shrink:0}
 .btn-agree{width:100%;background:#111;color:#fff;border:0;padding:15px;border-radius:14px;font-weight:800;font-size:15px;opacity:0.35;pointer-events:none}
 .btn-agree.enabled{opacity:1;pointer-events:auto}
+.dropZone{border:2px dashed #111;border-radius:16px;padding:26px 18px;text-align:center;background:#fafafa;margin:12px 0;cursor:pointer;display:block!important}
+.dropZone.dragover{background:#111;color:#fff;border-color:#111}
+.dropZone b{display:block;font-size:14px}
+.dropZone span{font-size:12px;color:#777}
+.dropZone.icon{font-size:28px;margin-bottom:6px}
+.filePreview{background:#f0f0f0;border-radius:12px;padding:12px;margin:10px 0;display:none;align-items:center;gap:10px;font-size:13px}
+.filePreview.show{display:flex}
+.filePreview.remove{margin-left:auto;background:#111;color:#fff;border:0;border-radius:50%;width:24px;height:24px;cursor:pointer}
 </style>
 </head>
 <body>
 
 <div class="header">
-<div class="logo">
-<svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1.5" fill="#111"/></svg>
-</div>
+<div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#111"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
 <div class="brand">PayLock</div>
 </div>
 
-<div class="greet">
-<h2 id="greetName">Good morning, there</h2>
-<p>Secure • Held • Protected</p>
-</div>
+<div class="greet"><h2 id="greetName">Good morning, there</h2><p>Secure • Held • Protected</p></div>
 
 <div id="view-home" class="view active">
-<div class="card">
-<div class="card-top"><span>Funds in Escrow</span><button class="btn-new" onclick="switchView('sell')">+ New</button></div>
-<h1>₦0.00</h1>
-<small>🔒 Protected until release</small>
-</div>
-<div class="section">
-<h3>Active Escrows</h3>
-<div class="empty">
-<b>No active escrows yet</b>
-You haven't created any escrow. Be the first to add or upload a product for sale.
-<button class="btn-primary" onclick="switchView('sell')">+ Add First Product</button>
-</div>
-</div>
-<div class="section">
-<h3>Recommended for You</h3>
-<div class="empty"><b>No products yet</b>Products you add will appear here.</div>
-</div>
+<div class="card"><div class="card-top"><span>Funds in Escrow</span><button class="btn-new" onclick="switchView('sell')">+ New</button></div><h1>₦0.00</h1><small>🔒 Protected until release</small></div>
+<div class="section"><h3>Active Escrows</h3><div class="empty"><b>No active escrows yet</b>You haven't created any escrow.<button class="btn-primary" onclick="switchView('sell')">+ Add First Product</button></div></div>
 </div>
 
 <div id="view-sell" class="view">
 <div class="card">
 <h3 style="font-size:20px;font-weight:800">Sell - Add Product</h3>
 <p style="color:#777;font-size:13px;margin:8px 0 12px">Be the first to upload a product. Your item will be protected by PayLock escrow.</p>
+
 <input class="input" id="pName" placeholder="Product name e.g. iPhone 15">
 <input class="input" id="pPrice" type="number" placeholder="Price in Naira (₦)">
 <input class="input" id="pDesc" placeholder="Description">
-<button class="btn-primary" onclick="addProduct()">Publish Product</button>
+
+<!-- FIXED FILE UPLOAD - NOW VISIBLE -->
+<input type="file" id="fileInput" hidden accept=".zip,.pdf,.mp4,.jpg,.jpeg,.png,.docx" onchange="handleFile(this.files[0])">
+<div class="dropZone" id="dropZone" onclick="document.getElementById('fileInput').click()" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event)">
+<div class="icon">📸</div>
+<b id="dropText">Tap to add product image / file</b>
+<span>ZIP, PDF, MP4, JPG, PNG, DOCX — Max 50MB<br>Required to publish</span>
+</div>
+
+<div class="filePreview" id="filePreview"><div>📦</div><div><b id="fileName"></b><br><span id="fileSize" style="color:#777;font-size:11px"></span></div><button class="remove" onclick="removeFile()">×</button></div>
+
+<button class="btn-primary" id="publishBtn" onclick="addProduct()">Publish Product</button>
 <div id="sellList" style="margin-top:20px"></div>
 <div style="margin-top:18px;text-align:center"><a href="#" onclick="showTermsAgain();return false;" style="font-size:11px;color:#999;text-decoration:underline">View Terms & Privacy</a></div>
 </div>
 </div>
 
-<div id="view-buy" class="view">
-<div class="section">
-<h3>Buy</h3>
-<div class="empty" id="buyList"><b>Marketplace empty</b>No products listed yet.</div>
-</div>
-</div>
+<div id="view-buy" class="view"><div class="section"><h3>Buy</h3><div class="empty" id="buyList"><b>Marketplace empty</b>No products listed yet.</div></div></div>
 
 <div id="view-wallet" class="view">
-<div class="card">
-<div class="card-top"><span>Your Wallet</span></div>
-<h1 id="walletBalance">₦0.00</h1>
-<small id="walletUser">Loading...</small>
-<div style="margin-top:16px;display:flex;gap:10px">
-<button class="btn-primary" style="flex:1">Fund Wallet</button>
-<button class="btn-primary" style="flex:1;background:#fff;color:#111;border:1px solid #ddd">Withdraw</button>
-</div>
-</div>
+<div class="card"><div class="card-top"><span>Your Wallet</span></div><h1>₦0.00</h1><small id="walletUser">Loading...</small><div style="margin-top:16px;display:flex;gap:10px"><button class="btn-primary" style="flex:1">Fund Wallet</button><button class="btn-primary" style="flex:1;background:#fff;color:#111;border:1px solid #ddd">Withdraw</button></div></div>
 <div class="section"><h3>Transaction History</h3><div class="empty">No transactions yet.</div></div>
 </div>
 
@@ -122,111 +109,56 @@ You haven't created any escrow. Be the first to add or upload a product for sale
 <div id="termsOverlay">
 <div id="termsBox">
 <h2>📜 PayLock Seller Agreement</h2>
-<div class="sub">Read and consent before selling — Telegram compliance required</div>
+<div class="sub">Read and consent before selling</div>
 <div class="terms-content">
-<b>1. Prohibited by Telegram — Instant Bot Ban</b><br>
-Telegram will ban bots that allow these. Zero tolerance:<br>
-- ❌ Nudes, pornographic files, sexual content involving minors, escort services<br>
-- ❌ Drugs, narcotics, weapons, explosives<br>
-- ❌ Counterfeit goods, pirated software, cracked accounts, stolen data / logs / cards<br>
-- ❌ Fake files, misleading files, empty zip, or files that don't match description<br>
-- ❌ Hate speech, harassment, illegal services<br>
-- ❌ Gambling, Ponzi schemes, unlicensed financial services<br><br>
-<b>2. No Fake Product Rule</b><br>
-Sellers must deliver exactly what was described. Selling fake files or scamming buyers will result in instant permanent ban, seizure of escrow earnings, and report to Telegram @notoscam.<br><br>
-<b>3. Escrow Protection</b><br>
-Buyer funds held until buyer confirms delivery. Dispute reviewed by PayLock. 5% fee on success.<br><br>
-<b>4. Privacy Policy</b><br>
-We only store Telegram ID, username, product listings & escrow history. No card data stored. Wallet via external provider. Never share data.<br><br>
-<b>5. Punishment</b><br>
-Violation = permanent ban + seizure of balance.
+<b>1. Prohibited by PayLockBot</b><br>- ❌ Nudes, porn, drugs, weapons<br>- ❌ Counterfeit, pirated software<br>- ❌ Fake files, empty zip<br><br><b>2. No Fake Product Rule</b><br>Must deliver exactly what described. Violation = permanent ban + seizure.<br><br><b>3. Escrow Protection</b><br>Buyer funds held until confirm. 5% fee on success.
 </div>
-
-<label class="agreeRow">
-<input type="checkbox" id="agreeCheck" onchange="toggleAgree()">
-<span><b>I consent and agree to obey all the stated rules and once violated I will face the punishment.</b></span>
-</label>
-
+<label class="agreeRow"><input type="checkbox" id="agreeCheck" onchange="toggleAgree()"><span><b>I agree to obey all rules.</b></span></label>
 <button id="btnAgree" class="btn-agree" onclick="acceptTerms()">Agree & Continue to Sell</button>
 <div style="text-align:center;margin-top:10px"><a href="#" onclick="closeTerms();return false;" style="font-size:12px;color:#888;text-decoration:none">Cancel</a></div>
 </div>
 </div>
 
 <script>
-let displayName = "there";
-let username = "";
-try{
-  const tgInit = window.Telegram && window.Telegram.WebApp;
-  if(tgInit){ tgInit.ready(); tgInit.expand(); }
-  const user = tgInit && tgInit.initDataUnsafe && tgInit.initDataUnsafe.user;
-  if(user){
-    displayName = user.first_name || user.username || "there";
-    username = user.username ? "@"+user.username : "";
-  }
-}catch(e){}
-
-const hour = new Date().getHours();
-let timeGreet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-document.getElementById("greetName").innerText = `${timeGreet}, ${String(displayName).toLowerCase()}`;
-document.getElementById("walletUser").innerText = username ? `${displayName} • ${username} • Protected` : `${displayName} • Protected`;
-
+let displayName="there";let username="";let selectedFile=null;
+try{const tg=window.Telegram.WebApp;tg.ready();tg.expand();const u=tg.initDataUnsafe?.user;if(u){displayName=u.first_name||u.username||"there";username=u.username?"@"+u.username:"";}}catch(e){}
+const hour=new Date().getHours();let greet=hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
+document.getElementById("greetName").innerText=`${greet}, ${String(displayName).toLowerCase()}`;
+document.getElementById("walletUser").innerText=username?`${displayName} • ${username} • Protected`:`${displayName} • Protected`;
 function switchView(name){
-  if(name==='sell'){
-    try{
-      if(!localStorage.getItem('paylock_terms_accepted')){
-        document.getElementById('termsOverlay').style.display='flex';
-        return;
-      }
-    }catch(e){}
-  }
+  if(name==='sell'){try{if(!localStorage.getItem('paylock_terms_accepted')){document.getElementById('termsOverlay').style.display='flex';return;}}catch(e){}}
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));
-  const view = document.getElementById("view-"+name);
-  const btn = document.getElementById("btn-"+name);
-  if(view) view.classList.add("active");
-  if(btn) btn.classList.add("active");
-  try{ window.Telegram.WebApp.HapticFeedback.impactOccurred('light'); }catch(e){}
+  const v=document.getElementById("view-"+name);const b=document.getElementById("btn-"+name);
+  if(v)v.classList.add("active");if(b)b.classList.add("active");
+  try{window.Telegram.WebApp.HapticFeedback.impactOccurred('light');}catch(e){}
 }
-function toggleAgree(){
-  const checked = document.getElementById('agreeCheck').checked;
-  const btn = document.getElementById('btnAgree');
-  if(checked){ btn.classList.add('enabled'); } else { btn.classList.remove('enabled'); }
-}
-function acceptTerms(){
-  const cb = document.getElementById('agreeCheck');
-  if(!cb.checked) return;
-  try{ localStorage.setItem('paylock_terms_accepted','yes'); }catch(e){}
-  document.getElementById('termsOverlay').style.display='none';
-  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
-  document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));
-  document.getElementById("view-sell").classList.add("active");
-  document.getElementById("btn-sell").classList.add("active");
-  try{ window.Telegram.WebApp.showAlert("Terms accepted. You can now sell."); }catch(e){}
-}
-function closeTerms(){ document.getElementById('termsOverlay').style.display='none'; }
-function showTermsAgain(){
-  try{ localStorage.removeItem('paylock_terms_accepted'); }catch(e){}
-  const cb=document.getElementById('agreeCheck'); if(cb){ cb.checked=false; toggleAgree(); }
-  document.getElementById('termsOverlay').style.display='flex';
-}
+function toggleAgree(){document.getElementById('btnAgree').classList.toggle('enabled',document.getElementById('agreeCheck').checked);}
+function acceptTerms(){if(!document.getElementById('agreeCheck').checked)return;try{localStorage.setItem('paylock_terms_accepted','yes');}catch(e){}document.getElementById('termsOverlay').style.display='none';switchView('sell');}
+function closeTerms(){document.getElementById('termsOverlay').style.display='none';}
+function showTermsAgain(){try{localStorage.removeItem('paylock_terms_accepted');}catch(e){}document.getElementById('agreeCheck').checked=false;toggleAgree();document.getElementById('termsOverlay').style.display='flex';}
+function handleFile(file){if(!file)return;if(file.size>50*1024*1024){alert("File too big. Max 50MB");return;}selectedFile=file;document.getElementById('fileName').innerText=file.name;document.getElementById('fileSize').innerText=(file.size/1024/1024).toFixed(2)+" MB";document.getElementById('filePreview').classList.add('show');document.getElementById('dropText').innerText="File selected ✓ Tap to change";}
+function removeFile(){selectedFile=null;document.getElementById('filePreview').classList.remove('show');document.getElementById('fileInput').value="";document.getElementById('dropText').innerText="Tap to add product image / file";}
+function dragOver(e){e.preventDefault();document.getElementById('dropZone').classList.add('dragover');}
+function dragLeave(e){document.getElementById('dropZone').classList.remove('dragover');}
+function dropFile(e){e.preventDefault();document.getElementById('dropZone').classList.remove('dragover');const f=e.dataTransfer.files[0];if(f)handleFile(f);}
 let products=[];
-function addProduct(){
-  const nameEl=document.getElementById("pName");
-  const priceEl=document.getElementById("pPrice");
-  const descEl=document.getElementById("pDesc");
-  const name=nameEl.value.trim();
-  const price=priceEl.value.trim();
-  if(!name||!price){
-    try{ window.Telegram.WebApp.showAlert("Enter product name and price"); }catch(e){ alert("Enter product name and price"); }
-    return;
-  }
-  products.push({name,price});
-  nameEl.value=""; priceEl.value=""; descEl.value="";
-  let html=""; products.forEach(p=>{ html+=`<div class="card" style="margin:10px 0"><b>${p.name}</b><br>₦${Number(p.price).toLocaleString()}<br><small>Seller: ${username||displayName} • Just now</small></div>`; });
-  document.getElementById("sellList").innerHTML=html;
-  document.getElementById("buyList").innerHTML=html;
-  try{ window.Telegram.WebApp.showAlert("Product published"); }catch(e){}
-  switchView('buy');
+async function addProduct(){
+  const name=document.getElementById("pName").value.trim();
+  const price=document.getElementById("pPrice").value.trim();
+  const desc=document.getElementById("pDesc").value.trim();
+  if(!name||!price){alert("Enter product name and price");return;}
+  if(!selectedFile){alert("Please attach your product image/file - ehn ehn, na required!");document.getElementById('dropZone').style.borderColor='red';return;}
+  const btn=document.getElementById("publishBtn");const old=btn.innerText;btn.innerText="Uploading... ⏳";btn.disabled=true;
+  try{
+    const form=new FormData();form.append("file",selectedFile);form.append("product_name",name);form.append("price",price);form.append("description",desc);
+    const res=await fetch("/api/upload",{method:"POST",body:form});const data=await res.json();
+    if(!res.ok)throw new Error(data.detail||"Upload failed");
+    products.push({name,price,file:selectedFile.name,size:(selectedFile.size/1024/1024).toFixed(2),link:data.preview_url,tx:data.transaction_id});
+    document.getElementById("pName").value="";document.getElementById("pPrice").value="";document.getElementById("pDesc").value="";removeFile();
+    let html="";products.forEach(p=>{html+=`<div class="card" style="margin:10px 0"><b>${p.name}</b> — ₦${Number(p.price).toLocaleString()}<br><small>📦 ${p.file} (${p.size} MB)</small><br><small style="color:green">✅ ${p.tx}</small><br><a href="${p.link}" target="_blank" style="font-size:12px">View File</a></div>`;});
+    document.getElementById("sellList").innerHTML=html;document.getElementById("buyList").innerHTML=html;switchView('buy');
+  }catch(err){alert("Upload failed: "+err.message);}finally{btn.innerText=old;btn.disabled=false;}
 }
 </script>
 </body>
