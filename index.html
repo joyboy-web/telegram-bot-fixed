@@ -1,224 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>PayLock</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif}
-body{background:#f5f5f7;color:#111;padding-bottom:120px}
-.header{padding:22px 20px 10px;display:flex;align-items:center;gap:12px}
-.logo{width:46px;height:46px;border:1.8px solid #111;border-radius:13px;display:flex;align-items:center;justify-content:center}
-.brand{font-size:32px;font-weight:900;letter-spacing:-1px}
-.greet{padding:2px 20px}.greet h2{font-size:22px;font-weight:700;text-transform:capitalize}.greet p{color:#777;font-size:13px;margin-top:3px}
-.card{background:#fff;margin:16px;border-radius:22px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,0.06);border:1px solid #eee}
-.view{display:none}.view.active{display:block}
-.input{width:100%;padding:14px 16px;border:1px solid #e5e5e5;border-radius:12px;margin:8px 0;font-size:15px;background:#fafafa}
-.btn-primary{width:100%;background:#111;color:#fff;border:0;padding:14px;border-radius:14px;font-weight:700;font-size:15px;margin-top:10px;cursor:pointer}
-.btn-new{border:1px solid #e0e0e0;background:#fff;padding:8px 18px;border-radius:22px;font-weight:700;cursor:pointer;font-size:13px}
-.nav{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(232,232,232,0.95);backdrop-filter:blur(12px);border-radius:34px;display:flex;gap:4px;padding:6px;z-index:50;box-shadow:0 8px 30px rgba(0,0,0,0.18)}
-.nav button{border:0;background:transparent;padding:10px 24px;border-radius:28px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:600;cursor:pointer;color:#777;min-width:72px}.nav button.active{background:#111;color:#fff}
-.dropZone{border:2px dashed #111;border-radius:16px;padding:20px 18px;text-align:center;background:#fafafa;margin:10px 0;cursor:pointer}
-.filePreview{background:#f0f0f0;border-radius:12px;padding:10px 12px;margin:8px 0;display:none;align-items:center;gap:10px;font-size:13px}.filePreview.show{display:flex}
-.typeRow{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}.typeBtn{padding:8px 14px;border:1px solid #ddd;border-radius:20px;background:#fff;font-size:12px;font-weight:700;cursor:pointer}.typeBtn.active{background:#111;color:#fff;border-color:#111}
-.wordCount{font-size:11px;text-align:right;color:#999}.wordCount.bad{color:#ff3b30}.wordCount.ok{color:#0a7a00}
-.productCard{background:#fff;border:1px solid #eee;border-radius:18px;padding:16px;margin:10px 0}
-.orderTag{background:#fff3cd;color:#856404;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:800}
-.seller-avatar{width:40px;height:40px;background:#111;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;text-transform:uppercase;flex-shrink:0}
-
-/* STANDOUT PRODUCT PAGE - PROFESSIONAL */
-#viewFileModal{position:fixed;inset:0;background:#f5f5f7;z-index:9999;display:none;flex-direction:column;overflow:hidden}
+*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+body{background:#f5f5f7;color:#111;padding-bottom:110px;overflow-x:hidden}
+.header{padding:20px 20px 6px;display:flex;align-items:center;gap:12px}
+.logo{width:42px;height:42px;border:1.7px solid #111;border-radius:12px;display:flex;align-items:center;justify-content:center}
+.brand{font-size:30px;font-weight:900;letter-spacing:-1px}
+.greet{padding:0 20px 8px}.greet h2{font-size:21px;font-weight:700;text-transform:capitalize}.greet p{color:#777;font-size:12px}
+.card{background:#fff;margin:12px;border-radius:20px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.06);border:1px solid #eee}
+.view{display:none}.view.active{display:block;animation:fade .22s ease}@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.input{width:100%;padding:13px 14px;border:1px solid #e6e6e6;border-radius:12px;margin:7px 0;font-size:14px;background:#fafafa;outline:none}
+.input:focus{border-color:#111;background:#fff}
+.btn-primary{width:100%;background:#111;color:#fff;border:0;padding:13px;border-radius:13px;font-weight:800;font-size:14px;margin-top:10px;cursor:pointer}
+.btn-new{border:1px solid #e0e0e0;background:#fff;padding:7px 16px;border-radius:20px;font-weight:700;cursor:pointer;font-size:12px}
+.nav{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(235,235,235,.94);backdrop-filter:blur(18px);border-radius:30px;display:flex;gap:2px;padding:5px;z-index:80;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.nav button{border:0;background:transparent;padding:8px 14px;border-radius:24px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;font-weight:700;cursor:pointer;color:#777;min-width:56px}.nav button.active{background:#111;color:#fff}
+.dropZone{border:2px dashed #111;border-radius:14px;padding:16px;text-align:center;background:#fafafa;margin:8px 0;cursor:pointer;font-size:13px}
+.filePreview{background:#f0f0f0;border-radius:12px;padding:10px 12px;margin:8px 0;display:none;align-items:center;gap:10px;font-size:12px}.filePreview.show{display:flex}
+.typeRow{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 10px}.typeBtn{padding:7px 13px;border:1px solid #ddd;border-radius:20px;background:#fff;font-size:11px;font-weight:700;cursor:pointer}.typeBtn.active{background:#111;color:#fff;border-color:#111}
+.wordCount{font-size:11px;text-align:right;color:#999}
+.productCard{background:#fff;border:1px solid #eee;border-radius:16px;padding:14px;margin:9px 0}
+.orderTag{background:#fff3cd;color:#856404;padding:3px 8px;border-radius:10px;font-size:10px;font-weight:700}
+.seller-avatar{width:38px;height:38px;background:#111;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;text-transform:uppercase;flex-shrink:0}
+#viewFileModal{position:fixed;inset:0;background:#f5f5f7;z-index:9999;display:none;flex-direction:column}
 #viewFileBox{width:100%;height:100%;background:#fff;display:flex;flex-direction:column;overflow:hidden;max-width:480px;margin:0 auto}
-.product-hero{width:100%;height:360px;background:#111;position:relative;flex-shrink:0;overflow:hidden}
+.product-hero{width:100%;height:320px;background:#111;position:relative;flex-shrink:0;overflow:hidden}
 .product-hero img{width:100%;height:100%;object-fit:cover}
-.hero-overlay{position:absolute;inset:0;background:linear-gradient(to bottom, rgba(0,0,0,0.05), rgba(0,0,0,0.6))}
-.hero-top{position:absolute;top:14px;left:14px;right:14px;display:flex;justify-content:space-between;align-items:center;z-index:2}
-.hero-close{background:rgba(255,255,255,0.95);border:0;width:36px;height:36px;border-radius:50%;font-size:16px;font-weight:800;cursor:pointer}
-.product-body{flex:1;overflow-y:auto;padding-bottom:130px}
-.product-content{padding:18px 20px 0}
-.price-main{font-size:32px;font-weight:900;letter-spacing:-1px}
-.product-title{font-size:22px;font-weight:900;line-height:1.25;margin:12px 0;letter-spacing:-0.3px}
-.product-desc{font-size:14px;line-height:1.65;color:#333;white-space:pre-wrap;margin:12px 0 18px}
-.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
-.meta-item{background:#f9f9fb;border:1px solid #eee;border-radius:14px;padding:12px}
-.meta-label{font-size:10px;color:#888;text-transform:uppercase;font-weight:700;letter-spacing:0.5px}
-.meta-value{font-size:13px;font-weight:700;margin-top:4px;word-break:break-all}
-.escrow-card{background:#fffbe6;border:1px solid #ffe082;border-radius:16px;padding:14px;margin:18px 0;display:flex;gap:10px}
-.sticky-action{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:rgba(255,255,255,0.97);backdrop-filter:blur(20px);border-top:1px solid #eee;padding:14px 20px 24px;z-index:20}
-.btn-generate{width:100%;background:#111;color:#fff;border:0;padding:16px;border-radius:16px;font-weight:900;font-size:15px;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,0.2)}
-.btn-buy{width:100%;background:#0a7a00;color:#fff;border:0;padding:16px;border-radius:16px;font-weight:900;font-size:16px;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;box-shadow:0 8px 24px rgba(10,122,0,0.3)}
-.linkBox{margin-top:12px;background:#111;color:#fff;border-radius:14px;padding:5px 5px 5px 14px;display:flex;justify-content:space-between;align-items:center;min-height:52px;font-size:12px}
-.copyInside{background:#fff;color:#111;border:0;padding:9px 16px;border-radius:22px;font-weight:800;font-size:12px;cursor:pointer}
-#termsOverlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(5px);z-index:9999;display:none;align-items:flex-end;justify-content:center;padding:12px}
-#termsBox{background:#fff;border-radius:24px;width:100%;max-width:480px;padding:22px}
-.btn-agree{width:100%;background:#111;color:#fff;border:0;padding:15px;border-radius:14px;font-weight:800;opacity:0.35;pointer-events:none}.btn-agree.enabled{opacity:1;pointer-events:auto}
-</style>
-</head>
-<body>
-<div class="header"><div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><div class="brand">PayLock</div></div>
-<div class="greet"><h2 id="greetName">Good morning, tolu</h2><p>Secure • Held • Protected • 24hrs escrow</p></div>
-
-<div id="view-home" class="view active">
-<div class="card"><div style="display:flex;justify-content:space-between"><span style="color:#888;font-size:13px">Funds in Escrow</span><button class="btn-new" onclick="switchView('sell')">+ New</button></div><h1 id="escrowTotal" style="font-size:38px;margin:8px 0;font-weight:900">₦0.00</h1><small id="escrowSub">🔒 Protected until release • 24hrs hold</small></div>
-<div style="padding:0 20px;margin-top:12px"><h3 style="font-size:19px;font-weight:800;margin-bottom:12px">Active Escrows</h3><div id="homeActiveList"></div></div>
-<div style="padding:0 20px;margin-top:22px"><h3 style="font-size:18px;font-weight:800;margin-bottom:12px">Recent Orders</h3><div id="ordersList"></div></div>
-</div>
-
-<div id="view-sell" class="view">
-<div id="sellFormWrap"><div class="card"><h3 style="font-size:20px;font-weight:800">Sell - Add Product</h3>
-<input class="input" id="pName" placeholder="Product name"><input class="input" id="pPrice" type="number" placeholder="Price in Naira (₦)">
-<label style="font-size:13px;font-weight:700;margin-top:8px;display:block">Product type?</label>
-<div class="typeRow"><button class="typeBtn" onclick="selectType(this,'eBook')">📚 eBook</button><button class="typeBtn" onclick="selectType(this,'Course')">🎓 Course</button><button class="typeBtn" onclick="selectType(this,'Software')">💾 Software</button><button class="typeBtn" onclick="selectType(this,'Video')">🎬 Video</button><button class="typeBtn" onclick="selectType(this,'Design')">🎨 Design</button><button class="typeBtn" onclick="selectType(this,'Template')">📄 Template</button><button class="typeBtn" onclick="selectType(this,'Audio')">🎧 Audio</button><button class="typeBtn" onclick="selectType(this,'License')">🔑 License</button></div>
-<textarea class="input" id="pDesc" rows="4" placeholder="Description (30-150 words)" oninput="countWords()"></textarea><div id="wordCount" class="wordCount">0 words (min 30, max 150)</div>
-<input type="file" id="coverInput" hidden accept=".jpg,.jpeg,.png,.webp" onchange="handleCover(this.files[0])"><div class="dropZone" onclick="document.getElementById('coverInput').click()"><b>🖼️ Cover Image *</b></div><div class="filePreview" id="coverPreview"><div>🖼️</div><div><b id="coverName"></b><br><span id="coverSize" style="font-size:11px"></span></div><button style="margin-left:auto;background:#111;color:#fff;border:0;border-radius:50%;width:24px;height:24px" onclick="removeCover()">×</button></div>
-<input type="file" id="fileInput" hidden accept=".zip,.pdf,.mp4,.mp3,.docx,.rar,.epub" onchange="handleFile(this.files[0])"><div class="dropZone" onclick="document.getElementById('fileInput').click()"><b>📦 Product File *</b></div><div class="filePreview" id="filePreview"><div>📦</div><div><b id="fileName"></b><br><span id="fileSize" style="font-size:11px"></span></div><button style="margin-left:auto;background:#111;color:#fff;border:0;border-radius:50%;width:24px;height:24px" onclick="removeFile()">×</button></div>
-<button class="btn-primary" id="publishBtn" onclick="addProduct()">Publish Product</button></div></div>
-<div id="myListingsWrap" style="padding:0 20px;display:none"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><h3 style="font-size:19px;font-weight:800">My Listings</h3><button class="btn-new" onclick="showSellForm()">+ New</button></div><div id="sellList"></div></div>
-</div>
-
-<div id="view-buy" class="view"><div style="padding:0 20px"><h3 style="font-size:19px;font-weight:800;margin:12px 0">Marketplace</h3><div id="buyList"></div></div></div>
-<div id="view-wallet" class="view"><div class="card"><h1 id="walletTotal">₦0.00</h1><small id="walletSub"></small></div><div style="padding:0 20px"><div id="walletOrders"></div></div></div>
-
-<div class="nav"><button id="btn-home" class="active" onclick="switchView('home')">🏠<br>Home</button><button id="btn-sell" onclick="switchView('sell')">🛒<br>Sell</button><button id="btn-buy" onclick="switchView('buy')">🛍️<br>Buy</button><button id="btn-wallet" onclick="switchView('wallet')">💳<br>Wallet</button></div>
-
-<div id="termsOverlay"><div id="termsBox"><h2>📜 Agreement</h2><p style="font-size:12px;color:#777">24hrs hold for refund protection • 5% fee</p><label style="display:flex;gap:10px;margin:14px 0;font-size:13px;border:1.5px solid #111;border-radius:12px;padding:12px"><input type="checkbox" id="agreeCheck" onchange="toggleAgree()"><span><b>I agree</b></span></label><button id="btnAgree" class="btn-agree" onclick="acceptTerms()">Agree & Continue</button></div></div>
-
-<div id="viewFileModal">
-<div id="viewFileBox">
-<div class="product-hero" id="productHero"><img id="productHeroImg" src=""><div class="hero-overlay"></div><div class="hero-top"><button class="hero-close" onclick="closeFileModal()">✕</button><div id="heroTags" style="display:flex;gap:6px"></div></div></div>
-<div class="product-body"><div class="product-content">
-<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-<div class="seller-avatar" id="sellerAvatar">T</div>
-<div style="flex:1"><div style="font-size:13px;font-weight:800" id="sellerName">tolu</div><div style="font-size:11px;color:#777" id="sellerTag">Verified seller • PayLock</div></div>
-<div id="productPills" style="display:flex;gap:6px"></div>
-</div>
-<div style="display:flex;align-items:baseline;gap:10px"><div class="price-main" id="productPrice">₦4,500</div><span style="font-size:11px;background:#111;color:#fff;padding:5px 10px;border-radius:20px;font-weight:800" id="productSales">4 sales • ₦18k earned</span></div>
-<h1 class="product-title" id="productName">Product Name</h1>
-<p class="product-desc" id="productDesc"></p>
-<div class="meta-grid"><div class="meta-item"><div class="meta-label">Type</div><div class="meta-value" id="productType"></div></div><div class="meta-item"><div class="meta-label">Format</div><div class="meta-value" id="productFormat"></div></div><div class="meta-item"><div class="meta-label">TX</div><div class="meta-value" style="color:#0a7a00" id="productTx"></div></div><div class="meta-item"><div class="meta-label">Seller</div><div class="meta-value" id="productSellerMeta"></div></div></div>
-<div class="escrow-card"><div>🔒</div><div><b style="font-size:13px">24hrs Escrow Hold</b><p style="font-size:12px;color:#555;margin-top:4px">We hold buyer's money 24hrs for refund safety. Auto-release after 24hrs. 5% platform fee.</p></div></div>
-</div></div>
-<div class="sticky-action">
-<div id="sellerAction"><button class="btn-generate" id="genBtn" onclick="generatePayLink()">🔗 Generate Product Link</button><div id="linkResult" style="display:none"><div class="linkBox"><span id="payLinkText" style="flex:1;overflow:hidden;text-overflow:ellipsis"></span><button class="copyInside" onclick="copyPayLink()">Copy</button></div><p style="font-size:11px;color:#777;text-align:center;margin-top:8px">Your product link under PayLock bot link. Buyer clicks → Telegram → Buy button.</p></div></div>
-<div id="buyerAction" style="display:none"><button class="btn-buy" id="buyBtn" onclick="handleBuy()">🛒 Buy Now • <span id="buyPrice"></span></button><p style="font-size:11px;color:#777;text-align:center;margin-top:8px">🔒 Protected by PayLock escrow • Instant delivery</p></div>
-</div>
-</div>
-</div>
-
-<script>
-const BOT_USERNAME="PayLockOfficialBot";
-let displayName="tolu",selectedFile=null,selectedCover=null,selectedCoverPreviewUrl="",selectedType="",products=[],currentViewingIndex=null;
-try{const tg=window.Telegram.WebApp;tg.ready();tg.expand();const u=tg.initDataUnsafe?.user;if(u)displayName=u.first_name||"tolu";}catch(e){}
-document.getElementById("greetName").innerText=`Good morning, ${String(displayName).toLowerCase()}`;
-try{products=JSON.parse(localStorage.getItem('paylock_products')||'[]');}catch(e){products=[];}
-function saveProducts(){localStorage.setItem('paylock_products',JSON.stringify(products));}
-function switchView(n){if(n==='sell'&&!localStorage.getItem('paylock_terms_accepted')){document.getElementById('termsOverlay').style.display='flex';return;}document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));document.getElementById("view-"+n)?.classList.add("active");document.getElementById("btn-"+n)?.classList.add("active");if(n==='sell')updateSellView();updateHome();}
-function toggleAgree(){document.getElementById('btnAgree').classList.toggle('enabled',document.getElementById('agreeCheck').checked);}
-function acceptTerms(){if(!document.getElementById('agreeCheck').checked)return;localStorage.setItem('paylock_terms_accepted','yes');document.getElementById('termsOverlay').style.display='none';switchView('sell');}
-function selectType(el,t){selectedType=t;document.querySelectorAll('.typeBtn').forEach(b=>b.classList.remove('active'));el.classList.add('active');}
-function countWords(){const txt=document.getElementById('pDesc').value.trim();const c=txt?txt.split(/\s+/).filter(w=>w).length:0;const el=document.getElementById('wordCount');el.innerText=`${c} words (min 30, max 150)`;el.className='wordCount '+(c<30||c>150?'bad':'ok');return c;}
-function handleCover(f){if(!f)return;selectedCover=f;if(selectedCoverPreviewUrl)URL.revokeObjectURL(selectedCoverPreviewUrl);selectedCoverPreviewUrl=URL.createObjectURL(f);document.getElementById('coverName').innerText=f.name;document.getElementById('coverSize').innerText=(f.size/1024/1024).toFixed(2)+" MB";document.getElementById('coverPreview').classList.add('show');}
-function removeCover(){selectedCover=null;if(selectedCoverPreviewUrl){URL.revokeObjectURL(selectedCoverPreviewUrl);selectedCoverPreviewUrl="";}document.getElementById('coverPreview').classList.remove('show');}
-function handleFile(f){if(!f)return;selectedFile=f;document.getElementById('fileName').innerText=f.name;document.getElementById('fileSize').innerText=(f.size/1024/1024).toFixed(2)+" MB";document.getElementById('filePreview').classList.add('show');}
-function removeFile(){selectedFile=null;document.getElementById('filePreview').classList.remove('show');}
-function getFileTypeIcon(n){const e=(n||'').split('.').pop().toLowerCase();if(['zip','rar'].includes(e))return{icon:'📦',type:'ZIP'};if(['pdf'].includes(e))return{icon:'📄',type:'PDF'};if(['epub'].includes(e))return{icon:'📚',type:'EPUB'};if(['mp4','mov'].includes(e))return{icon:'🎬',type:'Video'};if(['mp3','wav'].includes(e))return{icon:'🎧',type:'Audio'};return{icon:'📁',type:e.toUpperCase()||'File'};}
-function getTimeLeft(ra){const d=ra-Date.now();if(d<=0)return "Released";const h=Math.floor(d/1000/60/60),m=Math.floor(d/1000/60%60);return `${h}h ${m}m left`;}
-function updateSellView(){if(products.length>0){document.getElementById('sellFormWrap').style.display='none';document.getElementById('myListingsWrap').style.display='block';}else{document.getElementById('sellFormWrap').style.display='block';document.getElementById('myListingsWrap').style.display='none';}}
-function showSellForm(){document.getElementById('sellFormWrap').style.display='block';document.getElementById('myListingsWrap').style.display='none';}
-function updateHome(){
-  let totalHeld=0,totalEarned=0,totalOrders=0;
-  products.forEach(p=>{const s=p.salesCount||0;totalOrders+=s;totalHeld+=(p.orders?.filter(o=>o.status==='held').length||0)*Number(p.price);totalEarned+=s*Number(p.price);});
-  document.getElementById('escrowTotal').innerText='₦'+totalHeld.toLocaleString()+'.00';
-  document.getElementById('walletTotal').innerText='₦'+totalEarned.toLocaleString()+'.00';
-  document.getElementById('escrowSub').innerText=`🔒 ${totalOrders} orders • 24hrs refund window • 5% fee`;
-  document.getElementById('walletSub').innerText=`From ${totalOrders} sales • Held 24hrs before release`;
-  const homeList=document.getElementById('homeActiveList');
-  if(products.length===0){homeList.innerHTML=`<div style="background:#fff;border-radius:22px;padding:28px;text-align:center;color:#888;border:1px solid #eee"><b style="color:#111">No active escrows yet</b><br><button class="btn-primary" style="background:#111;margin-top:12px" onclick="switchView('sell')">+ Add First Product</button></div>`;}
-  else{let h="";products.forEach((p,i)=>{const sales=p.salesCount||0,earn=sales*Number(p.price),held=p.orders?.filter(o=>o.status==='held').length||0;const ext=(p.file||'').split('.').pop().toUpperCase();h+=`<div class="productCard" style="display:flex;gap:12px;align-items:center"><img src="${p.cover||''}" style="width:56px;height:56px;border-radius:12px;object-fit:cover;background:#eee" onerror="this.style.display='none'"><div style="flex:1"><b>${p.name}</b><br><small style="color:#777"><span style="background:#111;color:#fff;padding:2px 6px;border-radius:8px;font-size:10px">${ext}</span> ${p.prodType} • ${p.tx}</small><br><small style="font-weight:800">${sales} sales • ₦${earn.toLocaleString()} • ${held} held</small></div><button class="btn-new" onclick="openProduct(${i}, false)">View</button></div>`;});homeList.innerHTML=h;}
-  const all=[];products.forEach(p=>{(p.orders||[]).forEach(o=>all.push({...o,productName:p.name,price:p.price}) );});all.sort((a,b)=>b.createdAt-a.createdAt);
-  const oList=document.getElementById('ordersList');
-  if(all.length===0)oList.innerHTML=`<div style="background:#fff;border-radius:18px;padding:16px;border:1px solid #eee;color:#888;font-size:13px;text-align:center">No orders yet. Share PayLink.</div>`;
-  else{let oh="";all.slice(0,8).forEach(o=>{oh+=`<div class="productCard" style="padding:12px;display:flex;justify-content:space-between"><div><b>${o.id}</b><br><small>${o.productName} • ₦${Number(o.price).toLocaleString()}</small><br><small style="color:#777">${new Date(o.createdAt).toLocaleString()} • ${o.status}</small></div><div><small style="color:${o.status==='held'?'#856404':'green'}">${o.status==='held'?getTimeLeft(o.releaseAt):'Released'}</small></div></div>`;});oList.innerHTML=oh;}
-  const sellList=document.getElementById('sellList');let s="";products.forEach((p,i)=>{const sales=p.salesCount||0,earn=sales*Number(p.price);const ext=(p.file||'').split('.').pop().toUpperCase();s+=`<div class="productCard"><div style="display:flex;gap:12px"><img src="${p.cover||''}" style="width:64px;height:64px;border-radius:12px;object-fit:cover;background:#eee"><div style="flex:1"><b>${p.name}</b> — ₦${Number(p.price).toLocaleString()}<br><small><span class="orderTag">${ext}</span> ${p.prodType} • ${sales} sold • ₦${earn.toLocaleString()}</small><br><small style="color:green">${p.tx}</small></div></div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn-primary" style="margin:0;flex:1;background:#fff;color:#111;border:1px solid #ddd" onclick="openProduct(${i}, false)">View</button><button class="btn-primary" style="margin:0;flex:1" onclick="openProduct(${i}, false)">🔗 Link</button></div></div>`;});sellList.innerHTML=s;
-  const buyEl=document.getElementById('buyList');
-  if(products.length===0)buyEl.innerHTML=`<div style="background:#fff;border-radius:22px;padding:28px;text-align:center;color:#888">Marketplace empty</div>`;
-  else{let b="";products.forEach((p,i)=>{const ext=(p.file||'').split('.').pop().toUpperCase();b+=`<div class="productCard" onclick="openProduct(${i}, true)" style="cursor:pointer"><div style="display:flex;gap:12px"><img src="${p.cover||''}" style="width:64px;height:64px;border-radius:12px;object-fit:cover;background:#eee"><div><div style="display:flex;gap:6px;margin-bottom:4px"><span class="orderTag">${ext}</span><span class="orderTag" style="background:#111;color:#fff">${p.prodType}</span></div><b>${p.name}</b><br><span style="font-weight:900">₦${Number(p.price).toLocaleString()}</span></div></div></div>`;});buyEl.innerHTML=b;}
-  document.getElementById('walletOrders').innerHTML=oList.innerHTML;
-}
-function openProduct(i, buyerMode){
-  currentViewingIndex=i;
-  const p=products[i];
-  const info=getFileTypeIcon(p.file);
-  const ext=(p.file||'').split('.').pop().toUpperCase()||'PDF';
-  const sales=p.salesCount||0, earned=sales*Number(p.price);
-  document.getElementById('productHeroImg').src=p.cover||'';
-  document.getElementById('productHeroImg').style.display=p.cover?'block':'none';
-  document.getElementById('sellerAvatar').innerText=(displayName[0]||'T').toUpperCase();
-  document.getElementById('sellerName').innerText=displayName;
-  document.getElementById('sellerTag').innerText=`Verified seller • ${sales} sales • ${p.prodType}`;
-  document.getElementById('productPrice').innerText=`₦${Number(p.price).toLocaleString()}`;
-  document.getElementById('productSales').innerText=`${sales} sales • ₦${earned.toLocaleString()} earned`;
-  document.getElementById('productName').innerText=p.name;
-  document.getElementById('productDesc').innerText=p.desc||'';
-  document.getElementById('productType').innerText=p.prodType||'-';
-  document.getElementById('productFormat').innerText=`${info.type} • ${p.file} (${p.size} MB)`;
-  document.getElementById('productTx').innerText=p.tx;
-  document.getElementById('productSellerMeta').innerText=displayName;
-  document.getElementById('buyPrice').innerText=`₦${Number(p.price).toLocaleString()}`;
-  document.getElementById('buyBtn').innerHTML=`🛒 Buy Now • ₦${Number(p.price).toLocaleString()}`;
-  document.getElementById('heroTags').innerHTML=`<span style="background:rgba(0,0,0,0.75);color:#fff;padding:6px 10px;border-radius:20px;font-size:10px;font-weight:800">${ext}</span><span style="background:#fff;color:#111;padding:6px 10px;border-radius:20px;font-size:10px;font-weight:800">${p.prodType}</span>`;
-  document.getElementById('productPills').innerHTML=`<span class="orderTag">${ext}</span><span class="orderTag" style="background:#111;color:#fff">${p.prodType}</span>`;
-
-  if(buyerMode){
-    document.getElementById('sellerAction').style.display='none';
-    document.getElementById('buyerAction').style.display='block';
-  }else{
-    document.getElementById('sellerAction').style.display='block';
-    document.getElementById('buyerAction').style.display='none';
-    document.getElementById('linkResult').style.display='none';
-    document.getElementById('genBtn').innerHTML='🔗 Generate Product Link';
-    document.getElementById('genBtn').style.display='flex';
-  }
-  document.getElementById('viewFileModal').style.display='flex';
-}
-function closeFileModal(){document.getElementById('viewFileModal').style.display='none';}
-function generatePayLink(){
-  if(currentViewingIndex===null)return;
-  const p=products[currentViewingIndex];
-  const productLink=`https://t.me/${BOT_USERNAME}?start=${p.tx}`;
-  document.getElementById('payLinkText').innerText=productLink;
-  document.getElementById('linkResult').style.display='block';
-  document.getElementById('genBtn').innerHTML='✅ Product Link Generated';
-  p.link=productLink; saveProducts(); updateHome();
-}
-function copyPayLink(){navigator.clipboard.writeText(document.getElementById('payLinkText').innerText).then(()=>alert("✅ Product link copied!\nYour product link under PayLock bot link.\nBuyer clicks → opens Telegram → sees Buy button."));}
-function handleBuy(){
-  if(currentViewingIndex===null)return;
-  const p=products[currentViewingIndex];
-  const now=Date.now();
-  const order={id:`ORD-${Math.random().toString(36).substr(2,6).toUpperCase()}`,createdAt:now,releaseAt:now+24*60*60*1000,status:'held'};
-  p.orders=p.orders||[];p.orders.push(order);p.salesCount=(p.salesCount||0)+1;
-  fetch('/api/purchase',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tx:p.tx,order})}).catch(()=>{});
-  saveProducts();updateHome();
-  alert(`✅ Purchase successful! ${p.name} - ₦${Number(p.price).toLocaleString()}\nFunds held 24hrs • Money tab updated`);
-  closeFileModal();
-}
-async function addProduct(){
-  const name=document.getElementById("pName").value.trim(),price=document.getElementById("pPrice").value.trim(),desc=document.getElementById("pDesc").value.trim(),wc=countWords();
-  if(!name||!price)return alert("Enter name & price");if(!selectedType)return alert("Select type");if(wc<30)return alert(`Too short ${wc}/30`);if(wc>150)return alert(`Too long ${wc}/150`);if(!selectedCover)return alert("Add cover");if(!selectedFile)return alert("Add file");
-  const btn=document.getElementById("publishBtn");btn.innerText="Uploading...";btn.disabled=true;
-  try{
-    const form=new FormData();form.append("cover_image",selectedCover);form.append("file",selectedFile);form.append("product_name",name);form.append("price",price);form.append("description",desc);form.append("product_type",selectedType);
-    const res=await fetch("/api/upload",{method:"POST",body:form});const data=await res.json();if(!res.ok)throw new Error(data.detail||"Upload failed");
-    products.unshift({name,price:Number(price),desc,prodType:selectedType,file:selectedFile.name,size:(selectedFile.size/1024/1024).toFixed(2),tx:data.transaction_id,link:`https://t.me/${BOT_USERNAME}?start=${data.transaction_id}`,salesCount:0,orders:[],cover:data.cover_url||selectedCoverPreviewUrl});
-    saveProducts();document.getElementById("pName").value="";document.getElementById("pPrice").value="";document.getElementById("pDesc").value="";removeFile();removeCover();document.querySelectorAll('.typeBtn').forEach(b=>b.classList.remove('active'));selectedType="";countWords();
-    updateHome();updateSellView();openProduct(0,false);
-  }catch(e){alert(e.message);}finally{btn.innerText="Publish Product";btn.disabled=false;}
-}
-updateHome();updateSellView();
-setInterval(updateHome,1000);
-setInterval(()=>{let c=false;products.forEach(p=>{(p.orders||[]).forEach(o=>{if(o.status==='held'&&Date.now()>=o.releaseAt){o.status='released';c=true;}})});if(c){saveProducts();updateHome();}},5000);
-(function(){try{const qp=new URLSearchParams(window.location.search);let tx=qp.get('product')||qp.get('start')||qp.get('startapp');if(!tx){try{tx=window.Telegram.WebApp.initDataUnsafe?.start_param;}catch(e){}}if(tx){setTimeout(()=>{const idx=products.findIndex(p=>p.tx===tx);if(idx>=0)openProduct(idx,true);},900);}}catch(e){}})();
-</script>
-</body>
+.hero-overlay{position:absolute;inset:0;background:linear-gradient(to bottom, rgba(0,0,0,.05), rgba(0,0,0,.6))}
+.hero-top{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;z-index:2}
+.hero-close{background:rgba(255,255,255,.96);border:0;width:34px;height:34px;border-radius:50%;font-weight:800;cursor:pointer}
+.product-body{flex:1;overflow-y:auto;padding-bottom:120px}
+.product-content{padding:16px 18px 0}
+.price-main{font-size:30px;font-weight:900}
+.product-title{font-size:20px;font-weight:900;margin:10px 0;line-height:1.25}
+.product-desc{font-size:13px;line-height:1.6;color:#333;white-space:pre-wrap;margin:10px 0 16px}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:14px 0}
+.meta-item{background:#f9f9fb;border:1px solid #eee;border-radius:12px;padding:10px}
+.meta-label{font-size:9px;color:#888;text-transform:uppercase;font-weight:700}
+.meta-value{font-size:12px;font-weight:700;margin-top:3px;word-break:break-all}
+.sticky-action{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:
                                                                                                                                                                                                                                           </html>
