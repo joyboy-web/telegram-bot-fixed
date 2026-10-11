@@ -3,6 +3,6 @@ uvicorn
 supabase
 google-api-python-client
 google-auth
+python-telegram-bot==20.8
 python-multipart
-Flask
-python-telegram-bot
+requests
