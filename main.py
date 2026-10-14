@@ -1,12 +1,12 @@
-import os, json, uuid, shutil
+import os, json, uuid, shutil, time
 from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "123456:ABC")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://telegram-bot-fixed-uqmt.onrender.com")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://telegram-bot-fixed-uqmt.onrender.com").rstrip("/")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
@@ -28,7 +28,6 @@ def save_db(d):
 
 PRODUCTS = load_db()
 
-# --- WELCOME MESSAGE FOR FIRST TIME USERS ---
 WELCOME_TEXT = (
     "Welcome to PayLock 🔒\n\n"
     "Secure Escrow Marketplace for Naija 🇳🇬\n\n"
@@ -39,7 +38,7 @@ WELCOME_TEXT = (
 )
 
 async def send_telegram_message(chat_id, text, reply_markup=None):
-    if not BOT_TOKEN or BOT_TOKEN.startswith("123456"): return
+    if not BOT_TOKEN: return
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
     if reply_markup: payload["reply_markup"] = reply_markup
@@ -54,13 +53,16 @@ async def handle_telegram_update(update: dict):
     if text.startswith("/start"):
         parts = text.split()
         tx = parts[1] if len(parts)>1 else None
+        # ADD?v= to force Telegram to load new index.html every time
+        version = int(time.time())
+        webapp_url = f"{WEBHOOK_URL}/?v={version}"
         if tx and tx in PRODUCTS:
             p = PRODUCTS[tx]
             prod_text = f"🔒 <b>{p['name']}</b>\n\n💰 ₦{p['price']:,}\n📦 {p['prodType']}\n\nTap below to buy securely 👇"
-            kb = {"inline_keyboard": [[{"text": "🛒 Open & Buy Now", "web_app": {"url": f"{WEBHOOK_URL}/"}}]]}
+            kb = {"inline_keyboard": [[{"text": "🛒 Open & Buy Now", "web_app": {"url": webapp_url}}]]}
             await send_telegram_message(chat_id, prod_text, kb)
         else:
-            kb = {"inline_keyboard": [[{"text": "🛒 Open PayLock", "web_app": {"url": f"{WEBHOOK_URL}/"}}]]}
+            kb = {"inline_keyboard": [[{"text": "🛒 Open PayLock", "web_app": {"url": webapp_url}}]]}
             await send_telegram_message(chat_id, WELCOME_TEXT, kb)
 
 @app.post("/webhook")
@@ -69,11 +71,12 @@ async def telegram_webhook(req: Request):
     try:
         update = await req.json()
         await handle_telegram_update(update)
-    except: pass
+    except Exception as e:
+        print("Webhook error:", e)
     return {"ok": True}
 
 @app.get("/health")
-async def health(): return {"ok": True, "products": len(PRODUCTS)}
+async def health(): return {"ok": True, "products": len(PRODUCTS), "index_exists": os.path.exists(INDEX_FILE)}
 
 @app.post("/api/upload")
 async def upload(product_name: str = Form(...), price: str = Form(...), description: str = Form(...), product_type: str = Form(...), file: UploadFile = File(...), cover_image: UploadFile = File(...)):
@@ -99,13 +102,21 @@ async def prods(): return PRODUCTS
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
+def no_cache_response(path):
+    return FileResponse(path, headers={
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0"
+    })
+
 @app.get("/")
 async def root():
-    if os.path.exists(INDEX_FILE): return FileResponse(INDEX_FILE)
+    if os.path.exists(INDEX_FILE): return no_cache_response(INDEX_FILE)
     return JSONResponse({"error":"index.html NOT FOUND"})
 
 @app.get("/{full_path:path}")
 async def catch_all(full_path: str):
-    if full_path.startswith("api/") or full_path.startswith("uploads/") or full_path.startswith("webhook"): return JSONResponse({"detail":"Not Found"}, status_code=404)
-    if os.path.exists(INDEX_FILE): return FileResponse(INDEX_FILE)
+    if full_path.startswith("api/") or full_path.startswith("uploads/") or full_path.startswith("webhook"):
+        return JSONResponse({"detail":"Not Found"}, status_code=404)
+    if os.path.exists(INDEX_FILE): return no_cache_response(INDEX_FILE)
     return JSONResponse({"detail":"index.html missing"})
