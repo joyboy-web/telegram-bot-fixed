@@ -1,61 +1,60 @@
-import os, time, logging, asyncio
-from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+import os
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
+import asyncio
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://telegram-bot-fixed-uqmt.onrender.com").rstrip("/")
-BOT_USERNAME = os.getenv("BOT_USERNAME", "PayLockOfficialBot").replace("@","")
+WEBAPP_URL = os.getenv("WEBAPP_URL")  # your Render URL e.g https://yourapp.onrender.com
+
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-logging.basicConfig(level=logging.INFO)
-processed_updates = set()
-user_last_start = {}
-update_lock = asyncio.Lock()
+
+# Track users who already got /start to prevent spam
+started_users = set()
+
 @app.get("/")
-async def index():
-    for p in ["index.html", os.path.join(os.path.dirname(__file__), "index.html")]:
-        if os.path.exists(p):
-            r = FileResponse(p, media_type="text/html")
-            r.headers["Cache-Control"] = "no-store"
-            return r
-    return JSONResponse({"error":"index.html missing"})
-@app.get("/health")
-async def health(): return {"ok":True,"bot":BOT_USERNAME,"webhook":WEBHOOK_URL}
-tg_app = None
-try:
-    if BOT_TOKEN:
-        from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-        from telegram.ext import Application, CommandHandler, ContextTypes
-        tg_app = Application.builder().token(BOT_TOKEN).concurrent_updates(False).build()
-        async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-            async with update_lock:
-                uid = update.update_id
-                if uid in processed_updates: return
-                processed_updates.add(uid)
-                if len(processed_updates) > 500: processed_updates.clear()
-                user_id = update.effective_user.id
-                now = time.time()
-                last = user_last_start.get(user_id, 0)
-                if now - last < 8: return
-                user_last_start[user_id] = now
-            v=int(time.time())
-            url=f"{WEBHOOK_URL}/?v={v}"
-            kb=[[InlineKeyboardButton("Open PayLock", web_app=WebAppInfo(url=url))]]
-            await update.message.reply_text("Welcome to PayLock 🔒\n\nSecure Escrow Marketplace for Naija\n\nBuy safely — money dey hold until you confirm\nSell fast — get paid instantly\n100% escrow protection • 24hrs\n\nTap Open PayLock below!", reply_markup=InlineKeyboardMarkup(kb))
-        tg_app.add_handler(CommandHandler("start", start))
-        @app.post("/webhook")
-        async def webhook(req: Request):
-            data=await req.json()
-            update=Update.de_json(data, tg_app.bot)
-            await tg_app.process_update(update)
-            return {"ok":True}
-        @app.on_event("startup")
-        async def startup():
-            await tg_app.initialize()
-            await tg_app.start()
-            await tg_app.bot.set_webhook(f"{WEBHOOK_URL}/webhook", drop_pending_updates=True)
-        @app.on_event("shutdown")
-        async def shutdown():
-            await tg_app.stop()
-            await tg_app.shutdown()
-except Exception as e: logging.error(e)
+async def serve_index():
+    return FileResponse("index.html")
+
+# --- Telegram Bot ---
+async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id in started_users:
+        return  # block spam - reply only once
+    started_users.add(user_id)
+    
+    # auto-clear after 2 minutes to allow again if needed
+    asyncio.create_task(clear_user_later(user_id))
+    
+    await update.message.reply_text(
+        "Welcome to PayLock 🔒\nYour escrow is secured.\n\nTap below to open app:",
+        reply_markup={
+            "inline_keyboard": [[
+                {"text": "🚀 Open PayLock", "web_app": {"url": WEBAPP_URL}}
+            ]]
+        }
+    )
+
+async def clear_user_later(user_id):
+    await asyncio.sleep(120)
+    started_users.discard(user_id)
+
+telegram_app = Application.builder().token(BOT_TOKEN).build()
+telegram_app.add_handler(CommandHandler("start", start_cmd))
+
+@app.on_event("startup")
+async def startup():
+    await telegram_app.initialize()
+    await telegram_app.start()
+    # set webhook or polling based on your setup
+    if os.getenv("RENDER"):
+        await telegram_app.bot.set_webhook(f"{WEBAPP_URL}/webhook")
+    else:
+        asyncio.create_task(telegram_app.updater.start_polling())
+
+@app.post("/webhook")
+async def webhook(update: dict):
+    await telegram_app.process_update(Update.de_json(update, telegram_app.bot))
+    return {"ok": True}
