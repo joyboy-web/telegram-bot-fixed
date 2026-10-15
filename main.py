@@ -1,60 +1,77 @@
 import os
-from fastapi import FastAPI
+import asyncio
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
-import asyncio
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBAPP_URL = os.getenv("WEBAPP_URL")  # your Render URL e.g https://yourapp.onrender.com
+WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip()  # e.g https://your-app.onrender.com
 
 app = FastAPI()
 
-# Track users who already got /start to prevent spam
+# Prevent /start spam
 started_users = set()
+
+async def clear_user_later(uid):
+    await asyncio.sleep(120)
+    started_users.discard(uid)
+
+# Telegram handlers
+async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if uid in started_users:
+        return
+    started_users.add(uid)
+    asyncio.create_task(clear_user_later(uid))
+    
+    url = WEBAPP_URL if WEBAPP_URL else "https://t.me"
+    keyboard = {
+        "inline_keyboard": [[
+            {"text": "🚀 Open PayLock", "web_app": {"url": url}}
+        ]]
+    }
+    await update.message.reply_text(
+        "Welcome to PayLock 🔒\nEscrow Secured\n\nTap to open app:",
+        reply_markup=keyboard
+    )
+
+# Build bot app
+telegram_app = Application.builder().token(BOT_TOKEN).build()
+telegram_app.add_handler(CommandHandler("start", start_cmd))
 
 @app.get("/")
 async def serve_index():
     return FileResponse("index.html")
 
-# --- Telegram Bot ---
-async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id in started_users:
-        return  # block spam - reply only once
-    started_users.add(user_id)
-    
-    # auto-clear after 2 minutes to allow again if needed
-    asyncio.create_task(clear_user_later(user_id))
-    
-    await update.message.reply_text(
-        "Welcome to PayLock 🔒\nYour escrow is secured.\n\nTap below to open app:",
-        reply_markup={
-            "inline_keyboard": [[
-                {"text": "🚀 Open PayLock", "web_app": {"url": WEBAPP_URL}}
-            ]]
-        }
-    )
-
-async def clear_user_later(user_id):
-    await asyncio.sleep(120)
-    started_users.discard(user_id)
-
-telegram_app = Application.builder().token(BOT_TOKEN).build()
-telegram_app.add_handler(CommandHandler("start", start_cmd))
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
+    update = Update.de_json(data, telegram_app.bot)
+    await telegram_app.process_update(update)
+    return {"ok": True}
 
 @app.on_event("startup")
-async def startup():
+async def on_startup():
     await telegram_app.initialize()
     await telegram_app.start()
-    # set webhook or polling based on your setup
-    if os.getenv("RENDER"):
-        await telegram_app.bot.set_webhook(f"{WEBAPP_URL}/webhook")
+    # Only set webhook if URL is valid and contains https
+    if WEBAPP_URL and WEBAPP_URL.startswith("https://"):
+        try:
+            await telegram_app.bot.set_webhook(f"{WEBAPP_URL}/webhook")
+            print(f"Webhook set to {WEBAPP_URL}/webhook")
+        except Exception as e:
+            print(f"Webhook failed (will use polling fallback): {e}")
     else:
-        asyncio.create_task(telegram_app.updater.start_polling())
+        print("WEBAPP_URL not set or invalid - skipping webhook, using polling mode")
 
-@app.post("/webhook")
-async def webhook(update: dict):
-    await telegram_app.process_update(Update.de_json(update, telegram_app.bot))
-    return {"ok": True}
+@app.on_event("shutdown")
+async def on_shutdown():
+    await telegram_app.stop()
+    await telegram_app.shutdown()
+
+# Render needs this to bind port
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
