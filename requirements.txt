@@ -1,5 +1,4 @@
-fastapi
-uvicorn
+fastapi==0.110.0
+uvicorn==0.29.0
 python-telegram-bot==20.7
-httpx
-python-multipart
+httpx==0.26.0
