@@ -1,268 +1,81 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>PayLock</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>PayLock V6.1 Final</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f6f6f7;--card:#fff;--text:#101114;--muted:#6b7280;--black:#111827;--border:#e8e8ec;--green:#10b981}
-*{box-sizing:border-box;margin:0;padding:0;font-family:'Inter',system-ui}
-body{background:var(--bg);color:var(--text);padding-bottom:100px}
-.top-header{position:sticky;top:0;z-index:30;background:rgba(246,246,247,.92);backdrop-filter:blur(18px);border-bottom:1px solid var(--border);padding:12px 14px;display:flex;justify-content:space-between;align-items:center}
-.brand-pill{display:flex;align-items:center;gap:9px;background:var(--black);color:#fff;padding:7px 13px 7px 7px;border-radius:100px}
-.brand-icon{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#a5f3fc,#34d399);display:flex;align-items:center;justify-content:center}
-.brand-text b{font-size:14px;font-weight:800}.brand-text span{font-size:9px;opacity:.7;display:block}
-.wallet-badge{background:#fff;border:1px solid var(--border);padding:6px 11px;border-radius:100px;font-size:11px;font-weight:700;display:flex;gap:6px;align-items:center}
-.dot{width:7px;height:7px;background:var(--green);border-radius:50%;box-shadow:0 0 0 4px rgba(16,185,129,.18)}
-.container{padding:14px;max-width:520px;margin:0 auto}
-.card{background:var(--card);border-radius:22px;padding:16px;border:1px solid var(--border);box-shadow:0 8px 24px rgba(0,0,0,.04);margin-bottom:12px}
-.escrow-top{display:flex;justify-content:space-between;align-items:center}.escrow-top p{font-size:11px;font-weight:700;letter-spacing:.8px;color:var(--muted)}
-.btn-new{background:#fff;border:1px solid var(--border);padding:7px 13px;border-radius:100px;font-weight:700;font-size:12px;cursor:pointer}
-.escrow-amount{font-size:38px;font-weight:800;letter-spacing:-1.2px;margin-top:6px}
-.escrow-sub{font-size:12px;color:var(--muted);margin-top:2px}
-.section-title{font-size:18px;font-weight:800;margin:18px 0 10px}
-.product-row{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:18px;padding:11px;margin-bottom:9px;cursor:pointer}
-.p-thumb{width:68px;height:68px;border-radius:14px;background:#f3f4f6;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.p-thumb img{width:100%;height:100%;object-fit:cover}.p-main{flex:1;min-width:0}.p-main h4{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.p-main p{font-size:11px;color:var(--muted)}.p-main b{font-size:14px;margin-top:3px;display:block}
-.btn-view{border:1px solid var(--border);background:#fff;padding:7px 14px;border-radius:100px;font-weight:700;font-size:12px}
-.buy-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.buy-card{background:#fff;border-radius:20px;overflow:hidden;border:1px solid var(--border);cursor:pointer}.buy-card.img{height:132px;background:#f3f4f6;overflow:hidden}.buy-card.img img{width:100%;height:100%;object-fit:cover}.buy-card.info{padding:10px}.buy-card h4{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.buy-card p{font-size:10px;color:var(--muted)}.buy-card b{font-size:14px;margin-top:4px;display:block}
-.input{width:100%;background:#fff;border:1px solid var(--border);padding:15px 16px;border-radius:14px;font-size:14px;outline:none;margin-bottom:10px}.input:focus{border-color:#111827}
-.chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}.chip{padding:9px 14px;border-radius:100px;background:#fff;border:1px solid var(--border);font-size:12px;font-weight:600;cursor:pointer}.chip.active{background:var(--black);color:#fff}
-.drop{border:2px dashed var(--black);background:#fff;border-radius:14px;padding:16px;text-align:center;margin-bottom:10px;cursor:pointer}.drop img.preview{width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-top:8px}
-.btn-primary{width:100%;background:var(--black);color:#fff;padding:16px;border-radius:14px;font-weight:800;font-size:14px;border:none;cursor:pointer}
-.tabbar{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;background:rgba(255,255,255,.94);backdrop-filter:blur(18px);border:1px solid var(--border);padding:5px;border-radius:100px;display:flex;gap:3px;box-shadow:0 18px 36px rgba(0,0,0,.12);z-index:40}
-.tab{padding:8px 16px;border-radius:100px;display:flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer;min-width:60px}.tab.active{background:var(--black);color:#fff}.tab svg{width:20px;height:20px}.tab span{font-size:9px;font-weight:700}
-.page{display:none}.page.active{display:block}
-.search-wrap{position:relative;margin-bottom:12px}.search-wrap input{padding-left:40px}.search-wrap.ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);opacity:.5}
-/* WALLET BLACK + SHAKE */
-.wallet-black{background:#0f1115;border-radius:28px;padding:20px;position:relative;overflow:hidden;color:#fff;min-height:210px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 20px 40px rgba(0,0,0,.22)}
-.wallet-black:before{content:'';position:absolute;right:-30px;top:-30px;width:180px;height:180px;background:radial-gradient(circle at center,rgba(52,211,153,.28),transparent 70%);border-radius:50%}
-.wallet-black:after{content:'';position:absolute;left:-40px;bottom:-40px;width:220px;height:220px;background:radial-gradient(circle at center,rgba(165,243,252,.18),transparent 70%);border-radius:50%}
-.wallet-black.shake{animation:shake.5s cubic-bezier(.36,.07,.19,.97) both}
-@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
-.wb-top{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:2}
-.wb-top.logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px}.wb-top.logo i{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#34d399,#a5f3fc);display:flex;align-items:center;justify-content:center;color:#111}
-.eye-btn{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(10px);transition:.2s}
-.eye-btn:active{transform:scale(.92)}
-.wb-mid{position:relative;z-index:2;margin:18px 0}.wb-mid.stars{font-size:40px;font-weight:800;letter-spacing:8px}.wb-mid.amount{font-size:36px;font-weight:800;letter-spacing:-.5px}
-.wb-bottom{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:flex-end}.wb-bottom small{font-size:11px;opacity:.6;display:block}.wb-bottom b{font-size:13px;font-weight:600}
-.wb-actions{display:flex;gap:10px;margin-top:14px}.wb-actions button{flex:1;padding:14px;border-radius:14px;font-weight:800;font-size:13px;border:none;cursor:pointer}.btn-light{background:#fff;color:#111}
-/* MODALS PREMIUM */
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.52);backdrop-filter:blur(12px);display:none;align-items:flex-end;justify-content:center;z-index:100;padding:14px}.modal-bg.show{display:flex}
-.modal{width:100%;max-width:520px;background:#fff;border-radius:28px 28px 20px 20px;padding:22px;animation:up.36s cubic-bezier(.16,1,.3,1);max-height:92vh;overflow:auto;box-shadow:0 30px 60px rgba(0,0,0,.18)}
-@keyframes up{from{transform:translateY(28px);opacity:0}to{transform:translateY(0);opacity:1}}
-.modal.grab{width:36px;height:4px;background:#e5e7eb;border-radius:100px;margin:0 auto 14px}
-.bank-item{display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;cursor:pointer;border:1px solid transparent;transition:.15s}.bank-item:hover{background:#f9fafb;border-color:var(--border)}.bank-item.ic{width:36px;height:36px;border-radius:10px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px}
-.bank-item b{font-size:13px}.bank-item p{font-size:11px;color:var(--muted)}
-.section-label{font-size:11px;font-weight:800;letter-spacing:.8px;color:var(--muted);margin:14px 0 8px}
-.toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:11px 16px;border-radius:100px;font-size:12px;font-weight:700;display:none;z-index:200;box-shadow:0 12px 24px rgba(0,0,0,.18)}.toast.show{display:block}
-.chat-page{position:fixed;inset:0;z-index:35;background:#efeae2;display:none;flex-direction:column}.chat-page.show{display:flex}
-.chat-header{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:2}
-.avatar-premium{width:42px;height:42px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#34d399,#0f172a);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;position:relative}
-.avatar-premium:after{content:'';position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;background:#10b981;border:2px solid #fff;border-radius:50%}
-.chat-body{flex:1;overflow:auto;padding:12px;background:#efeae2;background-image: radial-gradient(rgba(0,0,0,.04) 1px, transparent 1px);background-size: 24px 24px;}
-.msg{max-width:76%;padding:10px 12px;border-radius:18px;font-size:14px;line-height:1.35;margin-bottom:8px;box-shadow:0 1px 1px rgba(0,0,0,.08);position:relative}.msg.bot{background:#fff;border-bottom-left-radius:6px}.msg.me{background:#dcf8c6;margin-left:auto;border-bottom-right-radius:6px}.msg.time{font-size:9px;color:#6b7280;margin-top:4px;text-align:right}.msg.btn-buy{background:#111827;color:#fff;padding:10px 14px;border-radius:12px;margin-top:8px;display:block;font-weight:700;font-size:13px;text-align:center;width:100%}
-.chat-input-row{display:flex;gap:8px;padding:10px 12px;background:#f0f0f0;border-top:1px solid #e5e7eb;align-items:center}.chat-input-row input{flex:1;background:#fff;border:1px solid #e5e7eb;padding:12px 16px;border-radius:24px;outline:none}.chat-input-row button{width:46px;height:46px;border-radius:50%;background:#111827;color:#fff;border:none;font-size:18px}
-.preview-cover{width:100%;height:260px;border-radius:22px;overflow:hidden;background:#f3f4f6;position:relative}.preview-cover img{width:100%;height:100%;object-fit:cover}
-.preview-actions{display:flex;gap:10px;margin-top:14px}.preview-actions button{flex:1}
-</style>
-</head>
-<body>
-<div class="top-header"><div class="brand-pill"><div class="brand-icon">🔒</div><div class="brand-text"><b>PayLock</b><span>Secure • Held • Protected</span></div></div><div class="wallet-badge"><div class="dot"></div> Escrow 24h</div></div>
-<div class="container">
-<div id="page-home" class="page active"><div class="card"><div class="escrow-top"><p>FUNDS IN ESCROW</p><button class="btn-new" onclick="switchTab('sell')">+ New</button></div><div class="escrow-amount" id="escrowAmount">₦0.00</div><div class="escrow-sub" id="escrowSub">0 orders • Auto</div></div><div class="section-title">Active Escrows</div><div id="homeList"></div><div class="section-title">Recent Orders</div><div id="recentList"></div></div>
-<div id="page-sell" class="page"><div class="section-title" style="margin-top:0">Sell - Add Product</div><input id="pName" class="input" placeholder="Product name"><input id="pPrice" class="input" type="number" placeholder="Price in Naira"><div class="chips" id="typeChips"></div><textarea id="pDesc" class="input" rows="4" placeholder="Description 30-150 words"></textarea><div class="drop" onclick="document.getElementById('coverInput').click()"><div>🖼️ Cover Image *</div><img id="coverPrev" class="preview" style="display:none"><input type="file" id="coverInput" accept="image/*" hidden></div><div class="drop" onclick="document.getElementById('fileInput').click()"><div>📦 Product File *</div><div id="fileName" style="font-size:12px;margin-top:6px;color:#6b7280"></div><input type="file" id="fileInput" hidden></div><button class="btn-primary" onclick="createProduct()">Publish Product →</button></div>
-<div id="page-buy" class="page"><div class="search-wrap"><span class="ic">🔍</span><input id="searchInput" class="input" placeholder="Search products..." oninput="liveSearch()"></div><div class="buy-grid" id="buyGrid"></div></div>
-<div id="page-wallet" class="page"><div class="wallet-black" id="walletBlack"><div class="wb-top"><div class="logo"><i>₦</i> PayLock Wallet</div><div class="eye-btn" onclick="toggleEye()"><span id="eyeIcon">🙈</span></div></div><div class="wb-mid"><div class="stars" id="wbStars">••••••</div><div class="amount" id="wbAmount" style="display:none">₦0</div></div><div class="wb-bottom"><div><small>Seller ID</small><b id="wbSeller">PAY-USER-8821</b></div><div style="text-align:right"><small>Username</small><b id="wbUser">@user</b></div></div></div><div class="wb-actions" id="wbActions"></div><div class="section-title">Transactions</div><div id="txList"></div></div><div id="page-preview" class="page"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="switchTab('buy')">←</div><b>Product Preview</b></div><div class="preview-cover" id="prevCover"></div><div class="card" style="margin-top:12px"><h3 id="prevName" style="font-size:18px;font-weight:800"></h3><p id="prevType" style="font-size:12px;color:#6b7280;margin-top:4px"></p><p id="prevDesc" style="font-size:13px;margin-top:10px;line-height:1.5;color:#374151"></p><div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px"><b id="prevPrice" style="font-size:20px"></b><span style="font-size:11px;background:#dcfce7;color:#15803d;padding:4px 10px;border-radius:100px;font-weight:800">24H Escrow</span></div><div class="preview-actions"><button class="btn-new" style="padding:16px;flex:1" onclick="openChatFromPreview()">💬 Chat Seller</button><button class="btn-primary" style="flex:1" onclick="buyFromPreview()">Buy Now</button></div></div></div>
-</div>
-<div class="tabbar" id="tabbar"><div class="tab active" data-tab="home" onclick="switchTab('home')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9L12 2l9 7v11a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-4H10v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></div><div class="tab" data-tab="sell" onclick="switchTab('sell')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg><span>Sell</span></div><div class="tab" data-tab="chat" onclick="openLastChat()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Chat</span></div><div class="tab" data-tab="buy" onclick="switchTab('buy')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Buy</span></div><div class="tab" data-tab="wallet" onclick="switchTab('wallet')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg><span>Wallet</span></div></div>
-<div class="chat-page" id="chatPage"><div class="chat-header"><div style="width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="closeChat()">←</div><div class="avatar-premium" id="chatAvatar">M</div><div style="flex:1"><b id="chatTitle">Product</b><div style="font-size:11px;color:#10b981;font-weight:700">● Online • Escrow Protected</div></div><button class="btn-new" onclick="closeChat()">↩ Leave</button></div><div class="chat-body" id="chatBox"></div><div class="chat-input-row"><input id="chatMsg" placeholder="Message..." onkeydown="if(event.key==='Enter')sendMsg()"><button onclick="sendMsg()">↑</button></div></div>
-<div class="modal-bg" id="linkModal" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="grab"></div><h3 style="font-size:18px;font-weight:800">Product Link Ready 🔒</h3><p style="font-size:13px;color:#6b7280;margin:8px 0 14px">Share on Telegram. Funds held 24hrs. Bot: @PayLockOfficialBot</p><div style="background:#f9fafb;border:1px solid var(--border);padding:14px;border-radius:14px;font-size:13px;word-break:break-all;display:flex;gap:10px;align-items:center"><span style="flex:1" id="linkText"></span><button class="btn-new" onclick="copyLink()">Copy</button></div><button class="btn-primary" style="margin-top:14px" onclick="closeModal()">Done</button></div></div>
-<div class="modal-bg" id="walletModal" onclick="if(event.target===this)this.classList.remove('show')"><div class="modal"><div class="grab"></div><h3 style="font-size:18px;font-weight:800">Connect Wallet 🏦</h3><p style="font-size:12px;color:#6b7280;margin:8px 0 14px">Enter your bank details. One-time setup — your escrow funds will settle here.</p><input id="acctName" class="input" placeholder="Account Name"><input id="acctNumber" class="input" placeholder="Account Number" type="number"><div style="position:relative"><input id="bankName" class="input" placeholder="Select Bank →" readonly onclick="openBankSelect()" style="cursor:pointer;background:#f9fafb"><span style="position:absolute;right:14px;top:50%;transform:translateY(-50%)">🏦</span></div><button class="btn-primary" style="margin-top:8px" onclick="confirmWallet()">Confirm & Connect →</button></div></div>
-<div class="modal-bg" id="bankModal" style="z-index:110" onclick="if(event.target===this)this.classList.remove('show')"><div class="modal" style="max-height:94vh"><div class="grab"></div><h3 style="font-size:17px;font-weight:800">Select Bank</h3><div class="search-wrap" style="margin-top:12px"><span class="ic">🔍</span><input id="bankSearch" class="input" placeholder="Search bank..." oninput="filterBanks()" style="padding-left:40px"></div><div id="bankList"></div></div></div>
-<div class="modal-bg" id="infoModal"><div class="modal" style="text-align:center;padding:28px 22px"><div style="width:64px;height:64px;border-radius:50%;background:#f3f4f6;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:30px" id="infoIcon">🔒</div><h3 id="infoTitle" style="font-size:18px;font-weight:800">Please connect wallet</h3><p id="infoText" style="font-size:13px;color:#6b7280;margin-top:8px;line-height:1.5">Connect your wallet to see balance and withdraw funds. One-time setup.</p><button class="btn-primary" style="margin-top:18px" onclick="document.getElementById('infoModal').classList.remove('show')">OK</button></div></div>
-<div class="modal-bg" id="termsModal" style="z-index:120"><div class="modal" style="text-align:left;padding:24px"><div class="grab"></div><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="width:38px;height:38px;border-radius:12px;background:#111827;color:#fff;display:flex;align-items:center;justify-content:center">🛡️</div><h3 style="font-size:17px;font-weight:800">Terms & Privacy</h3></div><div style="max-height:260px;overflow:auto;background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;font-size:12px;line-height:1.6;color:#374151;margin:10px 0">PayLock uses 24hrs escrow protection. Funds are held securely until buyer confirms delivery. By connecting wallet, you agree to our escrow terms, no fraud, and 100% protection policy. Your bank details are encrypted locally. We never share your data. Continued use means you accept these terms.</div><label style="display:flex;gap:8px;align-items:center;font-size:12px;margin:14px 0;font-weight:600;cursor:pointer"><input type="checkbox" id="termsCheck"> I accept Terms & Conditions</label><button class="btn-primary" onclick="acceptTerms()">Accept & Continue →</button></div></div>
-<div class="toast" id="toast"></div>
-<script>
-const BOT_USERNAME = "PayLockOfficialBot";
-const ALL_BANKS = ["Access Bank","Zenith Bank","Guaranty Trust Bank (GTBank)","United Bank for Africa (UBA)","First Bank of Nigeria","Fidelity Bank","First City Monument Bank (FCMB)","Stanbic IBTC Bank","Ecobank Nigeria","Wema Bank","Sterling Bank","Union Bank of Nigeria","Citibank Nigeria","Standard Chartered Bank Nigeria","Keystone Bank","Providus Bank","SunTrust Bank Nigeria","Titan Trust Bank","Globus Bank","PremiumTrust Bank","Optimus Bank","Kuda Microfinance Bank","Moniepoint Microfinance Bank","OPay","PalmPay","Paga","FairMoney","VBank (VFD Microfinance Bank)","Carbon","ALAT by Wema","Rubies Bank","Sparkle","Eyowo","Chipper Cash","Jaiz Bank","TAJBank","Lotus Bank","FSDH Merchant Bank","Rand Merchant Bank Nigeria","Greenwich Merchant Bank","Nova Merchant Bank","Coronation Merchant Bank","Parallex Bank","Signature Bank","LAPO Microfinance Bank","AB Microfinance Bank","Baobab Microfinance Bank","Lovonus Microfinance Bank","Addosser Microfinance Bank","Teerus Microfinance Bank","Altitude Microfinance Bank","Mutual Trust Microfinance Bank","Rephidim Microfinance Bank","NIRSAL Microfinance Bank","Renmoney Microfinance Bank","Accion Microfinance Bank","Mainstreet Microfinance Bank","Grooming Microfinance Bank","New Prudential Microfinance Bank","Seedvest Microfinance Bank","Trustfund Microfinance Bank","Fortis Microfinance Bank","Hasal Microfinance Bank","NPF Microfinance Bank","Nigerian Police Microfinance Bank","Peace Microfinance Bank","Page Microfinance Bank","Petro Microfinance Bank","Richwell Microfinance Bank","Safeguard Microfinance Bank","Sofri Microfinance Bank","Sparkle Microfinance Bank","Rubies Microfinance Bank","Eyowo Microfinance Bank","Carbon Microfinance Bank","OneBank Microfinance Bank","NowNow Digital Microfinance Bank","Sycamore Microfinance Bank","Creditville Microfinance Bank","Verdant Microfinance Bank","Entrepreneur Microfinance Bank"];
-let products = JSON.parse(localStorage.getItem("paylock_products")||"[]");
-let orders = JSON.parse(localStorage.getItem("paylock_orders")||"[]");
-let currentProduct=null; let previewProduct=null; let coverBase64=""; let selectedBank=""; let eyeOpen=false;function save(){localStorage.setItem("paylock_products",JSON.stringify(products));localStorage.setItem("paylock_orders",JSON.stringify(orders));renderAll();}
-function renderAll(){renderHome();renderBuy();renderWallet();}
-function renderHome(){
-  const escrow=orders.filter(o=>o.status==="HELD").reduce((s,o)=>s+o.price,0);
-  document.getElementById("escrowAmount").textContent="₦"+escrow.toLocaleString()+".00";
-  document.getElementById("escrowSub").textContent=orders.length+" orders • Auto";
-  const hl=document.getElementById("homeList");
-  if(!products.length) hl.innerHTML=`<div class="card" style="text-align:center;color:#6b7280">No products yet. Tap + New</div>`;
-  else hl.innerHTML=products.slice().reverse().map(p=>`<div class="product-row" onclick="openPreview('${p.id}')"><div class="p-thumb">${p.cover?`<img src="${p.cover}">`:`<span>📦</span>`}</div><div class="p-main"><h4>${p.name}</h4><p>${p.type} • ${p.sales} sold</p><b>₦${Number(p.price).toLocaleString()}</b></div><div><button class="btn-view">View</button></div></div>`).join("");
-  const rl=document.getElementById("recentList");
-  rl.innerHTML=orders.slice().reverse().slice(0,5).map(o=>`<div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px"><div><p style="font-size:11px;color:#6b7280;font-weight:700">Held 24h</p><b style="font-size:13px">${o.name}</b></div><div><span style="background:#dcfce7;color:#15803d;padding:4px 10px;border-radius:100px;font-size:11px;font-weight:800">${o.status}</span></div></div>`).join("")||`<div class="card" style="text-align:center;color:#6b7280">No orders yet</div>`;
-}
-let searchQ="";
-function liveSearch(){searchQ=document.getElementById("searchInput").value.toLowerCase().trim();renderBuy();}
-function renderBuy(){
-  const grid=document.getElementById("buyGrid");
-  let list=products.slice().reverse();
-  if(searchQ) list=list.filter(p=>(p.name+" "+p.type+" "+p.desc).toLowerCase().includes(searchQ));
-  if(!list.length){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;color:#6b7280;padding:20px">No products for "${searchQ}"</div>`;return;}
-  grid.innerHTML=list.map(p=>`<div class="buy-card" onclick="openPreview('${p.id}')"><div class="img">${p.cover?`<img src="${p.cover}">`:`<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:28px">📦</div>`}</div><div class="info"><h4>${p.name}</h4><p>${p.type} • ${p.sales} sales</p><b>₦${Number(p.price).toLocaleString()}</b></div></div>`).join("");
-}
-function renderWallet(){
-  const data=JSON.parse(localStorage.getItem("paylock_wallet_data")||"null");
-  const connected=!!data;
-  const held=orders.filter(o=>o.status==="HELD").reduce((s,o)=>s+o.price,0);
-  const avail=orders.filter(o=>o.status==="RELEASED").reduce((s,o)=>s+o.price,0);
-  const total=held+avail;
-  const stars=document.getElementById("wbStars");
-  const amount=document.getElementById("wbAmount");
-  const actions=document.getElementById("wbActions");
-  document.getElementById("wbSeller").textContent="PAY-"+(data?data.acctNumber.slice(-4):"8821");
-  document.getElementById("wbUser").textContent=data?data.acctName:"@user";
-  // AUTO-RESET: always start with ****** + closed eye
-  eyeOpen=false;
-  stars.textContent="••••••";
-  stars.style.display="block";
-  amount.style.display="none";
-  document.getElementById("eyeIcon").textContent="🙈";
-  amount.textContent="₦"+total.toLocaleString();
-  if(connected){
-    actions.innerHTML=`<button class="btn-light" style="background:#fff;border:1px solid #e5e7eb" onclick="showToast('Funding coming soon')">Fund Wallet</button><button class="btn-primary" style="flex:1;background:#fff;color:#111;border:1px solid #e5e7eb" onclick="showToast('Withdraw initiated')">Withdraw</button>`;
-  } else {
-    actions.innerHTML=`<button class="btn-primary" onclick="openWalletModal()" style="background:#fff;color:#111">Connect Wallet</button>`;
-  }
-  const tx=document.getElementById("txList");
-  tx.innerHTML=orders.slice().reverse().map(o=>`<div class="card" style="padding:12px 14px;display:flex;justify-content:space-between"><div><b style="font-size:12px">Held 24h</b><p style="font-size:11px;color:#6b7280">${o.name}</p></div><b>₦${o.price}</b></div>`).join("")||`<div class="card" style="text-align:center;color:#6b7280">No transactions</div>`;
-}
-function switchTab(t){
-  if(t==="chat"){openLastChat();return;}
-  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
-  document.getElementById("page-"+t).classList.add("active");
-  document.querySelectorAll(".tab").forEach(el=>el.classList.toggle("active",el.dataset.tab===t));
-  document.getElementById("chatPage").classList.remove("show");
-  document.getElementById("tabbar").style.display="flex";
-}
-let lastChatId=localStorage.getItem("paylock_last_chat")||null;
-function openLastChat(){if(lastChatId) openChat(lastChatId); else {switchTab("buy");showToast("Select a product to chat");}}
-function openPreview(id){
-  const p=products.find(x=>x.id===id); if(!p) return;
-  previewProduct=id;
-  document.getElementById("prevCover").innerHTML=p.cover?`<img src="${p.cover}">`:`<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:40px">📦</div>`;
-  document.getElementById("prevName").textContent=p.name;
-  document.getElementById("prevType").textContent=p.type+" • "+p.sales+" sales";
-  document.getElementById("prevDesc").textContent=p.desc;
-  document.getElementById("prevPrice").textContent="₦"+Number(p.price).toLocaleString();
-  document.querySelectorAll(".page").forEach(pg=>pg.classList.remove("active"));
-  document.getElementById("page-preview").classList.add("active");
-  document.querySelectorAll(".tab").forEach(el=>el.classList.remove("active"));
-}
-function openChatFromPreview(){if(previewProduct) openChat(previewProduct);}
-function buyFromPreview(){if(previewProduct) buyNow(previewProduct);}
-function openChat(id){
-  const p=products.find(x=>x.id===id); if(!p) return;
-  currentProduct=id; lastChatId=id; localStorage.setItem("paylock_last_chat",id);
-  document.getElementById("chatTitle").textContent=p.name;
-  document.getElementById("chatAvatar").textContent=p.name[0].toUpperCase();
-  const box=document.getElementById("chatBox");
-  const hist=JSON.parse(localStorage.getItem("paylock_chat_"+id)||"[]");
-  box.innerHTML=`<div style="text-align:center;margin:10px 0"><span style="background:#fff;padding:4px 10px;border-radius:12px;font-size:11px;color:#6b7280;box-shadow:0 1px 1px rgba(0,0,0,.08)">Today • Escrow Protected</span></div><div class="msg bot"><b>${p.name}</b><br>Type: ${p.type}<br>${p.desc.slice(0,120)}<br><b style="display:block;margin-top:6px">₦${p.price.toLocaleString()}</b><div class="time">24hrs escrow • 2:30 AM</div><div class="btn-buy" onclick="buyNow('${p.id}')">💳 Buy - ₦${p.price.toLocaleString()}</div></div>` + hist.map(m=>`<div class="msg ${m.me?'me':'bot'}">${m.text}<div class="time">${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} ✓✓</div></div>`).join("");
-  document.getElementById("chatPage").classList.add("show");
-  document.getElementById("tabbar").style.display="none";
-  setTimeout(()=>box.scrollTop=box.scrollHeight,80);
-}
-function closeChat(){document.getElementById("chatPage").classList.remove("show");document.getElementById("tabbar").style.display="flex";switchTab("home");}
-function buyNow(id){
-  const p=products.find(x=>x.id===id); if(!p) return;
-  const oid="ORD-"+Math.random().toString(36).slice(2,5).toUpperCase();
-  orders.push({id:oid,name:p.name,price:p.price,status:"HELD",created:Date.now()});
-  p.sales=(p.sales||0)+1; save();
-  const box=document.getElementById("chatBox");
-  if(box){box.innerHTML+=`<div class="msg bot">✅ Paid! ${p.name} ₦${p.price.toLocaleString()}<br>Order ${oid} Held 24hrs.<div class="time">Now ✓✓</div></div>`;box.scrollTop=box.scrollHeight;}
-  showToast("Payment held in escrow");
-}
-function sendMsg(){
-  const inp=document.getElementById("chatMsg"); const txt=inp.value.trim(); if(!txt||!currentProduct) return;
-  const box=document.getElementById("chatBox"); box.innerHTML+=`<div class="msg me">${txt}<div class="time">${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} ✓✓</div></div>`; inp.value="";
-  const hist=JSON.parse(localStorage.getItem("paylock_chat_"+currentProduct)||"[]"); hist.push({text:txt,me:true}); localStorage.setItem("paylock_chat_"+currentProduct,JSON.stringify(hist)); box.scrollTop=box.scrollHeight;
-}
-function openWalletModal(){document.getElementById("walletModal").classList.add("show");}
-function toggleEye(){
-  const data=JSON.parse(localStorage.getItem("paylock_wallet_data")||"null");
-  const walletEl=document.getElementById("walletBlack");
-  const icon=document.getElementById("eyeIcon");
-  const stars=document.getElementById("wbStars");
-  const amount=document.getElementById("wbAmount");
-  if(!data){
-    // SHAKE LIKE BANKING APP INCORRECT
-    walletEl.classList.remove("shake"); void walletEl.offsetWidth; walletEl.classList.add("shake");
-    if(window.Telegram && window.Telegram.WebApp){ Telegram.WebApp.HapticFeedback.notificationOccurred("error"); }
-    setTimeout(()=>{ walletEl.classList.remove("shake"); showInfo("🔒","Please connect wallet","Connect your wallet to see balance and withdraw funds. One-time setup."); }, 400);
-    return;
-  }
-  eyeOpen=!eyeOpen;
-  if(eyeOpen){
-    stars.style.display="none"; amount.style.display="block"; icon.textContent="👁️";
-    if(window.Telegram && window.Telegram.WebApp) Telegram.WebApp.HapticFeedback.impactOccurred("light");
-  } else {
-    stars.style.display="block"; amount.style.display="none"; icon.textContent="🙈";
-  }
-}
-function showInfo(icon,title,text){document.getElementById("infoIcon").textContent=icon;document.getElementById("infoTitle").textContent=title;document.getElementById("infoText").textContent=text;document.getElementById("infoModal").classList.add("show");}
-function openBankSelect(){document.getElementById("bankModal").classList.add("show");filterBanks();setTimeout(()=>document.getElementById("bankSearch").focus(),100);}
-function filterBanks(){
-  const q=document.getElementById("bankSearch").value.toLowerCase().trim();
-  const filtered=ALL_BANKS.filter(b=>b.toLowerCase().includes(q));
-  const suggested=filtered.slice(0,6);
-  const others=filtered.slice(6);
-  const list=document.getElementById("bankList");
-  let html=`<div class="section-label">SUGGESTED</div>`;
-  if(suggested.length) html+=suggested.map(b=>`<div class="bank-item" onclick="selectBank('${b.replace(/'/g,"\\'")}')"><div class="ic">${b[0]}</div><div><b>${b}</b><p>NGN Bank</p></div></div>`).join("");
-  else html+=`<div style="padding:10px;color:#6b7280;font-size:12px">No suggested</div>`;
-  html+=`<div class="section-label">OTHERS</div>`;
-  if(others.length) html+=others.map(b=>`<div class="bank-item" onclick="selectBank('${b.replace(/'/g,"\\'")}')"><div class="ic">${b[0]}</div><div><b>${b}</b><p>Other banks</p></div></div>`).join("");
-  else if(!filtered.length) html+=`<div style="padding:20px;text-align:center;color:#6b7280">No bank found</div>`;
-  list.innerHTML=html;
-}
-function selectBank(name){document.getElementById("bankName").value=name;document.getElementById("bankModal").classList.remove("show");showToast(name+" selected");}
-function confirmWallet(){
-  const acctName=document.getElementById("acctName").value.trim();
-  const acctNumber=document.getElementById("acctNumber").value.trim();
-  const bank=document.getElementById("bankName").value.trim();
-  if(!acctName||!acctNumber||!bank){showToast("Fill all fields");return;}
-  if(acctNumber.length<10){showToast("Account number must be 10 digits");return;}
-  const data={acctName,acctNumber,bank,created:Date.now()};
-  localStorage.setItem("paylock_wallet_data",JSON.stringify(data));
-  document.getElementById("walletModal").classList.remove("show");
-  showInfo("✅","Connected","Your wallet has been connected successfully! One-time setup done.");
-  renderWallet();
-}
-function checkTerms(){const accepted=localStorage.getItem("paylock_terms_accepted"); if(!accepted){document.getElementById("termsModal").classList.add("show");}}
-function acceptTerms(){const chk=document.getElementById("termsCheck"); if(!chk.checked){showToast("Please accept Terms");return;} localStorage.setItem("paylock_terms_accepted","1"); document.getElementById("termsModal").classList.remove("show"); showToast("Terms accepted ✓");}
-function showToast(m){const el=document.getElementById("toast");el.textContent=m;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2600);}
-function showLink(id){const link=`https://t.me/${BOT_USERNAME}?start=pay_${id}`;document.getElementById("linkText").textContent=link;document.getElementById("linkModal").classList.add("show");}
-function closeModal(){document.getElementById("linkModal").classList.remove("show");}
-function copyLink(){const t=document.getElementById("linkText").textContent;navigator.clipboard.writeText(t).then(()=>showToast("Link copied ✓ @PayLockOfficialBot"));}
-const chipWrap=document.getElementById("typeChips");let selectedType="Course";
-["eBook","Course","Software","Video","Design","Template","Audio","License"].forEach(tp=>{const d=document.createElement("div");d.className="chip"+(tp===selectedType?" active":"");d.textContent=tp;d.onclick=()=>{selectedType=tp;document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("active",c.textContent===tp));};chipWrap.appendChild(d);});
-document.getElementById("coverInput").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{coverBase64=ev.target.result;const img=document.getElementById("coverPrev");img.src=coverBase64;img.style.display="block";};r.readAsDataURL(f);});
-document.getElementById("fileInput").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;document.getElementById("fileName").textContent=f.name;});
-function createProduct(){
-  const name=document.getElementById("pName").value.trim();
-  const price=Number(document.getElementById("pPrice").value);
-  const desc=document.getElementById("pDesc").value.trim();
-  if(!name||!price||!coverBase64){showToast("Add name, price & cover");return;}
-  const id="PAY-"+Math.random().toString(36).slice(2,7).toUpperCase();
-  products.push({id,name,price,type:selectedType,desc,cover:coverBase64,sales:0,created:Date.now()});
-  save();
-  document.getElementById("pName").value="";document.getElementById("pPrice").value="";document.getElementById("pDesc").value="";document.getElementById("coverPrev").style.display="none";coverBase64="";document.getElementById("fileName").textContent="";
-  showLink(id);switchTab("home");
-}
-renderAll();checkTerms();
-if(window.Telegram && window.Telegram.WebApp){Telegram.WebApp.ready();Telegram.WebApp.expand();}
-</script>
-</body>
-  </html>
+:root{--bg:#F6F7FB;--card:#fff;--ink:#0F172A;--muted:#64748B;--line:#E2E8F0;--primary:#0F172A;--green:#10B981;--shadow:0 12px 32px rgba(15,23,42,.08)}
+*{box-sizing:border-box;margin:0;padding:0;font-family:Inter,sans-serif}
+body{background:var(--bg);color:var(--ink);padding-bottom:110px}#app{max-width:440px;margin:0 auto;min-height:100vh}
+.header{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--line);padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+.page{padding:16px;display:none}.page.active{display:block}.card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+.input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-size:14px;outline:none}
+.btn{border:none;border-radius:14px;padding:14px 18px;font-weight:700;font-size:14px;cursor:pointer;display:flex;justify-content:center}.btn-primary{background:var(--primary);color:#fff}.btn-ghost{background:var(--bg);border:1px solid var(--line)}
+.tabbar{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);width:92%;max-width:400px;background:var(--card);border:1px solid var(--line);border-radius:26px;display:flex;padding:8px 10px;z-index:40;box-shadow:0 18px 40px rgba(0,0,0,.14)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;border-radius:18px;color:var(--muted);cursor:pointer}.tab.active{background:var(--primary);color:#fff}
+.search-wrap{position:relative;margin-bottom:14px}.search-wrap input{height:52px;padding-left:18px;border-radius:16px}.suggest{position:absolute;top:58px;left:0;right:0;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);z-index:30;display:none;max-height:220px;overflow:auto}
+.s-item{padding:12px 16px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600;display:flex;justify-content:space-between;cursor:pointer}
+.p-cover{height:146px;background:#EEF2FF;overflow:hidden;display:grid;place-items:center}.p-cover img{width:100%;height:100%;object-fit:cover}.p-body{padding:14px}.p-title{font-weight:700;font-size:14px}.p-meta{font-size:12px;color:var(--muted);margin-top:4px}.p-price{font-weight:800;margin-top:6px}
+.chat-header{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--line);padding:10px 14px;display:flex;gap:12px;align-items:center}
+.chat-avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#0F172A,#1E293B);display:grid;place-items:center;position:relative}.online-dot{position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;background:var(--green);border:2px solid var(--card);border-radius:50%}
+.chat-wrap{height:calc(100vh - 126px);display:flex;flex-direction:column;background:#F8FAFC}.messages{flex:1;overflow:auto;padding:18px 14px;display:flex;flex-direction:column;gap:10px}
+.bubble{max-width:78%;padding:11px 14px;border-radius:18px;font-size:13.5px;line-height:1.45}.b-from{background:#fff;border:1px solid var(--line);border-bottom-left-radius:6px;align-self:flex-start}.b-to{background:var(--primary);color:#fff;border-bottom-right-radius:6px;align-self:flex-end}
+.typing{display:flex;gap:4px;padding:10px 14px;background:#fff;border:1px solid var(--line);border-radius:18px;width:fit-content}.typing span{width:6px;height:6px;background:var(--muted);border-radius:50%;animation:b 1s infinite}.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}@keyframes b{50%{transform:translateY(-3px)}}
+.chat-input{padding:12px;background:#fff;border-top:1px solid var(--line);display:flex;gap:10px}.chats-list{display:flex;flex-direction:column;background:var(--line);gap:1px}.chat-item{display:flex;gap:12px;padding:14px;background:#fff;cursor:pointer;align-items:center}
+.wallet-hero{background:linear-gradient(135deg,#0F172A 0%,#1E293B 60%,#0F3A2A 100%);border-radius:22px;padding:20px;color:#fff}.eye-btn{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);display:grid;place-items:center;cursor:pointer}
+.section-title{font-weight:800;font-size:15px;margin:20px 0 10px;display:flex;justify-content:space-between}.list-item{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:8px;cursor:pointer}
+.modal-back{position:fixed;inset:0;background:rgba(15,23,42,.56);backdrop-filter:blur(8px);z-index:80;display:none;place-items:end center;padding:12px}.modal-back.show{display:grid}.modal{background:#fff;width:100%;max-width:440px;border-radius:22px 22px 0 0;padding:20px;max-height:88vh;overflow:auto}
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--primary);color:#fff;padding:12px 18px;border-radius:999px;font-weight:700;font-size:13px;z-index:99;display:none}.toast.show{display:block}
+</style></head><body>
+<div id="app">
+<div class="header"><div style="display:flex;gap:10px;align-items:center;font-weight:800"><div style="width:32px;height:32px;background:var(--primary);border-radius:10px;display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>PayLock</div><span style="font-size:11px;padding:4px 8px;border-radius:999px;background:#F6F7FB;border:1px solid #E2E8F0;font-weight:700">Escrow 24h</span></div>
+<div id="pg-home" class="page active"><div class="search-wrap"><input id="searchHome" class="input" placeholder="Search products, courses, vendors..." oninput="liveSearch(this.value)"/><div id="suggestHome" class="suggest"></div></div><div id="homeGrid" style="display:grid;gap:12px"></div></div>
+<div id="pg-sell" class="page"><div class="card" style="padding:18px"><h3 style="font-weight:800">Sell a product</h3><div style="display:grid;gap:12px;margin-top:14px"><input id="sTitle" class="input" placeholder="Product title"/><textarea id="sDesc" class="input" style="height:84px" placeholder="Describe quality & style"></textarea><input id="sPrice" class="input" type="number" placeholder="Price ₦"/><select id="sType" class="input"><option>Course</option><option>Physical Product</option><option>Digital</option></select><select id="sEscrow" class="input"><option>24hrs escrow</option><option>48hrs escrow</option><option>72hrs escrow</option></select><label style="font-size:12px;font-weight:700">Cover Image *<input id="sCover" type="file" accept="image/*" onchange="previewCover(event)" style="margin-top:8px"/></label><div id="coverPreview" style="height:120px;background:var(--bg);border:1px dashed var(--line);border-radius:12px;display:none;overflow:hidden"></div><button class="btn btn-primary" style="width:100%" onclick="publishProduct()">Publish Product</button></div></div></div><div id="pg-chat" class="page" style="padding:0"><div style="padding:14px 16px;font-weight:800;display:flex;justify-content:space-between"><span>Saved Contacts</span><span style="font-size:11px;color:#64748B">WhatsApp style</span></div><div id="chatsList" class="chats-list"></div><div id="noChats" style="padding:40px;text-align:center;color:#64748B;font-size:13px;display:none">No chats yet. Victor example appears here.</div></div>
+<div id="pg-chat-room" class="page" style="padding:0;display:none;position:fixed;inset:0;z-index:50;background:#F6F7FB;flex-direction:column"><div class="chat-header"><button onclick="leaveChat()" style="width:36px;height:36px;border-radius:50%;border:1px solid #E2E8F0;background:#fff;display:grid;place-items:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg></button><div style="display:flex;gap:10px;align-items:center;flex:1"><div class="chat-avatar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><div class="online-dot"></div></div><div><div style="font-weight:800;font-size:14.5px">PayLock Secure Agent</div><div id="chatSub" style="font-size:11.5px;color:#10B981;font-weight:600">Online • Escrow Protected</div></div></div></div><div class="chat-wrap"><div id="msgList" class="messages"></div><div id="typingBox" style="padding:0 14px 8px;display:none"><div class="typing"><span></span><span></span><span></span></div></div><div class="chat-input"><input id="chatInput" class="input" placeholder="Message..." onkeydown="if(event.key==='Enter')sendMsg()"/><button onclick="sendMsg()" style="width:44px;height:44px;border-radius:50%;background:#0F172A;color:#fff;border:none;display:grid;place-items:center">></button></div></div></div>
+<div id="pg-buy" class="page"><div class="search-wrap"><input class="input" placeholder="Search products..." oninput="liveSearch(this.value,true)"/></div><div id="buyGrid" style="display:grid;gap:12px"></div></div>
+<div id="pg-wallet" class="page"><div class="wallet-hero"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:700">PayLock Wallet</div><button class="eye-btn" onclick="toggleWallet()"><span id="eyeIcon"></span></button></div><div style="margin-top:28px"><div style="font-size:12px;opacity:.7">Total Balance</div><div id="walletBal" style="font-size:28px;font-weight:800;margin-top:6px">••••••</div><div style="display:flex;gap:20px;margin-top:16px;font-size:12px"><div><div style="opacity:.6">Seller ID</div><div id="sellerId" style="font-weight:700">PAY-0000</div></div><div><div style="opacity:.6">Username</div><div id="userName" style="font-weight:700">—</div></div></div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px"><button class="btn btn-ghost" onclick="fundWallet()">Fund Wallet</button><button class="btn btn-ghost" onclick="withdraw()">Withdraw</button></div><div class="section-title"><span>Transaction History</span><span style="font-size:11px;color:#10B981">Live</span></div><div id="txList"></div><div class="section-title"><span>Withdrawal History</span></div><div id="wdList"></div><div style="height:20px"></div><div class="section-title"><span>Account Settings</span></div><div style="display:grid;gap:8px"><div class="list-item" onclick="openAcc('personal')"><span style="font-weight:600;font-size:13px">Personal Settings</span><span>›</span></div><div class="list-item" onclick="openAcc('preference')"><span style="font-weight:600;font-size:13px">Preferences</span><span>›</span></div><div class="list-item" onclick="openAcc('security')"><span style="font-weight:600;font-size:13px">Security & Privacy</span><span>›</span></div><div class="list-item" onclick="openAcc('banks')"><span style="font-weight:600;font-size:13px">Linked Banks</span><span>›</span></div><div class="list-item" onclick="openAcc('bot')" style="border-color:#0F172A"><span style="font-weight:700;font-size:13px">Bot Settings • Escrow Agent</span><span>›</span></div></div><div class="section-title"><span>Visibility</span></div><div style="display:grid;gap:8px"><div class="list-item" onclick="openVisibility()"><span style="font-weight:600;font-size:13px">Product Visibility</span><span>›</span></div><div class="list-item" onclick="openIncreaseVis()"><span style="font-weight:600;font-size:13px">Increase Visibility</span><span style="font-size:11px;background:#0F172A;color:#fff;padding:4px 8px;border-radius:999px">₦50 / sale</span></div></div><div class="section-title"><span>Sales Analytics</span></div><div class="card" style="padding:16px"><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px"><div style="text-align:center"><div style="font-weight:800;font-size:18px" id="statViews">0</div><div style="font-size:11px;color:#64748B">Views</div></div><div style="text-align:center"><div style="font-weight:800;font-size:18px" id="statSales">0</div><div style="font-size:11px;color:#64748B">Sales</div></div><div style="text-align:center"><div style="font-weight:800;font-size:18px" id="statProfit">₦0</div><div style="font-size:11px;color:#64748B">Profit</div></div></div><canvas id="salesChart" width="320" height="140" style="width:100%"></canvas></div></div>
+<div id="rateModal" class="modal-back"><div class="modal"><h3 style="font-weight:800">Rate experience</h3><p style="font-size:12px;color:#64748B">Bad = 1-2.9 ★ • Good = 3-5 ★</p><div id="stars" style="display:flex;gap:8px;margin:16px 0;font-size:30px"><span onclick="setStar(1)">☆</span><span onclick="setStar(2)">☆</span><span onclick="setStar(3)">☆</span><span onclick="setStar(4)">☆</span><span onclick="setStar(5)">☆</span></div><textarea id="reviewTxt" class="input" style="height:80px" placeholder="Review..."></textarea><button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="submitReview()">Submit Review</button></div></div>
+<div id="accModal" class="modal-back"><div class="modal" id="accContent"></div></div>
+<div id="visModal" class="modal-back"><div class="modal"><h3 style="font-weight:800">Product Visibility</h3><p style="font-size:13px;color:#64748B;margin-top:10px">Public appears in search/home. Private only direct link.</p><div style="margin-top:16px;display:grid;gap:10px"><button id="pubBtn" class="btn btn-ghost" onclick="chooseVis('public')">Public • Visible</button><button id="privBtn" class="btn btn-ghost" onclick="chooseVis('private')">Private • Hidden</button></div><div id="visNote" style="display:none;margin-top:14px;padding:12px;background:#F6F7FB;border-radius:12px;font-size:12px"></div><button id="visConfirm" style="display:none;width:100%;margin-top:12px" class="btn btn-primary" onclick="confirmVis()">Confirm</button></div></div>
+<div id="incModal" class="modal-back"><div class="modal"><h3 style="font-weight:800">Increase Visibility</h3><p style="font-size:13px;color:#64748B;margin-top:10px">Boosted to top search, featured Home, drastically increase sales. Costs ₦50 per sale only when sale.</p><button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="agreeInc()">Agree & Continue</button></div></div>
+<div id="toast" class="toast"></div>
+<div class="tabbar"><div class="tab active" onclick="nav('home')">Home</div><div class="tab" onclick="nav('sell')">Sell</div><div class="tab" onclick="nav('chat')">Chat</div><div class="tab" onclick="nav('buy')">Buy</div><div class="tab" onclick="nav('wallet')">Wallet</div></div>
+</div><script>
+const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch{return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
+let products=LS.get('pl_products',[]),tx=LS.get('pl_tx',[]),wd=LS.get('pl_wd',[]),chats=LS.get('pl_chats',[]),drafts=LS.get('pl_drafts',{}),botMsgs=LS.get('pl_botmsgs',[{id:1,text:"Hello! Thanks for interest. Purchase protected by PayLock Escrow.",active:true},{id:2,text:"Click Buy to purchase securely. Funds held 24hrs until confirm.",active:true}]),user=LS.get('pl_user',{id:'PAY-'+Math.floor(1000+Math.random()*9000),name:'Ofere Victor',balance:9000,vis:'public',inc:false,chatDuration:'24h'}),walletHidden=true,curProduct=null,curChat=null,coverBase64='',rating=0,chosenVis='',lastChatId=null;
+function init(){document.getElementById('sellerId').innerText=user.id;document.getElementById('userName').innerText=user.name;renderAll();setEye();drawChart();}
+function nav(p){document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));if(p==='chat-room')return;document.getElementById('pg-'+p).classList.add('active');const idx={home:0,sell:1,chat:2,buy:3,wallet:4}[p];document.querySelectorAll('.tab')[idx]?.classList.add('active');if(p==='wallet'){walletHidden=true;setEye();renderWalletSections()}}
+function setEye(){const b=document.getElementById('walletBal'),ic=document.getElementById('eyeIcon');if(walletHidden){b.innerText='••••••';ic.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.94 10.94 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a10.74 10.74 0 0 0 5.39-1.5"/><line x1="2" y1="2" x2="22" y2="22"/></svg>'}else{b.innerText='₦'+user.balance.toLocaleString();ic.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'}}
+function toggleWallet(){walletHidden=!walletHidden;setEye()}
+function previewCover(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{coverBase64=ev.target.result;document.getElementById('coverPreview').style.display='block';document.getElementById('coverPreview').innerHTML='<img src="'+coverBase64+'" style="width:100%;height:100%;object-fit:cover">'};r.readAsDataURL(f)}
+function publishProduct(){const t=document.getElementById('sTitle').value.trim(),d=document.getElementById('sDesc').value.trim(),pr=parseInt(document.getElementById('sPrice').value),tp=document.getElementById('sType').value,esc=document.getElementById('sEscrow').value;if(!t||!pr||!coverBase64){toast('Title price cover mandatory');return}const p={id:Date.now(),title:t,desc:d,price:pr,type:tp,escrow:esc,cover:coverBase64,sales:0,views:5};products.unshift(p);LS.set('pl_products',products);tx.unshift({title:t,price:pr,status:'Held 24h'});LS.set('pl_tx',tx);toast('Published');renderAll();nav('home')}
+function productHTML(p){return '<div class="card" onclick="openChatRoom('+p.id+')"><div class="p-cover">'+(p.cover?'<img src="'+p.cover+'"/>':'📦')+'</div><div class="p-body"><div class="p-title">'+p.title+'</div><div class="p-price">₦'+p.price.toLocaleString()+'</div></div></div>'}
+function renderAll(){document.getElementById('homeGrid').innerHTML=products.map(productHTML).join('')||'No products';document.getElementById('buyGrid').innerHTML=products.map(productHTML).join('');renderChats();renderWalletSections();document.getElementById('statViews').innerText=products.reduce((a,b)=>a+b.views,0);document.getElementById('statSales').innerText=products.reduce((a,b)=>a+b.sales,0);document.getElementById('statProfit').innerText='₦'+products.reduce((a,b)=>a+b.sales*b.price,0).toLocaleString()}
+function liveSearch(q){q=q.toLowerCase();const home=document.getElementById('suggestHome'),filtered=products.filter(p=>p.title.toLowerCase().includes(q));if(!q){home.style.display='none';renderAll();return}home.style.display='block';home.innerHTML=filtered.slice(0,5).map(p=>'<div class="s-item" onclick="openChatRoom('+p.id+')"><span>'+p.title+'</span><span>₦'+p.price+'</span></div>').join('');document.getElementById('homeGrid').innerHTML=filtered.map(productHTML).join('');document.getElementById('buyGrid').innerHTML=filtered.map(productHTML).join('')}
+function openChatRoom(pid){curProduct=products.find(x=>x.id==pid);const existing=chats.find(c=>c.id==pid);if(existing){curChat=existing}else{const intro=botMsgs.filter(b=>b.active)[0]?.text||"Escrow";curChat={id:pid,product:curProduct,sellerName:'Victor',lastSeen:'now',expiry:user.chatDuration||'24h',messages:[{from:'bot',text:curProduct.title+'\n'+intro+'\n\n💳 Buy - ₦'+curProduct.price,clock:'Today'}]}}document.getElementById('pg-chat-room').style.display='flex';document.getElementById('chatSub').innerText=curProduct.title.substring(0,32)+' • Seller: Victor';lastChatId=pid;renderMsgs();const d=drafts[pid];if(d)document.getElementById('chatInput').value=d;saveChat()}
+function renderMsgs(){const list=document.getElementById('msgList');list.innerHTML='';curChat.messages.forEach(m=>{const isMe=m.from==='me';list.innerHTML+='<div class="bubble '+(isMe?'b-to':'b-from')+'">'+m.text.replace(/\n/g,'<br>')+'<div style="font-size:10px;opacity:.6">'+(m.clock||'')+'</div></div>'});list.scrollTop=list.scrollHeight}
+function sendMsg(){const i=document.getElementById('chatInput');const t=i.value.trim();if(!t)return;curChat.messages.push({from:'me',text:t,clock:new Date().toLocaleTimeString(),seen:false});i.value='';delete drafts[lastChatId];LS.set('pl_drafts',drafts);renderMsgs();showTyping(()=>{curChat.messages.push({from:'bot',text:botMsgs.filter(b=>b.active)[1]?.text||"Thanks",clock:'now'});renderMsgs();saveChat()});saveChat()}
+function showTyping(cb){document.getElementById('typingBox').style.display='block';setTimeout(()=>{document.getElementById('typingBox').style.display='none';cb()},1100)}
+function leaveChat(){const inp=document.getElementById('chatInput').value.trim();if(inp&&lastChatId){drafts[lastChatId]=inp;LS.set('pl_drafts',drafts)}document.getElementById('pg-chat-room').style.display='none';nav('chat')}
+function renderChats(){const list=document.getElementById('chatsList');if(!chats.length){document.getElementById('noChats').style.display='block';list.innerHTML='';return}document.getElementById('noChats').style.display='none';list.innerHTML=chats.map(c=>{const last=c.messages[c.messages.length-1]?.text.substring(0,32)||'Tap';const draftTxt=drafts[c.id]?'[Draft] '+drafts[c.id].substring(0,20):last;return '<div class="chat-item" onclick="reopenChat('+c.id+')"><div class="chat-avatar">V</div><div style="flex:1"><div style="font-weight:700;display:flex;justify-content:space-between"><span>'+(c.sellerName||'Victor')+'</span><span style="font-size:10px;color:#64748B">'+(c.lastSeen||'2m ago')+'</span></div><div style="font-size:11px;color:'+(drafts[c.id]?'#EF4444':'#64748B')+'">'+draftTxt+'</div></div></div>'}).join('')}
+function saveChat(){curChat.lastSeen='now';const idx=chats.findIndex(c=>c.id==curChat.id);if(idx>-1)chats[idx]=curChat;else chats.unshift(curChat);LS.set('pl_chats',chats);renderChats()}
+function reopenChat(id){curChat=chats.find(c=>c.id==id);curProduct=curChat.product;lastChatId=id;document.getElementById('pg-chat-room').style.display='flex';renderMsgs();const d=drafts[id];if(d)document.getElementById('chatInput').value=d}
+function setStar(n){rating=n;document.querySelectorAll('#stars span').forEach((s,i)=>s.innerText=i<n?'★':'☆')}
+function submitReview(){document.getElementById('rateModal').classList.remove('show');if(rating<=2.9){tx.unshift({title:curProduct.title,price:curProduct.price,status:'Refunded'});LS.set('pl_tx',tx);curChat.messages.push({from:'bot',text:'Auto-refund ₦'+curProduct.price+' ('+rating+'★) flagged. Report seller? Reply YES.'});toast('Refunded bad 1-2.9')}else{curChat.messages.push({from:'bot',text:'Thank you patronage '+user.name+'. Your '+rating+'★ appreciated. Want speak Victor? YES to add.'});toast('Thanks good 3-5')}saveChat();renderWalletSections()}
+function renderWalletSections(){document.getElementById('txList').innerHTML=tx.slice(0,10).map(t=>'<div class="list-item"><div><div style="font-weight:700">'+t.status+'</div><div style="font-size:11px;color:#64748B">'+t.title+'</div></div><div>₦'+t.price+'</div></div>').join('')||'No tx';document.getElementById('wdList').innerHTML=wd.map(w=>'<div class="list-item"><div>'+w.status+'</div><div>₦'+w.amount+'</div></div>').join('')||'No wd'}
+function fundWallet(){user.balance+=5000;LS.set('pl_user',user);tx.unshift({title:'Wallet funding',price:5000,status:'Credited'});LS.set('pl_tx',tx);setEye();renderWalletSections();toast('₦5k funded');drawChart()}
+function withdraw(){if(user.balance<2000){toast('Insufficient');return}user.balance-=2000;LS.set('pl_user',user);wd.unshift({amount:2000,status:'Pending',date:new Date().toLocaleDateString()});LS.set('pl_wd',wd);toast('Pending');setEye();renderWalletSections()}
+function openAcc(type){const c=document.getElementById('accContent');let h='';if(type==='bot'){h='<h3 style="font-weight:800">Bot Settings • Escrow Agent</h3><p style="font-size:12px;color:#64748B">Audit buyers see, edit messages, set duration.</p><div style="margin-top:14px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">Chat Duration</div><select id="chatDur" class="input" onchange="user.chatDuration=this.value; LS.set(\'pl_user\',user); toast(\'Duration \'+this.value)"><option '+(user.chatDuration==='24h'?'selected':'')+'>24h</option><option '+(user.chatDuration==='48h'?'selected':'')+'>48h</option><option '+(user.chatDuration==='72h'?'selected':'')+'>72h</option><option>7d</option><option>Custom</option></select></div><div style="margin-top:16px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">Bot Messages</div><div id="botList"></div><div style="display:flex;gap:8px;margin-top:10px"><input id="newBot" class="input" placeholder="Add bot message"/><button class="btn btn-primary" onclick="addBot()">Add</button></div></div><button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="closeAcc(); toast(\'Saved\')">Save</button>'}else{h='<h3>'+type+'</h3><p>Premium settings for '+type+'</p><button class="btn btn-primary" onclick="closeAcc()">Close</button>'}c.innerHTML=h;document.getElementById('accModal').classList.add('show');if(type==='bot')renderBotList()}
+function renderBotList(){const l=document.getElementById('botList');if(!l)return;l.innerHTML=botMsgs.map((b,i)=>'<div style="background:#F6F7FB;border:1px solid #E2E8F0;border-radius:12px;padding:12px;margin-bottom:8px"><textarea class="input" style="height:56px" onchange="botMsgs['+i+'].text=this.value; LS.set(\'pl_botmsgs\',botMsgs)">'+b.text+'</textarea><div style="display:flex;justify-content:space-between;margin-top:8px"><label style="font-size:12px"><input type="checkbox" '+(b.active?'checked':'')+' onchange="botMsgs['+i+'].active=this.checked; LS.set(\'pl_botmsgs\',botMsgs)"/> Active</label><button style="font-size:12px;color:#EF4444;background:none;border:none" onclick="botMsgs.splice('+i+',1); LS.set(\'pl_botmsgs\',botMsgs); renderBotList()">Delete</button></div></div>').join('')}
+function addBot(){const t=document.getElementById('newBot').value.trim();if(!t)return;botMsgs.push({id:Date.now(),text:t,active:true});LS.set('pl_botmsgs',botMsgs);document.getElementById('newBot').value='';renderBotList();toast('Added')}
+function closeAcc(){document.getElementById('accModal').classList.remove('show')}
+function openVisibility(){document.getElementById('visModal').classList.add('show')}
+function chooseVis(v){chosenVis=v;document.getElementById('visNote').style.display='block';document.getElementById('visNote').innerText=v==='public'?'This action will be actively effective and visible to all buyers.':'This action will be actively effective and hide from search.';document.getElementById('visConfirm').style.display='block'}
+function confirmVis(){user.vis=chosenVis;LS.set('pl_user',user);document.getElementById('visModal').classList.remove('show');toast('Settings successful • '+chosenVis)}
+function openIncreaseVis(){document.getElementById('incModal').classList.add('show')}
+function agreeInc(){user.inc=true;LS.set('pl_user',user);document.getElementById('incModal').classList.remove('show');toast('Boost active ₦50/sale')}
+function toast(m){const t=document.getElementById('toast');t.innerText=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)}
+function drawChart(){const c=document.getElementById('salesChart');if(!c)return;const ctx=c.getContext('2d');ctx.clearRect(0,0,320,140);ctx.strokeStyle='#E2E8F0';for(let i=0;i<4;i++){ctx.beginPath();ctx.moveTo(0,i*35);ctx.lineTo(320,i*35);ctx.stroke()}ctx.strokeStyle='#0F172A';ctx.lineWidth=2;ctx.beginPath();const pts=products.length?products.slice(0,7).map(p=>p.sales||2):[2,5,3,8,6,9,4];pts.forEach((v,i)=>{const x=i*45+10,y=120-v*10;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke()}
+document.addEventListener('click',e=>{if(e.target.classList.contains('modal-back'))e.target.classList.remove('show')})
+if(!chats.length){chats=[{id:999,product:{id:999,title:'Victor Demo Product',type:'Course',price:5000,escrow:'24hrs escrow'},sellerName:'Victor',lastSeen:'Last chatted 2m ago',expiry:'24h',messages:[{from:'bot',text:'Hello from Victor - Escrow Protected',clock:'Today'}]}];LS.set('pl_chats',chats)}
+init()
+</script></body></html>
