@@ -1,4 +1,4 @@
-fastapi==0.110.0
-uvicorn==0.29.0
-python-telegram-bot==20.7
-httpx==0.25.2
+flask>=3.0,<4
+flask-cors>=4.0
+gunicorn>=22.0
+supabase>=2.4
