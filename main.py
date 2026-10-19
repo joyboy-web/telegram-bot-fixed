@@ -48,12 +48,11 @@ _missing = [
 if _missing:
     raise RuntimeError(f"Missing required environment variables: {', '.join(_missing)}")
 
-INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60  # replay window
-CLOCK_SKEW_SECONDS = 60                   # tolerate small clock drift
+INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60
+CLOCK_SKEW_SECONDS = 60
 MAX_INIT_DATA_LENGTH = 8192
 MAX_FIELD_LENGTH = 256
 
-# Secret key = HMAC_SHA256(key="WebAppData", msg=bot_token), derived once.
 _SECRET_KEY: bytes = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
@@ -74,7 +73,6 @@ CORS(
     max_age=600,
 )
 
-
 @app.after_request
 def set_security_headers(response: Response) -> Response:
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -84,24 +82,14 @@ def set_security_headers(response: Response) -> Response:
     response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
     return response
 
-
 # --------------------------------------------------------------------------- #
 # initData validation
 # --------------------------------------------------------------------------- #
 def _reject(reason: str) -> None:
-    """Log a rejection reason (never the payload) and return None."""
     logger.warning("initData rejected: %s", reason)
     return None
 
-
 def validate_init_data(init_data: str) -> dict[str, Any] | None:
-    """Validate Telegram Mini App initData.
-
-    Implements https://core.telegram.org/bots/web_apps#validating-data-received-via-the-mini-app
-
-    Returns a dict with keys ``user`` (dict), ``auth_date`` (int), ``query_id``
-    and ``start_param`` (optional) on success, otherwise ``None``.
-    """
     if not isinstance(init_data, str) or not init_data or len(init_data) > MAX_INIT_DATA_LENGTH:
         return _reject("missing_or_oversized")
 
@@ -121,7 +109,6 @@ def validate_init_data(init_data: str) -> dict[str, Any] | None:
     data_check_string = "\n".join(f"{key}={value}" for key, value in sorted(fields.items()))
     expected_hash = hmac.new(_SECRET_KEY, data_check_string.encode(), hashlib.sha256).hexdigest()
 
-    # Timing-safe comparison on bytes (str compare raises on non-ASCII input).
     if not hmac.compare_digest(expected_hash.encode(), received_hash.lower().encode()):
         return _reject("hash_mismatch")
 
@@ -153,23 +140,15 @@ def validate_init_data(init_data: str) -> dict[str, Any] | None:
         "start_param": fields.get("start_param"),
     }
 
-
 # --------------------------------------------------------------------------- #
 # Auth decorator
 # --------------------------------------------------------------------------- #
 F = TypeVar("F", bound=Callable[..., Any])
 
-
 def _error(code: str, status: int) -> tuple[Response, int]:
     return jsonify({"ok": False, "error": code}), status
 
-
 def require_telegram_auth(view: F) -> F:
-    """Protect a route. Client sends ``Authorization: tma <initData>``.
-
-    On success the verified Telegram user is available as ``g.tg_user``.
-    """
-
     @wraps(view)
     def wrapper(*args: Any, **kwargs: Any):
         scheme, _, token = request.headers.get("Authorization", "").partition(" ")
@@ -186,7 +165,6 @@ def require_telegram_auth(view: F) -> F:
 
     return wrapper  # type: ignore[return-value]
 
-
 # --------------------------------------------------------------------------- #
 # Persistence
 # --------------------------------------------------------------------------- #
@@ -196,14 +174,11 @@ def _clean_text(value: Any) -> str | None:
     value = value.strip()[:MAX_FIELD_LENGTH]
     return value or None
 
-
 def _clean_photo_url(value: Any) -> str | None:
     url = _clean_text(value)
     return url if url and url.startswith("https://") else None
 
-
 def upsert_user(user: dict[str, Any], auth_date: int) -> dict[str, Any]:
-    """Insert or update the user keyed by telegram_id; returns the stored row."""
     row = {
         "telegram_id": user["id"],
         "first_name": _clean_text(user.get("first_name")) or "User",
@@ -217,7 +192,6 @@ def upsert_user(user: dict[str, Any], auth_date: int) -> dict[str, Any]:
         raise RuntimeError("Upsert returned no rows")
     return result.data[0]
 
-
 def _public_user(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "telegram_id": row["telegram_id"],
@@ -227,14 +201,20 @@ def _public_user(row: dict[str, Any]) -> dict[str, Any]:
         "photo_url": row.get("photo_url"),
     }
 
+# --------------------------------------------------------------------------- #
+# Routes - FIXED: Added root routes to avoid not_found
+# --------------------------------------------------------------------------- #
+@app.get("/")
+def root():
+    return jsonify({"ok": True, "service": "PayLock API live"})
 
-# --------------------------------------------------------------------------- #
-# Routes
-# --------------------------------------------------------------------------- #
+@app.get("/health")
+def health():
+    return jsonify({"ok": True, "status": "live"})
+
 @app.get("/healthz")
 def healthz():
     return jsonify({"ok": True})
-
 
 @app.post("/api/auth/validate")
 def auth_validate():
@@ -249,18 +229,16 @@ def auth_validate():
 
     try:
         row = upsert_user(parsed["user"], parsed["auth_date"])
-    except Exception as exc:  # noqa: BLE001 - never leak DB internals to clients
+    except Exception as exc:
         logger.error("user upsert failed: %s", type(exc).__name__)
         return _error("service_unavailable", 503)
 
     logger.info("auth ok telegram_id=%s", row["telegram_id"])
     return jsonify({"ok": True, "user": _public_user(row)})
 
-
 @app.get("/api/me")
 @require_telegram_auth
 def me():
-    """Example protected route; every future /api route uses the same decorator."""
     result = (
         supabase.table("users")
         .select("telegram_id, first_name, last_name, username, photo_url")
@@ -272,24 +250,20 @@ def me():
         return _error("user_not_found", 404)
     return jsonify({"ok": True, "user": result.data[0]})
 
-
 # --------------------------------------------------------------------------- #
-# Error handlers (JSON only, no stack traces)
+# Error handlers
 # --------------------------------------------------------------------------- #
 @app.errorhandler(404)
 def not_found(_: Exception):
     return _error("not_found", 404)
 
-
 @app.errorhandler(405)
 def method_not_allowed(_: Exception):
     return _error("method_not_allowed", 405)
 
-
 @app.errorhandler(413)
 def payload_too_large(_: Exception):
     return _error("payload_too_large", 413)
-
 
 @app.errorhandler(Exception)
 def unhandled(exc: Exception):
