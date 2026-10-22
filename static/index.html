@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="paylock-api-base" content="https://telegram-bot-fixed-uqmt.onrender.com" />
 <meta name="paylock-bot-url" content="https://t.me/PayLockOfficialBot/app" />
-<title>PayLock V8 - Escrow Live</title>
+<title>PayLock V8 - Pro BG Fixed</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#F2F2F4;--card:#FFFFFF;--ink:#111827;--muted:#8B95A5;--line:#EAECEF;--primary:#101828;--green:#10B981;--tg-bg:#ffffff;--tg-bg2:#f1f1f4;--tg-text:#111111;--tg-hint:#707579;--tg-btn:#2481cc;--tg-btn-text:#ffffff;--tg-danger:#d93025;}
+:root{--bg:#F2F2F4;--card:#FFFFFF;--ink:#111827;--muted:#8B95A5;--line:#EAECEF;--primary:#101828;--green:#10B981; --tg-bg:#F2F2F4; --tg-bg2:#ffffff; --tg-text:#111827; --tg-hint:#707579; --tg-btn:#101828; --tg-btn-text:#ffffff; --tg-danger:#d93025;}
 *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,sans-serif}
 body{background:var(--bg);color:var(--ink);padding-bottom:110px}
 #app{max-width:440px;margin:0 auto;min-height:100vh;background:var(--bg)}
@@ -25,44 +25,38 @@ body{background:var(--bg);color:var(--ink);padding-bottom:110px}
 .btn-light{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.05)}
 .tx-card{background:#fff;border-radius:18px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border:1px solid #EDEEF1}
 .section{margin-top:26px}.section-title{font-weight:800;font-size:19px;margin-bottom:12px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.opt-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-weight:600;font-size:13px}
-.opt-card.dark{background:#101828;color:#fff;border-color:#101828}
 .search-wrap{position:relative;margin:14px 0 12px}.search-wrap input{width:100%;background:#fff;border:1.8px solid #111827;border-radius:16px;padding:16px 16px 16px 42px;font-size:14px;outline:none}
 .search-icon{position:absolute;left:12px;top:18px;font-size:20px}
 .prod-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;cursor:pointer}.prod-cover{height:98px;background:#F3F4F6;display:grid;place-items:center;font-size:34px}.prod-body{padding:10px 12px}
 .tabbar{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);width:94%;max-width:410px;background:#fff;border:1px solid var(--line);border-radius:28px;display:flex;justify-content:space-around;padding:8px 6px;box-shadow:0 16px 40px rgba(0,0,0,.12);z-index:40}
 .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;border-radius:22px;cursor:pointer;color:#6B7280;font-size:11px;font-weight:700}.tab.active{background:#101828;color:#fff}
-.modal-back{position:fixed;inset:0;background:rgba(16,24,40,.55);backdrop-filter:blur(10px);z-index:80;display:none;place-items:end center}.modal-back.show{display:grid}.modal{background:#fff;width:100%;max-width:440px;border-radius:24px 24px 0 0;padding:22px;max-height:88vh;overflow:auto}
-.input{width:100%;background:#F8FAFC;border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-size:14px;outline:none}.btn{border:none;border-radius:14px;padding:14px 18px;font-weight:700;font-size:14px;cursor:pointer;display:flex;justify-content:center}.btn-primary{background:#101828;color:#fff;width:100%}
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#101828;color:#fff;padding:12px 20px;border-radius:999px;font-weight:700;font-size:13px;z-index:99;display:none}.toast.show{display:block}
 .fee-note{font-size:11px;color:#6B7280;margin-top:6px;line-height:1.4}
+[hidden]{display:none !important;}
 </style>
 </head>
 <body>
-<div id="pl-overlay" class="fixed inset-0 z-[90] flex items-center justify-center bg-[var(--tg-bg)] text-[var(--tg-text)] px-8 text-center" role="status"><section id="pl-loading" class="flex flex-col items-center gap-5"><div class="h-10 w-10 animate-spin rounded-full border-[3px] border-[var(--tg-bg2)] border-t-[var(--tg-btn)]"></div><p class="text-base font-medium">Securing your session…</p></section><section id="pl-gate" class="flex max-w-sm flex-col items-center gap-4" hidden><h1 class="text-xl font-semibold">Please open inside Telegram</h1><a id="pl-open-tg" href="https://t.me/PayLockOfficialBot/app" class="mt-2 w-full rounded-xl bg-[var(--tg-btn)] px-6 py-3 text-base font-semibold text-[var(--tg-btn-text)] text-center">Open in Telegram</a></section><section id="pl-error" class="flex max-w-sm flex-col items-center gap-4" hidden><h1 id="pl-error-title" class="text-xl font-semibold"></h1><p id="pl-error-text" class="text-sm text-[var(--tg-hint)]"></p><button id="pl-retry" type="button" class="mt-2 w-full rounded-xl bg-[var(--tg-btn)] px-6 py-3 text-base font-semibold text-[var(--tg-btn-text)]">Try again</button></section></div>
+<div id="pl-overlay" class="fixed inset-0 z-[90] flex items-center justify-center bg-[#F2F2F4] text-[#111827] px-8 text-center" style="padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)" role="status" aria-live="polite">
+<section id="pl-loading" class="flex flex-col items-center gap-5"><div class="h-10 w-10 animate-spin rounded-full border-[3px] border-white border-t-[#101828]"></div><p class="text-base font-medium">Securing your session…</p></section>
+<section id="pl-gate" class="flex max-w-sm flex-col items-center gap-4" hidden><div class="flex h-20 w-20 items-center justify-center rounded-full bg-white border border-[#EAECEF]"><svg viewBox="0 0 24 24" class="h-10 w-10 text-[#101828]" fill="currentColor"><path d="M21.9 4.3a1 1 0 0 0-1.1-.2L2.9 11.2a1 1 0 0 0 .1 1.9l4.6 1.5 1.8 5.5a1 1 0 0 0 1.7.4l2.6-2.7 4.7 3.5a1 1 0 0 0 1.6-.6l3.1-15.2a1 1 0 0 0-.2-.7zM9.7 14l7.7-5.8-6.1 6.7-.3 3.1-1.3-4z"/></svg></div><h1 class="text-xl font-bold">Please open inside Telegram</h1><p class="text-sm text-[#8B95A5]">PayLock protects every escrow payment with your Telegram identity. Launch it from the Telegram app to continue.</p><a id="pl-open-tg" href="https://t.me/PayLockOfficialBot/app" class="mt-2 w-full rounded-xl bg-[#101828] px-6 py-3 text-base font-semibold text-white text-center">Open in Telegram</a></section>
+<section id="pl-error" class="flex max-w-sm flex-col items-center gap-4" hidden><div class="flex h-20 w-20 items-center justify-center rounded-full bg-white"><svg viewBox="0 0 24 24" class="h-10 w-10 text-red-500" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg></div><h1 id="pl-error-title" class="text-xl font-semibold"></h1><p id="pl-error-text" class="text-sm text-[#8B95A5]"></p><button id="pl-retry" type="button" class="mt-2 w-full rounded-xl bg-[#101828] px-6 py-3 text-base font-semibold text-white">Try again</button></section>
+<section id="pl-offline" class="flex max-w-sm flex-col items-center gap-4" hidden><h1 class="text-xl font-semibold">You're offline</h1><p class="text-sm text-[#8B95A5]">We'll reconnect automatically.</p></section>
+</div>
 
 <div id="app" hidden>
-<div class="pill-header"><div class="pill-left"><div style="width:34px;height:34px;background:#7DD3C0;border-radius:50%;display:grid;place-items:center">🔒</div><div><div style="font-weight:800;font-size:14px">PayLock</div><div style="font-size:11px;opacity:.7">Secure • Held • Protected</div></div></div><div class="pill-right"><div style="width:10px;height:10px;background:#10B981;border-radius:50%"></div>Escrow Live</div></div>
+<div class="top-bot-bar"><span>✕</span><div style="font-weight:800;font-size:19px">PayLock Bot</div><div style="display:flex;gap:14px">⌄ ⋮</div></div>
+<div class="pill-header"><div class="pill-left"><div style="width:34px;height:34px;background:#7DD3C0;border-radius:50%;display:grid;place-items:center">🔒</div><div><div style="font-weight:800;font-size:14px">PayLock</div><div style="font-size:11px;opacity:.7">Secure • Held • Protected</div></div></div><div class="pill-right"><div style="width:10px;height:10px;background:#10B981;border-radius:50%;box-shadow:0 0 0 4px rgba(16,185,129,.18)"></div>Escrow Live</div></div>
 
 <div id="pg-wallet" class="page active"><div class="wallet-hero"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:700;font-size:18px">₦ PayLock Wallet</div><button class="eye-btn" onclick="toggleWallet()" id="eyeBtn">👁️</button></div><div style="margin-top:42px"><div style="font-size:19px;font-weight:600" id="balText">₦0.00</div><div style="display:flex;justify-content:space-between;margin-top:34px;font-size:12px"><div><div style="opacity:.6">Seller ID</div><div style="font-weight:800;margin-top:4px;font-size:14px" id="sid">-</div></div><div style="text-align:right"><div style="opacity:.6">Username</div><div style="font-weight:800;margin-top:4px;font-size:14px" id="uname">-</div></div></div></div></div>
-<div class="btn-row"><button class="btn-light" onclick="doFund()">Fund Wallet (Mock)</button><button class="btn-light" onclick="doWithdraw()">Withdraw</button></div>
-<div class="section"><div class="section-title">Live Transactions</div><div id="txList">Loading...</div></div>
+<div class="btn-row"><button class="btn-light" onclick="doFund()">Fund Wallet</button><button class="btn-light" onclick="doWithdraw()">Withdraw</button></div>
+<div class="section"><div class="section-title">My Listings</div><div id="txList"></div></div>
 </div>
 
 <div id="pg-buy" class="page"><div class="search-wrap"><span class="search-icon">🔍</span><input id="searchInput" placeholder="Search products..." oninput="doSearch()"/></div><div id="buyGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px"></div></div>
-<div id="pg-home" class="page"><div class="search-wrap"><span class="search-icon">🔍</span><input id="searchHome" placeholder="Search products..." oninput="document.getElementById('searchInput').value=this.value;doSearch();"/></div><div id="homeGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px"></div></div>
+<div id="pg-home" class="page"><div class="search-wrap"><span class="search-icon">🔍</span><input id="searchHome" placeholder="Search..." oninput="document.getElementById('searchInput').value=this.value;doSearch()"/></div><div id="homeGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px"></div></div>
 
-<div id="pg-sell" class="page"><div style="background:#fff;border-radius:20px;padding:18px;border:1px solid var(--line)"><h3 style="font-weight:800">Sell a product</h3><div style="display:grid;gap:12px;margin-top:14px">
-<input id="sTitle" class="input" placeholder="Product title"/>
-<textarea id="sDesc" class="input" style="height:80px" placeholder="Describe..."></textarea>
-<input id="sPrice" class="input" type="number" placeholder="Price ₦ (min ₦500)" oninput="calcFeePreview()"/>
-<div id="feePreview" class="fee-note" style="display:none;background:#F8FAFC;padding:10px;border-radius:10px;border:1px dashed #E5E7EB"></div>
-<input id="sCover" type="file" accept="image/*" onchange="previewCover(event)"/><div id="coverPrev" style="height:120px;background:#F8FAFC;border:1px dashed #E5E7EB;border-radius:12px;display:none;overflow:hidden"></div>
-<button class="btn btn-primary" onclick="publish()" id="pubBtn">Publish Product</button>
-</div></div></div>
-
-<div id="pg-chat" class="page"><div style="font-weight:800;padding:8px 0 12px">Chats (Coming Soon)</div></div>
+<div id="pg-sell" class="page"><div style="background:#fff;border-radius:20px;padding:18px;border:1px solid var(--line)"><h3 style="font-weight:800">Sell a product</h3><div style="display:grid;gap:12px;margin-top:14px"><input id="sTitle" class="input" style="width:100%;background:#F8FAFC;border:1px solid var(--line);border-radius:14px;padding:14px 16px" placeholder="Product title"/><textarea id="sDesc" class="input" style="height:80px;width:100%;background:#F8FAFC;border:1px solid var(--line);border-radius:14px;padding:14px 16px" placeholder="Describe..."></textarea><input id="sPrice" class="input" style="width:100%;background:#F8FAFC;border:1px solid var(--line);border-radius:14px;padding:14px 16px" type="number" placeholder="Price ₦ (min ₦500)" oninput="calcFeePreview()"/><div id="feePreview" class="fee-note" style="display:none;background:#F8FAFC;padding:10px;border-radius:10px;border:1px dashed #E5E7EB"></div><input id="sCover" type="file" accept="image/*" onchange="previewCover(event)"/><div id="coverPrev" style="height:120px;background:#F8FAFC;border:1px dashed #E5E7EB;border-radius:12px;display:none;overflow:hidden"></div><button class="btn" style="background:#101828;color:#fff;width:100%;border-radius:14px;padding:14px;font-weight:700" onclick="publish()" id="pubBtn">Publish Product</button></div></div></div>
+<div id="pg-chat" class="page"><div style="font-weight:800;padding:8px 0 12px">Chats</div><div id="chatList" style="display:grid;gap:1px;background:var(--line);border-radius:12px;overflow:hidden"></div></div>
 </div>
 
 <div id="toast" class="toast"></div>
@@ -70,76 +64,48 @@ body{background:var(--bg);color:var(--ink);padding-bottom:110px}
 
 <script>
 const API_BASE = document.querySelector('meta[name="paylock-api-base"]').content.replace(/\/$/,'');
-const fmt = (kobo) => `₦${(kobo/100).toLocaleString('en-NG',{minimumFractionDigits:2})}`;
+const fmt = (kobo) => `₦${(kobo/100).toLocaleString('en-NG',{minimumFractionDigits:0})}`;
 let products=[], hidden=false, coverFile=null, balanceKobo=0;
-
-function nav(p){document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));document.getElementById('pg-'+p).classList.add('active');document.getElementById('t-'+p)?.classList.add('active');if(p==='wallet')loadWallet();if(p==='home'||p==='buy')loadProducts();}
+function nav(p){document.querySelectorAll('.page').forEach(e=>e.classList.remove('active'));document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));document.getElementById('pg-'+p).classList.add('active');document.getElementById('t-'+p)?.classList.add('active');}
 function toast(m){const t=document.getElementById('toast');t.innerText=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);}
-function toggleWallet(){hidden=!hidden;document.getElementById('eyeBtn').innerText= hidden? "🙈" : "👁️"; document.getElementById('balText').innerText= hidden? "••••••" : fmt(balanceKobo);}
-function calcFeePreview(){
-  const v = parseFloat(document.getElementById('sPrice').value)||0;
-  if(v<500){document.getElementById('feePreview').style.display='none';return;}
-  const priceKobo = Math.round(v*100);
-  const split = 16800;
-  const sellerGets = priceKobo - split;
-  const el = document.getElementById('feePreview');
-  el.style.display='block';
-  el.innerHTML = `Service & Secure Processing Fee: <b>₦168</b> (Includes Escrow Protection, Platform Maintenance & Secure Payment Processing)<br>You will receive: <b>${fmt(sellerGets)}</b>`;
-}
+function toggleWallet(){hidden=!hidden;document.getElementById('eyeBtn').innerText=hidden?"🙈":"👁️";document.getElementById('balText').innerText=hidden?"••••••":fmt(balanceKobo);}
+function calcFeePreview(){const v=parseFloat(document.getElementById('sPrice').value)||0;if(v<500){document.getElementById('feePreview').style.display='none';return;}const priceKobo=Math.round(v*100);const sellerGets=priceKobo-16800;const el=document.getElementById('feePreview');el.style.display='block';el.innerHTML=`Service & Secure Processing Fee: <b>₦168</b> (Includes Escrow Protection, Platform Maintenance & Secure Payment Processing) - You will receive: <b>${fmt(sellerGets)}</b>`;}
 function previewCover(e){const f=e.target.files[0];if(!f)return;coverFile=f;const r=new FileReader();r.onload=ev=>{const d=document.getElementById('coverPrev');d.style.display='block';d.innerHTML=`<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover">`};r.readAsDataURL(f);}
-function productHTML(p){
-  const buyerPays = p.buyer_pays || (p.price+16800);
-  return `<div class="prod-card" onclick="buyProduct('${p.id}')"><div class="prod-cover">${p.image_url? `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover">` : "📦"}</div><div class="prod-body"><div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div><div style="font-weight:800;margin-top:6px">${fmt(buyerPays)}</div><div class="fee-note">Includes buyer protection & secure escrow</div></div></div>`;
-}
-async function api(path,opts={}){
-  const initData = window.Telegram?.WebApp?.initData || '';
-  const h = {Authorization:`tma ${initData}`};
-  if(!(opts.body instanceof FormData)) h['Content-Type']='application/json';
-  const res = await fetch(`${API_BASE}${path}`,{method:opts.method||'GET',headers:h,body:opts.body? (opts.body instanceof FormData? opts.body : JSON.stringify(opts.body)) : undefined});
-  const data = await res.json().catch(()=>({ok:false,error:'bad_response'}));
-  if(!res.ok || !data.ok) throw new Error(data.error||`http_${res.status}`);
-  return data.data ?? data;
-}
-async function loadProducts(){
-  try{const data = await api('/api/products'); products=data||[]; renderGrids();}catch(e){toast('Failed load products');}
-}
-function renderGrids(){document.getElementById('homeGrid').innerHTML=products.map(productHTML).join('')||'<div style="color:#8B95A5">No products yet</div>';document.getElementById('buyGrid').innerHTML=products.map(productHTML).join('')||'<div style="color:#8B95A5">No products yet</div>';}
+function productHTML(p){const buyerPays=p.buyer_pays||(p.price+16800);return `<div class="prod-card" onclick="buyProduct('${p.id}')"><div class="prod-cover">${p.image_url?`<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover">`:"📦"}</div><div class="prod-body"><div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div><div style="font-weight:800;margin-top:6px">${fmt(buyerPays)}</div><div class="fee-note">Price: ${fmt(buyerPays)} (Includes buyer protection & secure escrow)</div></div></div>`;}
+async function api(path,opts={}){const h={Authorization:`tma ${window.Telegram?.WebApp?.initData||''}`};let body;if(opts.body instanceof FormData){body=opts.body;}else if(opts.body){h['Content-Type']='application/json';body=JSON.stringify(opts.body);}const res=await fetch(`${API_BASE}${path}`,{method:opts.method||'GET',headers:h,body,cache:'no-store'});const data=await res.json().catch(()=>({ok:false}));if(!res.ok||!data.ok)throw new Error(data.error||`http_${res.status}`);return data.data??data;}
+async function loadProducts(){try{const d=await api('/api/products');products=d||[];document.getElementById('homeGrid').innerHTML=products.map(productHTML).join('')||'<div style="color:#8B95A5">No products</div>';document.getElementById('buyGrid').innerHTML=products.map(productHTML).join('')||'<div style="color:#8B95A5">No products</div>';}catch{}}
+async function loadWallet(){try{const d=await api('/api/wallet/balance');balanceKobo=d.balance||0;document.getElementById('balText').innerText=hidden?"••••••":fmt(balanceKobo);}catch{}try{const d=await api('/api/products/me');document.getElementById('txList').innerHTML=d.map(p=>`<div class="tx-card"><div><div style="font-weight:700">${p.name}</div><div style="font-size:11px;color:#8B95A5">You receive ${fmt(p.seller_gets)}</div></div><div style="font-weight:800">${fmt(p.price)}</div></div>`).join('')||'No listings yet';}catch{}}
 function doSearch(){const q=document.getElementById('searchInput').value.toLowerCase();const f=products.filter(p=>p.name.toLowerCase().includes(q));document.getElementById('buyGrid').innerHTML=f.map(productHTML).join('');document.getElementById('homeGrid').innerHTML=f.map(productHTML).join('');}
-async function loadWallet(){
-  try{const data = await api('/api/wallet/balance'); balanceKobo=data.balance||0; document.getElementById('balText').innerText= hidden? "••••••" : fmt(balanceKobo);}catch{}
-  try{const data = await api('/api/products/me'); document.getElementById('txList').innerHTML=data.map(p=>`<div class="tx-card"><div><div style="font-weight:700">${p.name}</div><div style="font-size:11px;color:#8B95A5">Listed • You receive ${fmt(p.seller_gets)}</div></div><div style="font-weight:800">${fmt(p.price)}</div></div>`).join('')||'No listings yet';}catch{ document.getElementById('txList').innerHTML='No listings yet';}
-}
-async function publish(){
-  const title=document.getElementById('sTitle').value.trim(); const desc=document.getElementById('sDesc').value.trim(); const priceN=document.getElementById('sPrice').value.trim();
-  if(!title||!priceN){toast('Title and price required');return;}
-  const priceKobo = Math.round(parseFloat(priceN)*100);
-  if(priceKobo<50000){toast('Min ₦500');return;}
-  document.getElementById('pubBtn').innerText='Publishing...'; document.getElementById('pubBtn').disabled=true;
-  try{const fd=new FormData(); fd.append('name',title); fd.append('description',desc); fd.append('price_kobo',String(priceKobo)); if(coverFile) fd.append('cover',coverFile); await api('/api/products',{method:'POST',body:fd}); toast('Published!'); document.getElementById('sTitle').value='';document.getElementById('sPrice').value='';document.getElementById('sDesc').value='';document.getElementById('coverPrev').style.display='none'; nav('home'); loadProducts();}catch(e){toast(e.message);}finally{document.getElementById('pubBtn').innerText='Publish Product';document.getElementById('pubBtn').disabled=false;}
-}
-async function buyProduct(id){ if(!confirm('Buy this product with escrow protection?'))return; try{const res=await api(`/api/wallet/buy/${id}`,{method:'POST'}); toast(`Bought! Paid ${fmt(res.fees.buyer_pays)}`); loadWallet();}catch(e){toast(e.message==='Insufficient balance'? 'Insufficient balance — Fund wallet': e.message);}}
-async function doFund(){ try{await api('/api/wallet/fund/mock',{method:'POST',body:{amount_kobo:500000}}); toast('₦5,000 funded (mock)'); loadWallet();}catch(e){toast(e.message);}}
+async function publish(){const title=document.getElementById('sTitle').value.trim();const priceN=document.getElementById('sPrice').value.trim();if(!title||!priceN){toast('Title and price required');return;}const priceKobo=Math.round(parseFloat(priceN)*100);if(priceKobo<50000){toast('Min ₦500');return;}document.getElementById('pubBtn').innerText='Publishing...';try{const fd=new FormData();fd.append('name',title);fd.append('description',document.getElementById('sDesc').value.trim());fd.append('price_kobo',String(priceKobo));if(coverFile)fd.append('cover',coverFile);await api('/api/products',{method:'POST',body:fd});toast('Published!');document.getElementById('sTitle').value='';document.getElementById('sPrice').value='';document.getElementById('coverPrev').style.display='none';nav('home');loadProducts();}catch(e){toast(e.message);}finally{document.getElementById('pubBtn').innerText='Publish Product';}}
+async function buyProduct(id){if(!confirm('Buy with escrow protection?'))return;try{const r=await api(`/api/wallet/buy/${id}`,{method:'POST'});toast(`Paid ${fmt(r.fees.buyer_pays)}`);loadWallet();}catch(e){toast(e.message);}}
+async function doFund(){try{await api('/api/wallet/fund/mock',{method:'POST',body:{amount_kobo:500000}});toast('₦5,000 funded');loadWallet();}catch(e){toast(e.message);}}
 function doWithdraw(){toast('Withdraw coming with Paystack');}
-
-function initApp(){ const u=window.PayLock?.user; if(u){document.getElementById('sid').innerText='PAY-'+String(u.telegram_id).slice(-4); document.getElementById('uname').innerText=u.first_name+' '+(u.last_name||'');} loadProducts(); loadWallet();}
+function initApp(){const u=window.PayLock?.user;if(u){document.getElementById('sid').innerText='PAY-'+String(u.telegram_id).slice(-4);document.getElementById('uname').innerText=(u.first_name||'')+' '+(u.last_name||'');}loadProducts();loadWallet();}
 </script>
 
 <script>
 (() => {
   'use strict';
   const tg = window.Telegram && window.Telegram.WebApp;
-  const API_BASE = document.querySelector('meta[name="paylock-api-base"]').content.replace(/\/$/,'');
+  const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.content || '';
+  const API_BASE = meta('paylock-api-base').replace(/\/$/, '');
+  const REQUEST_TIMEOUT_MS = 10000;
+  const MAX_RETRIES = 2;
   const $ = (id) => document.getElementById(id);
   const overlay = $('pl-overlay');
-  const views = { loading: $('pl-loading'), gate: $('pl-gate'), error: $('pl-error') };
-  function show(name){ overlay.hidden=false; Object.entries(views).forEach(([k,el])=>{if(el) el.hidden=k!==name;});}
-  function showError(title,text){ $('pl-error-title').textContent=title; $('pl-error-text').textContent=text; show('error');}
-  async function requestValidation(){ const res=await fetch(`${API_BASE}/api/auth/validate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})}); if(res.status===401) throw new Error('auth_expired'); if(!res.ok) throw new Error(`http_${res.status}`); const data=await res.json(); if(!data?.ok) throw new Error('bad_response'); return data.user; }
-  function onSuccess(user){ window.PayLock=Object.freeze({user:Object.freeze(user)}); overlay.hidden=true; $('app').hidden=false; initApp(); }
-  async function authenticate(){ show('loading'); try{onSuccess(await requestValidation());}catch(err){showError(err.message==='auth_expired'?'Session expired':'Connection problem', err.message==='auth_expired'?'Reopen from Telegram':'Check connection and retry');}}
-  function boot(){ if(!tg||!tg.initData){show('gate');return;} tg.ready(); tg.expand(); $('pl-retry')?.addEventListener('click',authenticate); authenticate(); }
-  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',boot,{once:true});}else{boot();}
+  const views = { loading: $('pl-loading'), gate: $('pl-gate'), error: $('pl-error'), offline: $('pl-offline'), };
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  let authenticated = false; let inFlight = false;
+  class AuthRejected extends Error {}
+  function show(name){ overlay.hidden=false; Object.entries(views).forEach(([k,el])=>{el.hidden=k!==name;}); }
+  function showError(title,text){ $('pl-error-title').textContent=title; $('pl-error-text').textContent=text; try{ tg?.HapticFeedback?.notificationOccurred('error');}catch(_){} show('error'); }
+  function applyTheme(){ if(!tg) return; const p=tg.themeParams||{}; const r=document.documentElement; Object.entries({bg_color:'--tg-bg',secondary_bg_color:'--tg-bg2',text_color:'--tg-text',hint_color:'--tg-hint',button_color:'--tg-btn',button_text_color:'--tg-btn-text',destructive_text_color:'--tg-danger'}).forEach(([k,v])=>{ if(p[k]) r.style.setProperty(v,p[k]); }); try{ tg.setHeaderColor?.('bg_color'); if(p.bg_color) tg.setBackgroundColor?.(p.bg_color);}catch(_){} }
+  async function requestValidation(){ const c=new AbortController(); const t=setTimeout(()=>c.abort(),REQUEST_TIMEOUT_MS); try{ const res=await fetch(`${API_BASE}/api/auth/validate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData}),signal:c.signal,cache:'no-store',credentials:'omit'}); if(res.status===401) throw new AuthRejected(); if(!res.ok) throw new Error(`http_${res.status}`); const data=await res.json(); if(!data?.ok||!data.user) throw new Error('bad_response'); return data.user; } finally{ clearTimeout(t);} }
+  function onSuccess(user){ authenticated=true; window.PayLock=Object.freeze({user:Object.freeze(user)}); try{ tg?.HapticFeedback?.notificationOccurred('success');}catch(_){} overlay.hidden=true; $('app').hidden=false; if(typeof initApp==='function') initApp(); }
+  async function authenticate(){ if(inFlight||authenticated) return; inFlight=true; try{ for(let a=0;a<=MAX_RETRIES;a++){ if(!navigator.onLine){ show('offline'); return; } show('loading'); try{ onSuccess(await requestValidation()); return; }catch(err){ if(err instanceof AuthRejected){ showError('Session expired','Please close PayLock and reopen it from Telegram.'); return; } if(a===MAX_RETRIES){ showError('Connection problem',"We couldn't verify your session. Check your connection and try again."); return; } await sleep(500*2**a); } } } finally{ inFlight=false; } }
+  function boot(){ if(!tg||!tg.initData){ show('gate'); return; } tg.ready(); tg.expand(); applyTheme(); tg.onEvent('themeChanged',applyTheme); $('pl-retry').addEventListener('click',()=>{ try{ tg.HapticFeedback?.impactOccurred('light');}catch(_){} authenticate(); }); window.addEventListener('online',()=>{ if(!authenticated) authenticate(); }); window.addEventListener('offline',()=>{ if(!authenticated) show('offline'); }); authenticate(); }
+  if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded',boot,{once:true}); } else { boot(); }
 })();
 </script>
 </body>
-  </html>
+                                                                                                                                                                                       </html>
