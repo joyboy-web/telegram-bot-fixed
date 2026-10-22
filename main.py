@@ -1,6 +1,6 @@
-"""PayLock API: Telegram initData validation + serve frontend."""
+"""PayLock API: Telegram initData validation + Feature 2 Escrow."""
 from __future__ import annotations
-import hashlib, hmac, json, logging, os, sys, time
+import hashlib, hmac, json, logging, os, sys, time, uuid
 from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, TypeVar
@@ -9,6 +9,10 @@ from flask import Flask, Response, g, jsonify, request, send_from_directory
 from flask_cors import CORS
 from supabase import Client, create_client
 
+from services.fee_service import calculate_fees
+from services.wallet_service import get_balance, apply_transaction, fund_mock
+from services.product_service import create_product as svc_create_product, list_active
+
 logging.basicConfig(stream=sys.stdout, level=os.getenv("LOG_LEVEL", "INFO").upper(), format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("paylock")
 
@@ -16,6 +20,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+ENABLE_MOCK = os.getenv("ENABLE_MOCK_FUNDING", "false").lower() == "true"
+
 _missing = [name for name, value in (("BOT_TOKEN", BOT_TOKEN),("SUPABASE_URL", SUPABASE_URL),("SUPABASE_SERVICE_KEY", SUPABASE_SERVICE_KEY),("ALLOWED_ORIGINS", ALLOWED_ORIGINS)) if not value]
 if _missing: raise RuntimeError(f"Missing required env: {', '.join(_missing)}")
 
@@ -27,7 +33,7 @@ _SECRET_KEY: bytes = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 app = Flask(__name__, static_folder="static", static_url_path="")
-app.config["MAX_CONTENT_LENGTH"] = 16*1024
+app.config["MAX_CONTENT_LENGTH"] = 10*1024*1024
 app.json.sort_keys = False
 CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}}, allow_headers=["Content-Type","Authorization"], methods=["GET","POST","OPTIONS"], supports_credentials=False, max_age=600)
 
@@ -120,9 +126,82 @@ def auth_validate():
 @app.get("/api/me")
 @require_telegram_auth
 def me():
-    result = supabase.table("users").select("telegram_id, first_name, last_name, username, photo_url").eq("telegram_id", g.tg_user["id"]).limit(1).execute()
+    result = supabase.table("users").select("telegram_id, first_name, last_name, username, photo_url, balance").eq("telegram_id", g.tg_user["id"]).limit(1).execute()
     if not result.data: return _error("user_not_found", 404)
     return jsonify({"ok": True, "user": result.data[0]})
+
+# ============ FEATURE 2: WALLET + PRODUCTS ============
+
+@app.get("/api/wallet/balance")
+@require_telegram_auth
+def wallet_balance():
+    bal = get_balance(supabase, str(g.tg_user["id"]))
+    return jsonify({"ok": True, "data": {"balance": bal, "balance_naira": bal/100}})
+
+@app.post("/api/wallet/fund/mock")
+@require_telegram_auth
+def wallet_fund_mock():
+    if not ENABLE_MOCK: return _error("not_found", 404)
+    payload = request.get_json(silent=True) or {}
+    amount = payload.get("amount_kobo") or 500000 # default 5000 NGN
+    try: amount = int(amount)
+    except: return _error("bad_request", 400)
+    if amount < 10000: return _error("bad_request", 400)
+    res = fund_mock(supabase, str(g.tg_user["id"]), amount)
+    if not res["ok"]: return jsonify(res), 400
+    return jsonify({"ok": True, "data": res["data"]})
+
+@app.get("/api/products")
+@require_telegram_auth
+def products_list():
+    res = list_active(supabase)
+    return jsonify(res)
+
+@app.get("/api/products/me")
+@require_telegram_auth
+def products_mine():
+    res = supabase.table("products").select("*").eq("seller_id", g.tg_user["id"]).order("created_at", desc=True).execute()
+    return jsonify({"ok": True, "data": res.data or []})
+
+@app.post("/api/products")
+@require_telegram_auth
+def products_create():
+    try:
+        name = request.form.get("name","").strip()
+        desc = request.form.get("description","").strip()
+        price_raw = request.form.get("price_kobo") or request.form.get("price") or "0"
+        price_kobo = int(float(price_raw)*100) if "." in str(price_raw) else int(price_raw)
+        if not name: return _error("bad_request", 400)
+        f = request.files.get("cover")
+        img_bytes = f.read() if f else None
+        if img_bytes and len(img_bytes) > 5*1024*1024: return _error("payload_too_large", 413)
+        result = svc_create_product(supabase, str(g.tg_user["id"]), name, price_kobo, desc, img_bytes)
+        return jsonify(result)
+    except ValueError as ve:
+        return jsonify({"ok": False, "error": str(ve)}), 400
+    except Exception as exc:
+        logger.error("create product failed: %s", exc, exc_info=True)
+        return _error("internal_error", 500)
+
+@app.post("/api/wallet/buy/<product_id>")
+@require_telegram_auth
+def wallet_buy(product_id: str):
+    try: uuid.UUID(product_id)
+    except: return _error("bad_request", 400)
+    prod = supabase.table("products").select("*").eq("id", product_id).single().execute()
+    if not prod.data: return _error("not_found", 404)
+    if str(prod.data["seller_id"]) == str(g.tg_user["id"]): return _error("cannot_buy_own", 400)
+    fees = calculate_fees(int(prod.data["price"]))
+    buyer_id = str(g.tg_user["id"])
+    seller_id = str(prod.data["seller_id"])
+    buy_ref = f"buy_{buyer_id}_{product_id[:8]}_{uuid.uuid4().hex[:6]}"
+    # debit buyer buyer_pays
+    debit = apply_transaction(supabase, buyer_id, -fees["buyer_pays"], "escrow_buy", buy_ref, {"product_id": product_id})
+    if not debit["ok"]: return jsonify(debit), 400
+    # credit seller seller_gets
+    credit_ref = f"sell_{seller_id}_{product_id[:8]}_{uuid.uuid4().hex[:6]}"
+    credit = apply_transaction(supabase, seller_id, fees["seller_gets"], "escrow_sell", credit_ref, {"product_id": product_id, "buyer_id": buyer_id})
+    return jsonify({"ok": True, "data": {"product": prod.data, "fees": fees, "buyer_balance": get_balance(supabase, buyer_id)}})
 
 @app.errorhandler(404)
 def not_found(_: Exception): return _error("not_found", 404)
