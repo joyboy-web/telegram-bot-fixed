@@ -1,7 +1,7 @@
 import os, hmac, hashlib, json, requests, uuid
 from datetime import datetime, timedelta
 from urllib.parse import parse_qsl
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from supabase import create_client
 from werkzeug.utils import secure_filename
@@ -50,9 +50,20 @@ def get_user():
         return None
     return verify_init_data(auth[4:])
 
+# ===== FIXED ONLY THIS - SERVE index.html =====
 @app.route('/')
+@app.route('/app')
+def serve_frontend():
+    if os.path.exists('index.html'):
+        return send_from_directory('.', 'index.html')
+    if os.path.exists('static/index.html'):
+        return send_from_directory('static', 'index.html')
+    return jsonify(ok=False, error="index.html not found in root - push it")
+
+@app.route('/health')
+@app.route('/healthz')
 def health():
-    return jsonify(ok=True, service="PayLock V7.3 searchable banks")
+    return jsonify(ok=True, service="PayLock V7.3 searchable banks", frontend=os.path.exists('index.html'))
 
 @app.route('/api/auth/validate', methods=['POST'])
 def auth_validate():
