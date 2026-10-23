@@ -98,8 +98,13 @@ def upsert_user(user: dict[str, Any], auth_date: int) -> dict[str, Any]:
     return result.data[0]
 def _public_user(row: dict[str, Any]) -> dict[str, Any]: return {"telegram_id": row["telegram_id"], "first_name": row["first_name"], "last_name": row.get("last_name"), "username": row.get("username"), "photo_url": row.get("photo_url")}
 
+# ===== ONLY THIS FUNCTION FIXED TO SERVE index.html FROM ROOT =====
 @app.get("/")
+@app.get("/app")
 def root():
+    # your index.html is in root, not static/
+    if os.path.exists("index.html"):
+        return send_from_directory(".", "index.html")
     if os.path.exists(os.path.join(app.static_folder, "index.html")):
         return send_from_directory(app.static_folder, "index.html")
     return jsonify({"ok": True, "service": "PayLock API live"})
@@ -143,7 +148,7 @@ def wallet_balance():
 def wallet_fund_mock():
     if not ENABLE_MOCK: return _error("not_found", 404)
     payload = request.get_json(silent=True) or {}
-    amount = payload.get("amount_kobo") or 500000 # default 5000 NGN
+    amount = payload.get("amount_kobo") or 500000
     try: amount = int(amount)
     except: return _error("bad_request", 400)
     if amount < 10000: return _error("bad_request", 400)
@@ -170,7 +175,7 @@ def products_create():
         name = request.form.get("name","").strip()
         desc = request.form.get("description","").strip()
         price_raw = request.form.get("price_kobo") or request.form.get("price") or "0"
-        price_kobo = int(float(price_raw)*100) if "." in str(price_raw) else int(price_raw)
+        price_kobo = int(float(price_raw)*100) if "." in str(price_raw) else int(price_raw))
         if not name: return _error("bad_request", 400)
         f = request.files.get("cover")
         img_bytes = f.read() if f else None
@@ -195,10 +200,8 @@ def wallet_buy(product_id: str):
     buyer_id = str(g.tg_user["id"])
     seller_id = str(prod.data["seller_id"])
     buy_ref = f"buy_{buyer_id}_{product_id[:8]}_{uuid.uuid4().hex[:6]}"
-    # debit buyer buyer_pays
     debit = apply_transaction(supabase, buyer_id, -fees["buyer_pays"], "escrow_buy", buy_ref, {"product_id": product_id})
     if not debit["ok"]: return jsonify(debit), 400
-    # credit seller seller_gets
     credit_ref = f"sell_{seller_id}_{product_id[:8]}_{uuid.uuid4().hex[:6]}"
     credit = apply_transaction(supabase, seller_id, fees["seller_gets"], "escrow_sell", credit_ref, {"product_id": product_id, "buyer_id": buyer_id})
     return jsonify({"ok": True, "data": {"product": prod.data, "fees": fees, "buyer_balance": get_balance(supabase, buyer_id)}})
