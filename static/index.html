@@ -448,7 +448,7 @@
       </div>
       <div class="sheet-body" id="fund-sheet-body">
         <div class="step-dots">
-          <span class="active" data-step="1"></span><span data-step="2"></span><span data-step="3"></span>
+          <span class="active" data-step="1"></span><span data-step="2"></span>
         </div>
 
         <div id="fund-step-1">
@@ -469,35 +469,12 @@
             <div id="saved-cards-list"></div>
           </div>
 
-          <div style="margin-top:22px;">
-            <div class="section-label" style="margin-top:0;">Add new card</div>
-            <div class="field-group" style="position:relative;">
-              <label class="field-label">Card number</label>
-              <div style="position:relative;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8B95A5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; left:14px; top:15px;"><rect x="1" y="4" width="22" height="16" rx="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
-                <input class="input-field" id="card-number" style="padding-left:44px;" inputmode="numeric" maxlength="19" placeholder="0000 0000 0000 0000">
-                <span id="card-brand" style="position:absolute; right:14px; top:14px; font-size:11px; font-weight:800; color:#8B95A5;"></span>
-              </div>
+          <div style="margin-top:22px; display:flex; align-items:center; justify-content:space-between; padding:12px 2px; border-top:1px solid #EAECEF; border-bottom:1px solid #EAECEF;">
+            <div>
+              <div style="font-size:13px; font-weight:700;">Save this card</div>
+              <div style="font-size:11px; font-weight:500; color:#8B95A5; margin-top:2px;">Your card is securely collected and saved by Paystack — never stored on our servers.</div>
             </div>
-            <div style="display:flex; gap:10px;">
-              <div class="field-group" style="flex:1;">
-                <label class="field-label">Expiry MM/YY</label>
-                <input class="input-field" id="card-expiry" inputmode="numeric" maxlength="5" placeholder="MM/YY">
-              </div>
-              <div class="field-group" style="flex:1;">
-                <label class="field-label">CVV</label>
-                <input class="input-field" id="card-cvv" type="password" inputmode="numeric" maxlength="3" placeholder="123">
-              </div>
-            </div>
-            <div class="field-group">
-              <label class="field-label">Cardholder name</label>
-              <input class="input-field" id="card-name" placeholder="Full name on card">
-            </div>
-            <p style="font-size:10px; font-weight:500; color:#8B95A5; margin:-6px 0 10px;">Card details are collected securely by Paystack and never stored on our servers.</p>
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:4px 2px;">
-              <span style="font-size:13px; font-weight:700;">Save this card</span>
-              <div class="toggle-switch" id="save-card-toggle"></div>
-            </div>
+            <div class="toggle-switch" id="save-card-toggle"></div>
           </div>
 
           <div style="margin-top:20px;">
@@ -516,21 +493,6 @@
         </div>
 
         <div id="fund-step-2" class="hidden">
-          <div style="text-align:center; margin-bottom:6px;">
-            <h3 style="font-size:15px; font-weight:800;">Enter your PIN</h3>
-            <p style="font-size:12px; font-weight:500; color:#8B95A5; margin-top:4px;">Confirm this transaction securely</p>
-          </div>
-          <div class="pin-dots" id="pin-dots">
-            <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
-          </div>
-          <div class="pin-keypad" id="pin-keypad"></div>
-          <div id="otp-section" class="hidden" style="margin-top:16px;">
-            <label class="field-label">OTP</label>
-            <input class="input-field" id="otp-input" inputmode="numeric" maxlength="6" placeholder="Enter OTP sent to your phone">
-          </div>
-        </div>
-
-        <div id="fund-step-3" class="hidden">
           <div class="card-white" style="margin-bottom:16px;">
             <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; padding:6px 0;"><span style="color:#8B95A5;">Amount</span><span id="confirm-amount">₦0.00</span></div>
             <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; padding:6px 0;"><span style="color:#8B95A5;">Email</span><span id="confirm-email">—</span></div>
@@ -540,6 +502,31 @@
             <span id="fund-pay-btn-text">Pay ₦0.00</span>
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sheet-overlay" id="pin-sheet-overlay" onclick="PayLock.closePinSheetOutside(event)">
+    <div class="sheet" id="pin-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <h3 id="pin-sheet-title">Enter PIN</h3>
+        <button class="sheet-close" onclick="PayLock.closePinSheet()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <div style="text-align:center;">
+          <p id="pin-sheet-sub" style="font-size:12px; font-weight:500; color:#8B95A5;">Confirm this action securely</p>
+        </div>
+        <div class="pin-dots" id="pin-sheet-dots">
+          <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+        </div>
+        <div id="pin-sheet-error" class="hidden" style="text-align:center; font-size:12px; font-weight:700; color:#DC2626; margin-bottom:10px;"></div>
+        <div id="pin-sheet-action" class="hidden" style="margin-bottom:14px;">
+          <button class="pay-btn" style="margin-top:0;" id="pin-sheet-action-btn">Set PIN</button>
+        </div>
+        <div class="pin-keypad" id="pin-sheet-keypad"></div>
       </div>
     </div>
   </div>
@@ -564,7 +551,9 @@ const PayLock = (function(){
     balanceVisible: true,
     balance_kobo: 0,
     selectedCardId: null,
-    fund: { amount: 0, email: '', phone: '', saveCard: false, pin: '' }
+    hasPin: false,
+    pendingWithdrawal: null,
+    fund: { amount: 0, email: '', phone: '', saveCard: false }
   };
 
   let coverFile = null;
@@ -640,7 +629,15 @@ const PayLock = (function(){
 
     loadBalance();
     loadProducts();
+    loadPinStatus();
     bindEvents();
+  }
+
+  function loadPinStatus(){
+    fetch(API+'/api/wallet/pin-status', { headers: getAuthHeader() })
+      .then(r=>r.json()).then(data=>{
+        state.hasPin = !!data.has_pin;
+      }).catch(()=>{});
   }
 
   function bindEvents(){
@@ -655,8 +652,6 @@ const PayLock = (function(){
       btn.addEventListener('click', ()=> setChipAmount(amounts[idx], btn));
     });
     document.getElementById('fund-amount').addEventListener('input', onAmountInput);
-    document.getElementById('card-number').addEventListener('input', formatCardNumber);
-    document.getElementById('card-expiry').addEventListener('input', formatExpiry);
     document.getElementById('save-card-toggle').addEventListener('click', toggleSaveCard);
     document.getElementById('fund-continue-btn').addEventListener('click', ()=>goFundStep(2));
     document.getElementById('fund-pay-btn').addEventListener('click', payNow);
@@ -743,7 +738,7 @@ const PayLock = (function(){
     reader.onload = ev=>{
       box.replaceChildren();
       const img = document.createElement('img');
-      img.src = ev.target.result; // safe: local data URL from FileReader
+      img.src = ev.target.result;
       img.style.maxHeight = '120px';
       img.style.borderRadius = '12px';
       box.appendChild(img);
@@ -1081,31 +1076,237 @@ const PayLock = (function(){
     }
   }
 
+  // ============ WITHDRAWAL — PIN MODAL FLOW (no prompt()) ============
   function submitWithdrawal(){
     const amountNaira = parseFloat(document.getElementById('wd-amount').value);
     if(!amountNaira || amountNaira < 1000){ alert('Minimum withdrawal is ₦1,000'); return; }
     if(!state.selectedBankCode || !state.resolvedAccountName){ alert('Please link and verify a bank account'); return; }
     const accountNumber = document.getElementById('account-number').value.trim();
-    const pin = prompt('Enter your 4-digit PIN to confirm');
-    if(!pin || !/^\d{4}$/.test(pin)){ alert('Valid 4-digit PIN required'); return; }
+
+    state.pendingWithdrawal = {
+      amount_kobo: Math.round(amountNaira*100),
+      bank_name: document.getElementById('bank-search').value,
+      bank_code: state.selectedBankCode,
+      account_number: accountNumber,
+      account_name: state.resolvedAccountName
+    };
+
+    if(!state.hasPin){
+      openSetPinModal();
+    } else {
+      openWithdrawPinModal();
+    }
+  }
+
+  // ============ SHARED PIN SHEET (set-pin + withdrawal confirm) ============
+  let pinModal = { mode: null, value: '', firstPin: '' };
+
+  function renderPinKeypad(){
+    const keys = ['1','2','3','4','5','6','7','8','9','','0','back'];
+    const pad = document.getElementById('pin-sheet-keypad');
+    pad.replaceChildren();
+    keys.forEach(k=>{
+      if(k===''){ pad.appendChild(document.createElement('div')); return; }
+      const btn = document.createElement('button');
+      btn.className = 'pin-key';
+      btn.type = 'button';
+      if(k==='back'){
+        const svgNS='http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNS,'svg');
+        svg.setAttribute('width','20'); svg.setAttribute('height','20'); svg.setAttribute('viewBox','0 0 24 24');
+        svg.setAttribute('fill','none'); svg.setAttribute('stroke','#101828'); svg.setAttribute('stroke-width','1.8');
+        svg.setAttribute('stroke-linecap','round'); svg.setAttribute('stroke-linejoin','round');
+        const path = document.createElementNS(svgNS,'path');
+        path.setAttribute('d','M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z');
+        const l1 = document.createElementNS(svgNS,'line'); l1.setAttribute('x1','18'); l1.setAttribute('y1','9'); l1.setAttribute('x2','12'); l1.setAttribute('y2','15');
+        const l2 = document.createElementNS(svgNS,'line'); l2.setAttribute('x1','12'); l2.setAttribute('y1','9'); l2.setAttribute('x2','18'); l2.setAttribute('y2','15');
+        svg.appendChild(path); svg.appendChild(l1); svg.appendChild(l2);
+        btn.appendChild(svg);
+        btn.addEventListener('click', pinSheetBackspace);
+      } else {
+        btn.textContent = k;
+        btn.addEventListener('click', ()=>pinSheetPress(k));
+      }
+      pad.appendChild(btn);
+    });
+  }
+
+  function updatePinSheetDots(){
+    document.querySelectorAll('#pin-sheet-dots .pin-dot').forEach((d,i)=>{
+      d.classList.toggle('filled', i < pinModal.value.length);
+    });
+  }
+
+  function showPinError(msg){
+    const el = document.getElementById('pin-sheet-error');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+  function clearPinError(){
+    document.getElementById('pin-sheet-error').classList.add('hidden');
+  }
+
+  function resetPinSheetUI(){
+    document.getElementById('pin-sheet-keypad').classList.remove('hidden');
+    document.getElementById('pin-sheet-dots').classList.remove('hidden');
+    document.getElementById('pin-sheet-action').classList.add('hidden');
+  }
+
+  function openSetPinModal(){
+    pinModal = { mode:'set-new', value:'', firstPin:'' };
+    document.getElementById('pin-sheet-title').textContent = 'Set your PIN';
+    document.getElementById('pin-sheet-sub').textContent = 'Create a 4-digit PIN to secure withdrawals';
+    clearPinError();
+    resetPinSheetUI();
+    renderPinKeypad();
+    updatePinSheetDots();
+    document.getElementById('pin-sheet-overlay').classList.add('open');
+  }
+
+  function openWithdrawPinModal(){
+    pinModal = { mode:'withdraw', value:'', firstPin:'' };
+    document.getElementById('pin-sheet-title').textContent = 'Enter your PIN';
+    document.getElementById('pin-sheet-sub').textContent = 'Confirm this withdrawal securely';
+    clearPinError();
+    resetPinSheetUI();
+    renderPinKeypad();
+    updatePinSheetDots();
+    document.getElementById('pin-sheet-overlay').classList.add('open');
+  }
+
+  function closePinSheet(){
+    document.getElementById('pin-sheet-overlay').classList.remove('open');
+    pinModal = { mode:null, value:'', firstPin:'' };
+    state.pendingWithdrawal = null;
+  }
+  function closePinSheetOutside(e){ if(e.target.id==='pin-sheet-overlay') closePinSheet(); }
+
+  function pinSheetPress(d){
+    if(pinModal.value.length>=4) return;
+    clearPinError();
+    pinModal.value += d;
+    updatePinSheetDots();
+    if(pinModal.value.length===4){
+      setTimeout(handlePinComplete, 200);
+    }
+  }
+  function pinSheetBackspace(){
+    pinModal.value = pinModal.value.slice(0,-1);
+    updatePinSheetDots();
+  }
+
+  function handlePinComplete(){
+    if(pinModal.mode === 'set-new'){
+      pinModal.firstPin = pinModal.value;
+      pinModal.value = '';
+      pinModal.mode = 'set-confirm';
+      document.getElementById('pin-sheet-sub').textContent = 'Confirm your PIN';
+      updatePinSheetDots();
+      return;
+    }
+    if(pinModal.mode === 'set-confirm'){
+      if(pinModal.value !== pinModal.firstPin){
+        showPinError('PINs do not match. Try again.');
+        pinModal.mode = 'set-new';
+        pinModal.firstPin = '';
+        pinModal.value = '';
+        document.getElementById('pin-sheet-sub').textContent = 'Create a 4-digit PIN to secure withdrawals';
+        updatePinSheetDots();
+        return;
+      }
+      submitSetPin(pinModal.firstPin, pinModal.value);
+      return;
+    }
+    if(pinModal.mode === 'withdraw'){
+      submitWithdrawalWithPin(pinModal.value);
+      return;
+    }
+  }
+
+  function submitSetPin(pin, confirmPin){
+    document.getElementById('pin-sheet-keypad').classList.add('hidden');
+    fetch(API+'/api/wallet/set-pin', {
+      method:'POST', headers: jsonHeaders(),
+      body: JSON.stringify({ pin, confirm_pin: confirmPin })
+    })
+    .then(r=>r.json().then(data=>({status:r.status, data})))
+    .then(({status, data})=>{
+      if(status!==200 || data.error){
+        showPinError(data.error || 'Could not set PIN. Try again.');
+        pinModal = { mode:'set-new', value:'', firstPin:'' };
+        document.getElementById('pin-sheet-sub').textContent = 'Create a 4-digit PIN to secure withdrawals';
+        document.getElementById('pin-sheet-keypad').classList.remove('hidden');
+        updatePinSheetDots();
+        return;
+      }
+      state.hasPin = true;
+      haptic();
+      if(state.pendingWithdrawal){
+        openWithdrawPinModal();
+      } else {
+        closePinSheet();
+      }
+    })
+    .catch(()=>{
+      showPinError('Network error. Try again.');
+      pinModal = { mode:'set-new', value:'', firstPin:'' };
+      document.getElementById('pin-sheet-keypad').classList.remove('hidden');
+      updatePinSheetDots();
+    });
+  }
+
+  function submitWithdrawalWithPin(pin){
+    const payload = state.pendingWithdrawal;
+    if(!payload){ closePinSheet(); return; }
+    document.getElementById('pin-sheet-keypad').classList.add('hidden');
 
     fetch(API+'/api/wallet/withdraw', {
       method:'POST', headers: jsonHeaders(),
-      body: JSON.stringify({
-        amount_kobo: Math.round(amountNaira*100),
-        bank_name: document.getElementById('bank-search').value,
-        bank_code: state.selectedBankCode,
-        account_number: accountNumber,
-        account_name: state.resolvedAccountName,
-        pin: pin
-      })
-    }).then(r=>r.json().then(data=>({status:r.status,data})))
-      .then(({status,data})=>{
-        if(status>=400 || data.error){ alert(data.error || 'Withdrawal failed'); return; }
+      body: JSON.stringify(Object.assign({}, payload, { pin }))
+    })
+    .then(r=>r.json().then(data=>({status:r.status, data})))
+    .then(({status, data})=>{
+      if(status===200 && !data.error){
+        closePinSheet();
         alert('Withdrawal request submitted');
         document.getElementById('wd-amount').value='';
         loadWithdrawals(); loadBalance();
-      }).catch(()=>alert('Withdrawal failed, try again'));
+        return;
+      }
+
+      const code = data.code || '';
+      if(code === 'PIN_NOT_SET' || status===403){
+        showPinError('Set your PIN first.');
+        document.getElementById('pin-sheet-action-btn').textContent = 'Set PIN';
+        document.getElementById('pin-sheet-action-btn').onclick = ()=> openSetPinModal();
+        document.getElementById('pin-sheet-action').classList.remove('hidden');
+        document.getElementById('pin-sheet-dots').classList.add('hidden');
+        return;
+      }
+      if(code === 'RATE_LIMITED' || status===429){
+        showPinError('Too many attempts. Try again in 15 minutes.');
+        setTimeout(closePinSheet, 2000);
+        return;
+      }
+      if(code === 'PIN_INVALID' || status===401){
+        showPinError('Incorrect PIN. Try again.');
+        pinModal.value = '';
+        document.getElementById('pin-sheet-keypad').classList.remove('hidden');
+        updatePinSheetDots();
+        return;
+      }
+
+      showPinError(data.error || 'Withdrawal failed. Try again.');
+      pinModal.value = '';
+      document.getElementById('pin-sheet-keypad').classList.remove('hidden');
+      updatePinSheetDots();
+    })
+    .catch(()=>{
+      showPinError('Network error. Try again.');
+      pinModal.value = '';
+      document.getElementById('pin-sheet-keypad').classList.remove('hidden');
+      updatePinSheetDots();
+    });
   }
 
   // ============ FUND SHEET ============
@@ -1129,24 +1330,6 @@ const PayLock = (function(){
     const raw = document.getElementById('fund-amount').value.replace(/[^\d]/g,'');
     state.fund.amount = parseInt(raw,10) || 0;
     document.querySelectorAll('#fund-chips .chip').forEach(c=>c.classList.remove('active'));
-  }
-
-  function formatCardNumber(){
-    const input = document.getElementById('card-number');
-    let v = input.value.replace(/\D/g,'').slice(0,16);
-    input.value = v.match(/.{1,4}/g)?.join(' ') || v;
-    const brandEl = document.getElementById('card-brand');
-    if(v.startsWith('4')) brandEl.textContent='VISA';
-    else if(/^5[1-5]/.test(v)) brandEl.textContent='MASTERCARD';
-    else if(/^(506|507|650)/.test(v)) brandEl.textContent='VERVE';
-    else brandEl.textContent='';
-  }
-
-  function formatExpiry(){
-    const input = document.getElementById('card-expiry');
-    let v = input.value.replace(/\D/g,'').slice(0,4);
-    if(v.length>=3) v = v.slice(0,2)+'/'+v.slice(2);
-    input.value = v;
   }
 
   function toggleSaveCard(){
@@ -1204,7 +1387,7 @@ const PayLock = (function(){
   }
 
   function goFundStep(step){
-    for(let i=1;i<=3;i++){
+    for(let i=1;i<=2;i++){
       document.getElementById('fund-step-'+i).classList.toggle('hidden', i!==step);
     }
     document.querySelectorAll('.step-dots span').forEach(d=>{
@@ -1222,57 +1405,11 @@ const PayLock = (function(){
       state.fund.email = document.getElementById('fund-email').value.trim();
       state.fund.phone = document.getElementById('fund-phone').value.trim();
       if(!state.fund.email){ alert('Email is required'); goFundStep(1); return; }
-      setupPinKeypad();
-    }
 
-    if(step===3){
       document.getElementById('confirm-amount').textContent = nairaFmt(state.fund.amount*100);
       document.getElementById('confirm-email').textContent = state.fund.email;
       document.getElementById('fund-pay-btn-text').textContent = 'Pay ' + nairaFmt(state.fund.amount*100);
     }
-  }
-
-  function setupPinKeypad(){
-    state.fund.pin = '';
-    updatePinDots();
-    const keys = ['1','2','3','4','5','6','7','8','9','','0','back'];
-    const pad = document.getElementById('pin-keypad');
-    pad.replaceChildren();
-    keys.forEach(k=>{
-      if(k===''){ pad.appendChild(document.createElement('div')); return; }
-      const btn = document.createElement('button');
-      btn.className = 'pin-key';
-      btn.type = 'button';
-      if(k==='back'){
-        const svgNS='http://www.w3.org/2000/svg';
-        const svg = document.createElementNS(svgNS,'svg');
-        svg.setAttribute('width','20'); svg.setAttribute('height','20'); svg.setAttribute('viewBox','0 0 24 24');
-        svg.setAttribute('fill','none'); svg.setAttribute('stroke','#101828'); svg.setAttribute('stroke-width','1.8');
-        svg.setAttribute('stroke-linecap','round'); svg.setAttribute('stroke-linejoin','round');
-        const path = document.createElementNS(svgNS,'path');
-        path.setAttribute('d','M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z');
-        const l1 = document.createElementNS(svgNS,'line'); l1.setAttribute('x1','18'); l1.setAttribute('y1','9'); l1.setAttribute('x2','12'); l1.setAttribute('y2','15');
-        const l2 = document.createElementNS(svgNS,'line'); l2.setAttribute('x1','12'); l2.setAttribute('y1','9'); l2.setAttribute('x2','18'); l2.setAttribute('y2','15');
-        svg.appendChild(path); svg.appendChild(l1); svg.appendChild(l2);
-        btn.appendChild(svg);
-        btn.addEventListener('click', pinBackspace);
-      } else {
-        btn.textContent = k;
-        btn.addEventListener('click', ()=>pinPress(k));
-      }
-      pad.appendChild(btn);
-    });
-  }
-
-  function pinPress(d){
-    if(state.fund.pin.length>=4) return;
-    state.fund.pin += d;
-    updatePinDots();
-    if(state.fund.pin.length===4){ setTimeout(()=>goFundStep(3), 250); }
-  }
-  function pinBackspace(){ state.fund.pin = state.fund.pin.slice(0,-1); updatePinDots(); }
-  function updatePinDots(){
-    document.querySelectorAll('.pin-dot').forEach((d,i)=>{ d.classList.toggle('filled', i < state.fund.pin.length); });
   }
 
   // ============ PAYSTACK INLINE ============
@@ -1351,9 +1488,10 @@ const PayLock = (function(){
 
   return {
     retryAuth, goPage, navTab, toggleBalanceVisibility, submitWithdrawal,
-    closeFundSheet, closeFundSheetOutside, openFundSheet, downloadReceipt
+    closeFundSheet, closeFundSheetOutside, openFundSheet, downloadReceipt,
+    closePinSheet, closePinSheetOutside
   };
 })();
 </script>
 </body>
-  </html>
+</html>
