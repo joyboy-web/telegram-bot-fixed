@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>PayLock — Secure Escrow</title>
+<meta name="theme-color" content="#F2F2F4">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://js.paystack.co/v1/inline.js"></script>
+<style>
+  :root{
+    --ink:#101828;
+    --bg:#F2F2F4;
+    --line:#EAECEF;
+    --muted:#8B95A5;
+    --white:#FFFFFF;
+    --green:#16A34A;
+    --amber:#D97706;
+    --blue:#2563EB;
+    --red:#DC2626;
+    --safe-b: env(safe-area-inset-bottom);
+    --safe-t: env(safe-area-inset-top);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%; background:var(--bg); font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif; color:var(--ink); -webkit-font-smoothing:antialiased; overscroll-behavior:none;}
+  button{font-family:inherit; cursor:pointer; border:none; background:none;}
+  input,textarea{font-family:inherit;}
+  a{text-decoration:none; color:inherit;}
+  .hidden{display:none !important;}
+  svg{display:block;}
+  ::-webkit-scrollbar{display:none;}
+
+  .gate-screen{position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:9999; padding:24px;}
+  .gate-panel{display:flex; flex-direction:column; align-items:center; text-align:center; max-width:320px; width:100%;}
+  .gate-icon-circle{width:64px; height:64px; border-radius:50%; background:var(--white); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; margin-bottom:20px; box-shadow:0 4px 16px rgba(16,24,40,0.06);}
+  .gate-title{font-size:17px; font-weight:800; margin-bottom:6px;}
+  .gate-sub{font-size:13px; font-weight:500; color:var(--muted); line-height:1.5; margin-bottom:24px;}
+  .gate-btn{width:100%; height:50px; border-radius:16px; background:var(--ink); color:var(--white); font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:8px;}
+  .gate-btn:active{opacity:0.85;}
+  .gate-btn-ghost{width:100%; height:48px; border-radius:16px; background:transparent; border:1px solid var(--line); color:var(--ink); font-size:13px; font-weight:700; margin-top:10px;}
+  .gate-spin{width:34px; height:34px; border-radius:50%; border:3px solid var(--line); border-top-color:var(--ink); animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .app-shell{max-width:440px; margin:0 auto; min-height:100dvh; background:var(--bg); position:relative; overflow-x:hidden; padding-bottom:calc(90px + var(--safe-b));}
+  #pages{padding:0 16px;}
+  .page{display:none; animation:fadeIn 0.2s ease;}
+  .page.active{display:block;}
+  @keyframes fadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
+  .section-label{font-size:11px; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); margin:4px 0 10px;}
+
+  .tabbar{position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:440px; background:rgba(255,255,255,0.92); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border-top:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; padding:8px 6px calc(8px + var(--safe-b)); z-index:500;}
+  .tab-item{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 2px; border-radius:18px; transition:background 0.15s; color:var(--muted);}
+  .tab-item.active{background:#F3F4F6; color:var(--ink);}
+  .tab-item .label{font-size:10px; font-weight:700;}
+
+  .card-white{background:var(--white); border:1px solid var(--line); border-radius:22px; padding:16px;}
+  .row-tap{display:flex; align-items:center; gap:12px; padding:12px 4px; border-radius:12px;}
+  .row-icon-box{width:38px; height:38px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .row-title{font-size:14px; font-weight:800;}
+  .row-sub{font-size:11px; font-weight:500; color:var(--muted); margin-top:2px;}
+
+  .badge{font-size:10px; font-weight:800; padding:4px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:0.02em;}
+  .badge-pending{background:#FEF3C7; color:#92400E;}
+  .badge-approved{background:#DBEAFE; color:#1E40AF;}
+  .badge-paid{background:#DCFCE7; color:#166534;}
+  .badge-failed{background:#FEE2E2; color:#991B1B;}
+
+  .input-field{width:100%; height:50px; border-radius:14px; border:1px solid var(--line); background:#FAFAFB; padding:0 14px; font-size:14px; font-weight:600; color:var(--ink); outline:none; transition:border-color 0.15s;}
+  .input-field:focus{border-color:var(--ink);}
+  .field-label{font-size:12px; font-weight:700; margin-bottom:6px; display:block;}
+  .field-group{margin-bottom:14px;}
+
+  .empty-state{display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px 20px; text-align:center;}
+  .empty-state .icon-box{width:56px; height:56px; border-radius:16px; background:var(--white); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; margin-bottom:14px;}
+  .empty-state p{font-size:13px; font-weight:600; color:var(--muted);}
+
+  .sheet-overlay{position:fixed; inset:0; background:rgba(16,24,40,0.45); z-index:2000; display:flex; align-items:flex-end; opacity:0; pointer-events:none; transition:opacity 0.25s;}
+  .sheet-overlay.open{opacity:1; pointer-events:auto;}
+  .sheet{width:100%; max-width:440px; margin:0 auto; background:var(--white); border:1px solid var(--line); border-radius:22px 22px 0 0; max-height:92vh; display:flex; flex-direction:column; transform:translateY(100%); transition:transform 0.3s cubic-bezier(.32,.72,0,1); padding-bottom:var(--safe-b);}
+  .sheet-overlay.open .sheet{transform:translateY(0);}
+  .sheet-handle{width:36px; height:4px; border-radius:4px; background:var(--line); margin:10px auto 2px;}
+  .sheet-header{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--line);}
+  .sheet-header h3{font-size:16px; font-weight:800;}
+  .sheet-close{width:32px; height:32px; border-radius:50%; background:#F3F4F6; display:flex; align-items:center; justify-content:center;}
+  .sheet-body{overflow-y:auto; padding:18px; flex:1;}
+
+  .chip-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+  .chip{padding:8px 14px; border-radius:20px; border:1px solid var(--line); font-size:12px; font-weight:700; color:var(--ink); background:var(--white);}
+  .chip.active{background:var(--ink); color:var(--white); border-color:var(--ink);}
+
+  .amount-input-wrap{display:flex; align-items:center; gap:4px; border:1px solid var(--line); border-radius:16px; padding:14px 16px; background:#FAFAFB;}
+  .amount-input-wrap span{font-size:22px; font-weight:800; color:var(--muted);}
+  .amount-input-wrap input{border:none; background:none; outline:none; font-size:22px; font-weight:800; width:100%; color:var(--ink);}
+
+  .saved-card-row{display:flex; align-items:center; gap:12px; padding:12px; border:1px solid var(--line); border-radius:14px; margin-bottom:8px;}
+  .saved-card-row.selected{border-color:var(--ink); background:#F9FAFB;}
+
+  .toggle-switch{width:44px; height:26px; border-radius:20px; background:var(--line); position:relative; transition:background 0.2s; flex-shrink:0;}
+  .toggle-switch.on{background:var(--ink);}
+  .toggle-switch::after{content:''; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:var(--white); transition:transform 0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.2);}
+  .toggle-switch.on::after{transform:translateX(18px);}
+
+  .pin-dots{display:flex; gap:14px; justify-content:center; margin:18px 0;}
+  .pin-dot{width:16px; height:16px; border-radius:50%; border:2px solid var(--line); transition:all 0.15s;}
+  .pin-dot.filled{background:var(--ink); border-color:var(--ink);}
+  .pin-keypad{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; max-width:260px; margin:0 auto;}
+  .pin-key{height:56px; border-radius:16px; background:#F3F4F6; font-size:18px; font-weight:800; display:flex; align-items:center; justify-content:center;}
+  .pin-key:active{background:#E5E7EB;}
+
+  .pay-btn{width:100%; height:54px; border-radius:16px; background:var(--ink); color:var(--white); font-size:15px; font-weight:800; display:flex; align-items:center; justify-content:center; gap:8px; margin-top:16px;}
+  .pay-btn:disabled{opacity:0.5;}
+
+  .step-dots{display:flex; gap:6px; justify-content:center; margin-bottom:16px;}
+  .step-dots span{width:6px; height:6px; border-radius:50%; background:var(--line);}
+  .step-dots span.active{background:var(--ink); width:16px; border-radius:4px;}
+
+  .upload-box{border:1.6px dashed var(--line); border-radius:18px; padding:20px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:8px; position:relative; overflow:hidden; min-height:140px; background:var(--white);}
+  .upload-box img{max-width:100%;}
+  .upload-box input[type=file]{position:absolute; inset:0; opacity:0; cursor:pointer;}
+  .upload-box p{font-size:12px; font-weight:700; color:var(--muted);}
+  .upload-box span.hint{font-size:10px; color:var(--muted); font-weight:500;}
+</style>
+</head>
+<body>
+<div id="app-root">
+
+  <div id="gate-screen" class="gate-screen">
+    <div class="gate-panel" data-state="loading" id="gate-loading">
+      <div class="gate-spin"></div>
+    </div>
+    <div class="gate-panel hidden" data-state="blocked" id="gate-blocked">
+      <div class="gate-icon-circle">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </div>
+      <div class="gate-title">Please open inside Telegram</div>
+      <div class="gate-sub">PayLock escrow only works inside the official Telegram mini app for your security.</div>
+      <a class="gate-btn" href="https://t.me/PayLockOfficialBot/app">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        Open in Telegram
+      </a>
+    </div>
+    <div class="gate-panel hidden" data-state="error" id="gate-error">
+      <div class="gate-icon-circle">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+      </div>
+      <div class="gate-title">Verification failed</div>
+      <div class="gate-sub" id="gate-error-msg">We could not verify your Telegram session. Please try again.</div>
+      <button class="gate-btn" onclick="PayLock.retryAuth()">Retry</button>
+    </div>
+    <div class="gate-panel hidden" data-state="offline" id="gate-offline">
+      <div class="gate-icon-circle">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M16.72 11.06A10.94 10.94 0 0119 12.55"></path><path d="M5 12.55a10.94 10.94 0 015.17-2.39"></path><path d="M10.71 5.05A16 16 0 0122.58 9"></path><path d="M1.42 9a15.91 15.91 0 014.7-2.88"></path><path d="M8.53 16.11a6 6 0 016.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+      </div>
+      <div class="gate-title">You are offline</div>
+      <div class="gate-sub">Check your internet connection and try again.</div>
+      <button class="gate-btn" onclick="location.reload()">Reload</button>
+    </div>
+  </div>
+
+  <div id="app-shell" class="app-shell hidden">
+    <main id="pages">
+
+      <section id="pg-home" class="page active">
+        <div style="padding-top:20px;">
+          <div style="font-size:11px; font-weight:800; letter-spacing:0.08em; color:#8B95A5; text-transform:uppercase;">Welcome back</div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+            <h1 style="font-size:22px; font-weight:900;" id="home-greeting">Hi there</h1>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11.5V6a2 2 0 00-4 0"></path><path d="M14 10V4a2 2 0 00-4 0v2"></path><path d="M10 10.5V6a2 2 0 00-4 0v8"></path><path d="M6 14v-2.5a2 2 0 00-4 0c0 4 2 10 9 10h2c4 0 6-2.5 6-6v-4"></path></svg>
+          </div>
+          <p style="font-size:12px; font-weight:500; color:#8B95A5; margin-top:4px;">Your escrow is secure. No fake data — all live.</p>
+        </div>
+
+        <div style="margin-top:18px; border-radius:22px; padding:22px; background:linear-gradient(145deg,#0B1220,#111827); color:#fff;">
+          <div style="font-size:11px; font-weight:700; color:#9CA3AF; text-transform:uppercase; letter-spacing:0.06em;">Total balance</div>
+          <div style="font-size:30px; font-weight:900; margin-top:6px;" id="home-balance">₦0.00</div>
+          <div style="font-size:11px; font-weight:600; color:#6B7280; margin-top:4px;" id="home-uid">ID: —</div>
+          <button onclick="PayLock.goPage('pg-wallet')" style="margin-top:16px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.14); color:#fff; font-size:12px; font-weight:700; padding:10px 16px; border-radius:12px; display:flex; align-items:center; gap:6px; width:fit-content;">
+            View Wallet
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:18px;">
+          <button class="card-white" style="display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px 8px;" onclick="PayLock.goPage('pg-sell')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span style="font-size:12px; font-weight:700;">Sell</span>
+          </button>
+          <button class="card-white" style="display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px 8px;" onclick="PayLock.goPage('pg-buy')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"></path></svg>
+            <span style="font-size:12px; font-weight:700;">Buy</span>
+          </button>
+          <button class="card-white" style="display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px 8px;" onclick="PayLock.openFundSheet()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+            <span style="font-size:12px; font-weight:700;">Fund</span>
+          </button>
+        </div>
+
+        <div class="section-label" style="margin-top:22px;">Featured products</div>
+        <div id="home-products-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;"></div>
+        <div id="home-products-empty" class="empty-state hidden">
+          <div class="icon-box"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></div>
+          <p>No products yet</p>
+        </div>
+      </section>
+
+      <section id="pg-sell" class="page">
+        <div style="padding-top:20px; margin-bottom:16px;">
+          <h1 style="font-size:20px; font-weight:900;">Sell a product</h1>
+          <p style="font-size:12px; font-weight:500; color:#8B95A5; margin-top:4px;">List your item under escrow protection.</p>
+        </div>
+
+        <form id="sell-form">
+          <div class="field-group">
+            <label class="field-label">Cover image (required)</label>
+            <div class="upload-box" id="cover-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8B95A5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+              <p>Upload cover image</p>
+              <span class="hint">JPG, PNG or WEBP — max 5MB</span>
+              <input type="file" id="cover-input" accept="image/jpeg,image/png,image/webp">
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Product file (optional)</label>
+            <div class="upload-box" id="file-box">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8B95A5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+              <p>Upload product file</p>
+              <span class="hint">ZIP, PDF, MP4, DOCX — max 50MB</span>
+              <input type="file" id="file-input" accept=".zip,.pdf,.mp4,.docx">
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Product name</label>
+            <input class="input-field" id="sell-name" placeholder="e.g. Premium design template" required>
+          </div>
+          <div class="field-group">
+            <label class="field-label">Description</label>
+            <textarea class="input-field" id="sell-desc" style="height:90px; padding-top:12px; resize:none;" placeholder="Describe your product"></textarea>
+          </div>
+          <div class="field-group">
+            <label class="field-label">Category</label>
+            <input class="input-field" id="sell-category" placeholder="e.g. Digital, Service, Physical">
+          </div>
+          <div class="field-group">
+            <label class="field-label">Price (₦)</label>
+            <input class="input-field" id="sell-price" type="number" inputmode="numeric" placeholder="0.00">
+          </div>
+
+          <div class="card-white" id="fee-preview" style="margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom:8px;">
+              <span style="color:#8B95A5;">Product</span><span id="fee-product">₦0.00</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom:8px;">
+              <span style="color:#8B95A5;">Escrow protection</span><span id="fee-escrow">₦0.00</span>
+            </div>
+            <div style="height:1px; background:#EAECEF; margin:8px 0;"></div>
+            <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:800;">
+              <span>Buyer pays</span><span id="fee-total">₦0.00</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:600; color:#8B95A5; margin-top:6px;">
+              <span>You receive</span><span id="fee-seller">₦0.00</span>
+            </div>
+          </div>
+
+          <button type="submit" class="pay-btn" id="sell-submit-btn">List product</button>
+        </form>
+      </section>
+
+      <section id="pg-chat" class="page">
+        <div style="padding-top:20px;"><h1 style="font-size:20px; font-weight:900;">Chat</h1></div>
+        <div class="empty-state">
+          <div class="icon-box"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"></path></svg></div>
+          <p>No conversations yet</p>
+        </div>
+      </section>
+
+      <section id="pg-buy" class="page">
+        <div style="padding-top:20px; margin-bottom:14px;">
+          <h1 style="font-size:20px; font-weight:900;">Marketplace</h1>
+          <p style="font-size:12px; font-weight:500; color:#8B95A5; margin-top:4px;">Browse products under escrow protection.</p>
+        </div>
+        <div id="buy-products-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;"></div>
+        <div id="buy-products-empty" class="empty-state hidden">
+          <div class="icon-box"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"></path></svg></div>
+          <p>No products yet</p>
+        </div>
+      </section>
+
+      <section id="pg-wallet" class="page">
+        <div style="padding-top:20px; margin-bottom:16px;"><h1 style="font-size:20px; font-weight:900;">Wallet</h1></div>
+
+        <div style="border-radius:22px; padding:22px; background:linear-gradient(145deg,#0B1220,#111827); color:#fff; position:relative;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="font-size:11px; font-weight:700; color:#9CA3AF; text-transform:uppercase; letter-spacing:0.06em;">Available balance</div>
+            <button onclick="PayLock.toggleBalanceVisibility()" id="balance-eye-btn" style="width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </div>
+          <div style="font-size:30px; font-weight:900; margin-top:6px;" id="wallet-balance">₦0.00</div>
+          <div style="display:flex; gap:10px; margin-top:16px;">
+            <button onclick="PayLock.openFundSheet()" style="flex:1; background:#fff; color:#101828; font-size:13px; font-weight:800; padding:12px; border-radius:14px;">Fund</button>
+            <button onclick="PayLock.goPage('pg-wd')" style="flex:1; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.15); color:#fff; font-size:13px; font-weight:800; padding:12px; border-radius:14px;">Withdraw</button>
+          </div>
+        </div>
+
+        <div class="section-label" style="margin-top:22px;">History</div>
+        <div class="card-white">
+          <div class="row-tap" onclick="PayLock.goPage('pg-tx')">
+            <div class="row-icon-box" style="background:#EEF2FF;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4338CA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+            </div>
+            <div style="flex:1;"><div class="row-title">Transaction History</div><div class="row-sub">All wallet credits and debits</div></div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8B95A5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </div>
+          <div style="height:1px; background:#EAECEF; margin:4px 0;"></div>
+          <div class="row-tap" onclick="PayLock.goPage('pg-wd')">
+            <div class="row-icon-box" style="background:#FFF7ED;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C2410C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle></svg>
+            </div>
+            <div style="flex:1;"><div class="row-title">Withdrawal History</div><div class="row-sub">Bank payouts and status</div></div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8B95A5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </div>
+        </div>
+      </section>
+
+      <section id="pg-tx" class="page">
+        <div style="padding-top:20px; display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+          <button onclick="PayLock.goPage('pg-wallet')" style="width:36px; height:36px; border-radius:12px; background:#fff; border:1px solid #EAECEF; display:flex; align-items:center; justify-content:center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <h1 style="font-size:18px; font-weight:900;">Transaction history</h1>
+        </div>
+        <div id="tx-list"></div>
+        <div id="tx-empty" class="empty-state hidden">
+          <div class="icon-box"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg></div>
+          <p>No transactions yet</p>
+        </div>
+      </section>
+
+      <section id="pg-wd" class="page">
+        <div style="padding-top:20px; display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+          <button onclick="PayLock.goPage('pg-wallet')" style="width:36px; height:36px; border-radius:12px; background:#fff; border:1px solid #EAECEF; display:flex; align-items:center; justify-content:center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <h1 style="font-size:18px; font-weight:900;">Withdraw</h1>
+        </div>
+
+        <div class="card-white" style="margin-bottom:16px;">
+          <div class="section-label" style="margin-top:0;">Linked bank</div>
+          <div class="field-group">
+            <label class="field-label">Bank</label>
+            <input class="input-field" id="bank-search" placeholder="Search bank" autocomplete="off">
+            <div id="bank-list" class="hidden" style="margin-top:6px; max-height:200px; overflow-y:auto; border:1px solid #EAECEF; border-radius:14px;"></div>
+          </div>
+          <div class="field-group">
+            <label class="field-label">Account number</label>
+            <input class="input-field" id="account-number" maxlength="10" inputmode="numeric" placeholder="0123456789">
+          </div>
+          <div id="account-name-row" class="hidden" style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; color:#166534;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            <span id="account-name-text"></span>
+          </div>
+        </div>
+
+        <div class="card-white" style="margin-bottom:16px;">
+          <div class="section-label" style="margin-top:0;">Withdraw funds</div>
+          <div style="font-size:11px; font-weight:600; color:#8B95A5; margin-bottom:10px;">
+            Available: <span id="wd-available" style="color:#101828; font-weight:800;">₦0.00</span>
+            · Held in escrow: <span id="wd-held" style="color:#D97706; font-weight:800;">₦0.00</span>
+          </div>
+          <div class="field-group">
+            <label class="field-label">Amount (min ₦1,000)</label>
+            <input class="input-field" id="wd-amount" type="number" inputmode="numeric" placeholder="0.00">
+          </div>
+          <button class="pay-btn" onclick="PayLock.submitWithdrawal()">Request withdrawal</button>
+        </div>
+
+        <div class="section-label">Withdrawal history</div>
+        <div id="wd-list"></div>
+        <div id="wd-empty" class="empty-state hidden">
+          <div class="icon-box"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect></svg></div>
+          <p>No withdrawals yet</p>
+        </div>
+      </section>
+
+      <section id="pg-receipt" class="page">
+        <div style="padding-top:60px; display:flex; flex-direction:column; align-items:center; text-align:center;">
+          <div style="width:72px; height:72px; border-radius:50%; background:#DCFCE7; display:flex; align-items:center; justify-content:center; margin-bottom:18px;">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </div>
+          <div style="font-size:12px; font-weight:700; color:#8B95A5; text-transform:uppercase;">Amount</div>
+          <div style="font-size:28px; font-weight:900; margin-top:4px;" id="receipt-amount">₦0.00</div>
+          <div class="badge badge-paid" style="margin-top:10px;">Paid</div>
+
+          <div class="card-white" style="width:100%; margin-top:28px; text-align:left;">
+            <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; padding:8px 0;"><span style="color:#8B95A5;">Reference</span><span id="receipt-ref">—</span></div>
+            <div style="height:1px; background:#EAECEF;"></div>
+            <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; padding:8px 0;"><span style="color:#8B95A5;">Date</span><span id="receipt-date">—</span></div>
+            <div style="height:1px; background:#EAECEF;"></div>
+            <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; padding:8px 0;"><span style="color:#8B95A5;">Status</span><span style="color:#16A34A;">Successful</span></div>
+          </div>
+
+          <button class="pay-btn" style="margin-top:22px;" onclick="PayLock.downloadReceipt()">Download receipt</button>
+          <button class="gate-btn-ghost" onclick="PayLock.goPage('pg-wallet')">Back to wallet</button>
+        </div>
+      </section>
+
+    </main>
+
+    <nav class="tabbar">
+      <button class="tab-item active" data-tab="pg-home" onclick="PayLock.navTab('pg-home',this)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        <span class="label">Home</span>
+      </button>
+      <button class="tab-item" data-tab="pg-sell" onclick="PayLock.navTab('pg-sell',this)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2l3 7H3l3-7z"></path><path d="M21 9H3l1.5 11a2 2 0 002 2h11a2 2 0 002-2z"></path></svg>
+        <span class="label">Sell</span>
+      </button>
+      <button class="tab-item" data-tab="pg-chat" onclick="PayLock.navTab('pg-chat',this)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"></path></svg>
+        <span class="label">Chat</span>
+      </button>
+      <button class="tab-item" data-tab="pg-buy" onclick="PayLock.navTab('pg-buy',this)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 01-8 0"></path></svg>
+        <span class="label">Buy</span>
+      </button>
+      <button class="tab-item" data-tab="pg-wallet" onclick="PayLock.navTab('pg-wallet',this)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 010-4h14v4"></path><path d="M3 5v14a2 2 0 002 2h16v-5"></path><path d="M18 12a2 2 0 000 4h4v-4z"></path></svg>
+        <span class="label">Wallet</span>
+      </button>
+    </nav>
+  </div>
+
+  <div class="sheet-overlay" id="fund-sheet-overlay" onclick="PayLock.closeFundSheetOutside(event)">
+    <div class="sheet" id="fund-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <h3>Add funds</h3>
+        <button class="sheet-close" onclick="PayLock.closeFundSheet()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="sheet-body" id="fund-sheet-body">
+        <div class="step-dots">
+          <span class="active" data-step="1"></span><span data-step="2"></span>
+        </div>
+
+        <div id="fund-step-1">
+          <label class="field-label">Amount</label>
+          <div class="amount-input-wrap">
+            <span>₦</span>
+            <input type="text" id="fund-amount" inputmode="numeric" placeholder="0.00">
+          </div>
+          <div class="chip-row" id="fund-chips">
+            <button class="chip" type="button">₦1,000</button>
+            <button class="chip" type="button">₦5,000</button>
+            <button class="chip" type="button">₦10,000</button>
+            <button class="chip" type="button">₦20,000</button>
+          </div>
+
+          <div id="saved-cards-section" class="hidden" style="margin-top:22px;">
+            <div class="section-label" style="margin-top:0;">Saved cards</div>
+            <div id="saved-cards-list"></div>
+          </div>
+
+          <div style="margin-top:22px; display:flex; align-items:center; justify-content:space-between; padding:12px 2px; border-top:1px solid #EAECEF; border-bottom:1px solid #EAECEF;">
+            <div>
+              <div style="font-size:13px; font-weight:700;">Save this card</div>
+              <div style="font-size:11px; font-weight:500; color:#8B95A5; margin-top:2px;">Your card is securely collected and saved by Paystack — never stored on our servers.</div>
+            </div>
+            <div class="toggle-switch" id="save-card-toggle"></div>
+          </div>
+
+          <div style="margin-top:20px;">
+            <div class="section-label" style="margin-top:0;">Personal information</div>
+            <div class="field-group">
+              <label class="field-label">Email</label>
+              <input class="input-field" id="fund-email" type="email" placeholder="you@example.com">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Phone</label>
+              <input class="input-field" id="fund-phone" type="tel" placeholder="080XXXXXXXX">
+            </div>
+          </div>
+
+          <button class="pay-btn" id="fund-continue-btn">Continue</button>
+        </div>
+
+        <div id="fund-step-2" class="hidden">
+          <div class="card-white" style="margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; padding:6px 0;"><span style="color:#8B95A5;">Amount</span><span id="confirm-amount">₦0.00</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; padding:6px 0;"><span style="color:#8B95A5;">Email</span><span id="confirm-email">—</span></div>
+          </div>
+          <button class="pay-btn" id="fund-pay-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0110 0v4"></path></svg>
+            <span id="fund-pay-btn-text">Pay ₦0.00</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sheet-overlay" id="pin-sheet-overlay" onclick="PayLock.closePinSheetOutside(event)">
+    <div class="sheet" id="pin-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <h3 id="pin-sheet-title">Enter PIN</h3>
+        <button class="sheet-close" onclick="PayLock.closePinSheet()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <div style="text-align:center;">
+          <p id="pin-sheet-sub" style="font-size:12px; font-weight:500; color:#8B95A5;">Confirm this action securely</p>
+        </div>
+        <div class="pin-dots" id="pin-sheet-dots">
+          <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+        </div>
+        <div id="pin-sheet-error" class="hidden" style="text-align:center; font-size:12px; font-weight:700; color:#DC2626; margin-bottom:10px;"></div>
+        <div id="pin-sheet-action" class="hidden" style="margin-bottom:14px;">
+          <button class="pay-btn" style="margin-top:0;" id="pin-sheet-action-btn">Set PIN</button>
+        </div>
+        <div class="pin-keypad" id="pin-sheet-keypad"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const PayLock = (function(){
+
+  const API = '';
+  const tg = window.Telegram ? window.Telegram.WebApp : null;
+  const TG_INIT_DATA = tg ? (tg.initData || null) : null;
+
+  let state = {
+    user: null,
+    telegram_id: null,
+    products: [],
+    savedCards: [],
+    banks: [],
+    selectedBankCode: null,
+    resolvedAccountName: null,
+    balanceVisible: true,
+    balance_kobo: 0,
+    selectedCardId: null,
+    hasPin: false,
+    pendingWithdrawal: null,
+    fund: { amount: 0, email: '', phone: '', saveCard: false }
+  };
+
+  let coverFile = null;
+  let productFile = null;
+
+  // ============ AUTH HEADER ============
+  function getAuthHeader(){
+    if(!TG_INIT_DATA) return {};
+    return { 'Authorization': 'tma ' + TG_INIT_DATA };
+  }
+
+  function jsonHeaders(){
+    return Object.assign({ 'Content-Type': 'application/json' }, getAuthHeader());
+  }
+
+  // ============ INIT ============
+  function init(){
+    if(tg){
+      tg.ready();
+      tg.expand();
+    }
+
+    if(!navigator.onLine){
+      showGateState('offline');
+      window.addEventListener('online', ()=>location.reload());
+      return;
+    }
+
+    showGateState('loading');
+
+    if(!tg || !tg.initData){
+      showGateState('blocked');
+      return;
+    }
+
+    validateAuth();
+  }
+
+  function showGateState(name){
+    document.getElementById('gate-screen').classList.remove('hidden');
+    ['loading','blocked','error','offline'].forEach(s=>{
+      document.getElementById('gate-'+s).classList.toggle('hidden', s!==name);
+    });
+    document.getElementById('app-shell').classList.add('hidden');
+  }
+
+  function validateAuth(){
+    fetch(API+'/api/auth/validate', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ initData: tg.initData })
+    })
+    .then(r=>{ if(!r.ok) throw new Error('verify_failed'); return r.json(); })
+    .then(data=>{
+      state.user = data.user;
+      state.telegram_id = data.user.telegram_id;
+      enterApp();
+    })
+    .catch(()=>{
+      document.getElementById('gate-error-msg').innerText = 'We could not verify your Telegram session. Please try again.';
+      showGateState('error');
+    });
+  }
+
+  function retryAuth(){ init(); }
+
+  function enterApp(){
+    document.getElementById('gate-screen').classList.add('hidden');
+    document.getElementById('app-shell').classList.remove('hidden');
+
+    document.getElementById('home-greeting').textContent = 'Hi ' + (state.user.first_name || 'there');
+    document.getElementById('home-uid').textContent = 'ID: ' + state.telegram_id;
+
+    loadBalance();
+    loadProducts();
+    loadPinStatus();
+    bindEvents();
+  }
+
+  function loadPinStatus(){
+    fetch(API+'/api/wallet/pin-status', { headers: getAuthHeader() })
+      .then(r=>r.json()).then(data=>{
+        state.hasPin = !!data.has_pin;
+      }).catch(()=>{});
+  }
+
+  function bindEvents(){
+    document.getElementById('cover-input').addEventListener('change', handleCover);
+    document.getElementById('file-input').addEventListener('change', handleFile);
+    document.getElementById('sell-form').addEventListener('submit', submitSellForm);
+    document.getElementById('sell-price').addEventListener('input', previewFees);
+
+    document.querySelectorAll('#fund-chips .chip').forEach(btn=>{
+      const amounts = [1000,5000,10000,20000];
+      const idx = Array.from(btn.parentNode.children).indexOf(btn);
+      btn.addEventListener('click', ()=> setChipAmount(amounts[idx], btn));
+    });
+    document.getElementById('fund-amount').addEventListener('input', onAmountInput);
+    document.getElementById('save-card-toggle').addEventListener('click', toggleSaveCard);
+    document.getElementById('fund-continue-btn').addEventListener('click', ()=>goFundStep(2));
+    document.getElementById('fund-pay-btn').addEventListener('click', payNow);
+
+    document.getElementById('bank-search').addEventListener('input', filterBanks);
+    document.getElementById('bank-search').addEventListener('focus', showBankList);
+    document.getElementById('account-number').addEventListener('input', maybeResolveAccount);
+  }
+
+  function haptic(){ if(tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light'); }
+
+  function goPage(id){
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.tab-item').forEach(t=>t.classList.toggle('active', t.dataset.tab===id));
+    if(id==='pg-wd'){ loadBanks(); loadWithdrawals(); loadBalance(); }
+    if(id==='pg-tx'){ loadTransactions(); }
+    if(id==='pg-wallet'){ loadBalance(); }
+    window.scrollTo(0,0);
+  }
+
+  function navTab(id){ haptic(); goPage(id); }
+
+  // ============ FEE MODEL (must match backend exactly) ============
+  function computeFees(priceNaira){
+    const price_kobo = Math.round(priceNaira * 100);
+    const PLATFORM_FEE = 20000;
+    let paystackFee;
+    if(price_kobo <= 250000){
+      paystackFee = Math.round(price_kobo * 0.015);
+    } else {
+      paystackFee = Math.round(price_kobo * 0.015 + 10000);
+    }
+    paystackFee = Math.min(200000, paystackFee);
+    const totalExtra = PLATFORM_FEE + paystackFee;
+    const split = Math.round(totalExtra / 2);
+    return {
+      price_kobo,
+      paystackFee,
+      platformFee: PLATFORM_FEE,
+      split,
+      buyerPays: price_kobo + split,
+      sellerGets: price_kobo - split
+    };
+  }
+
+  function nairaFmt(kobo){
+    return '₦' + ((kobo||0)/100).toLocaleString('en-NG', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+
+  function previewFees(){
+    const priceNaira = parseFloat(document.getElementById('sell-price').value) || 0;
+    const f = computeFees(priceNaira);
+    document.getElementById('fee-product').textContent = nairaFmt(f.price_kobo);
+    document.getElementById('fee-escrow').textContent = nairaFmt(f.split);
+    document.getElementById('fee-total').textContent = nairaFmt(f.buyerPays);
+    document.getElementById('fee-seller').textContent = nairaFmt(f.sellerGets);
+  }
+
+  // ============ SELL UPLOADS — HARDENED ============
+  const ALLOWED_COVER_TYPES = ['image/jpeg','image/png','image/webp'];
+  const ALLOWED_FILE_EXT = ['.zip','.pdf','.mp4','.docx'];
+  const MAX_COVER_BYTES = 5 * 1024 * 1024;
+  const MAX_FILE_BYTES = 50 * 1024 * 1024;
+
+  function handleCover(e){
+    const file = e.target.files[0];
+    if(!file) return;
+
+    if(!ALLOWED_COVER_TYPES.includes(file.type)){
+      alert('Cover must be JPG, PNG or WEBP');
+      e.target.value = '';
+      return;
+    }
+    if(file.size > MAX_COVER_BYTES){
+      alert('Cover image must be max 5MB');
+      e.target.value = '';
+      return;
+    }
+
+    coverFile = file;
+    const box = document.getElementById('cover-box');
+    const reader = new FileReader();
+    reader.onload = ev=>{
+      box.replaceChildren();
+      const img = document.createElement('img');
+      img.src = ev.target.result;
+      img.style.maxHeight = '120px';
+      img.style.borderRadius = '12px';
+      box.appendChild(img);
+
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.id = 'cover-input';
+      input.accept = 'image/jpeg,image/png,image/webp';
+      input.addEventListener('change', handleCover);
+      box.appendChild(input);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleFile(e){
+    const file = e.target.files[0];
+    if(!file) return;
+
+    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    if(!ALLOWED_FILE_EXT.includes(ext)){
+      alert('File must be ZIP, PDF, MP4 or DOCX');
+      e.target.value = '';
+      return;
+    }
+    if(file.size > MAX_FILE_BYTES){
+      alert('File exceeds 50MB limit');
+      e.target.value = '';
+      return;
+    }
+
+    productFile = file;
+    const box = document.getElementById('file-box');
+    box.replaceChildren();
+
+    const wrap = document.createElement('div');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('width','22'); svg.setAttribute('height','22'); svg.setAttribute('viewBox','0 0 24 24');
+    svg.setAttribute('fill','none'); svg.setAttribute('stroke','#101828'); svg.setAttribute('stroke-width','1.8');
+    svg.setAttribute('stroke-linecap','round'); svg.setAttribute('stroke-linejoin','round');
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d','M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z');
+    const poly = document.createElementNS('http://www.w3.org/2000/svg','polyline');
+    poly.setAttribute('points','13 2 13 9 20 9');
+    svg.appendChild(path); svg.appendChild(poly);
+    wrap.appendChild(svg);
+
+    const nameEl = document.createElement('p');
+    nameEl.style.marginTop = '6px'; nameEl.style.fontSize = '12px'; nameEl.style.fontWeight = '700';
+    nameEl.textContent = file.name.slice(0,80);
+    wrap.appendChild(nameEl);
+    box.appendChild(wrap);
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.id = 'file-input';
+    input.accept = '.zip,.pdf,.mp4,.docx';
+    input.addEventListener('change', handleFile);
+    box.appendChild(input);
+  }
+
+  function submitSellForm(e){
+    e.preventDefault();
+    const name = document.getElementById('sell-name').value.trim();
+    const desc = document.getElementById('sell-desc').value.trim();
+    const category = document.getElementById('sell-category').value.trim();
+    const priceNaira = parseFloat(document.getElementById('sell-price').value);
+
+    if(!coverFile){ alert('Cover image is required'); return; }
+    if(!name || !priceNaira || priceNaira<=0){ alert('Enter a valid name and price'); return; }
+
+    const btn = document.getElementById('sell-submit-btn');
+    btn.disabled = true; btn.textContent = 'Listing...';
+
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('description', desc);
+    fd.append('category', category);
+    fd.append('price_naira', priceNaira);
+    fd.append('cover', coverFile);
+    if(productFile) fd.append('product_file', productFile);
+
+    fetch(API+'/api/products', { method:'POST', headers: getAuthHeader(), body: fd })
+      .then(r=>r.json().then(data=>({status:r.status, data})))
+      .then(({status, data})=>{
+        if(status!==201 || data.error){ alert(data.error || 'Failed to list product'); btn.disabled=false; btn.textContent='List product'; return; }
+        alert('Product listed successfully');
+        document.getElementById('sell-form').reset();
+        coverFile = null; productFile = null;
+        btn.disabled=false; btn.textContent='List product';
+        loadProducts();
+        goPage('pg-home');
+      })
+      .catch(()=>{
+        alert('Failed to list product. Try again.');
+        btn.disabled=false; btn.textContent='List product';
+      });
+  }
+
+  // ============ PRODUCTS — SAFE RENDERING ============
+  function loadProducts(){
+    fetch(API+'/api/products').then(r=>r.json()).then(data=>{
+      state.products = data.products || [];
+      renderProductGrid('home-products-grid','home-products-empty', state.products.slice(0,6));
+      renderProductGrid('buy-products-grid','buy-products-empty', state.products);
+    }).catch(()=>{});
+  }
+
+  function renderProductGrid(gridId, emptyId, list){
+    const grid = document.getElementById(gridId);
+    const empty = document.getElementById(emptyId);
+    grid.replaceChildren();
+
+    if(!list || list.length===0){ empty.classList.remove('hidden'); return; }
+    empty.classList.add('hidden');
+
+    list.forEach(p=>{
+      const card = document.createElement('div');
+      card.className = 'card-white';
+      card.style.padding = '10px';
+
+      const img = document.createElement('img');
+      img.alt = '';
+      img.style.width = '100%';
+      img.style.aspectRatio = '1/1';
+      img.style.borderRadius = '14px';
+      img.style.objectFit = 'cover';
+      img.style.background = '#F3F4F6';
+      img.style.marginBottom = '8px';
+      if(typeof p.image_url === 'string' && /^https:\/\//.test(p.image_url)){
+        img.src = p.image_url;
+      }
+      card.appendChild(img);
+
+      const title = document.createElement('div');
+      title.style.fontSize = '12px';
+      title.style.fontWeight = '800';
+      title.style.whiteSpace = 'nowrap';
+      title.style.overflow = 'hidden';
+      title.style.textOverflow = 'ellipsis';
+      title.textContent = p.name || '';
+      card.appendChild(title);
+
+      const price = document.createElement('div');
+      price.style.fontSize = '13px';
+      price.style.fontWeight = '900';
+      price.style.marginTop = '4px';
+      price.textContent = nairaFmt(p.buyer_pays_kobo || 0);
+      card.appendChild(price);
+
+      grid.appendChild(card);
+    });
+  }
+
+  // ============ WALLET BALANCE ============
+  function loadBalance(){
+    fetch(API+'/api/wallet/balance', { headers: getAuthHeader() })
+      .then(r=>r.json()).then(data=>{
+        state.balance_kobo = data.balance_kobo || 0;
+        renderBalance();
+        document.getElementById('wd-available').textContent = nairaFmt(Math.max(0, (data.balance_kobo||0)-(data.held_kobo||0)));
+        document.getElementById('wd-held').textContent = nairaFmt(data.held_kobo||0);
+      }).catch(()=>{});
+  }
+
+  function renderBalance(){
+    const txt = state.balanceVisible ? nairaFmt(state.balance_kobo) : '₦••••••';
+    document.getElementById('home-balance').textContent = txt;
+    document.getElementById('wallet-balance').textContent = txt;
+  }
+
+  function toggleBalanceVisibility(){
+    state.balanceVisible = !state.balanceVisible;
+    renderBalance();
+  }
+
+  // ============ TRANSACTIONS / WITHDRAWALS — SAFE RENDERING ============
+  function loadTransactions(){
+    fetch(API+'/api/wallet/transactions', { headers: getAuthHeader() })
+      .then(r=>r.json()).then(data=>{
+        const list = data.transactions || [];
+        const el = document.getElementById('tx-list');
+        const empty = document.getElementById('tx-empty');
+        el.replaceChildren();
+        if(list.length===0){ empty.classList.remove('hidden'); return; }
+        empty.classList.add('hidden');
+
+        list.forEach(t=>{
+          const row = document.createElement('div');
+          row.className = 'card-white';
+          row.style.marginBottom = '10px';
+          row.style.display = 'flex';
+          row.style.alignItems = 'center';
+          row.style.gap = '12px';
+
+          const iconBox = document.createElement('div');
+          iconBox.className = 'row-icon-box';
+          iconBox.style.background = t.type==='credit' ? '#DCFCE7' : '#FEE2E2';
+          const svgNS = 'http://www.w3.org/2000/svg';
+          const svg = document.createElementNS(svgNS,'svg');
+          svg.setAttribute('width','18'); svg.setAttribute('height','18'); svg.setAttribute('viewBox','0 0 24 24');
+          svg.setAttribute('fill','none'); svg.setAttribute('stroke', t.type==='credit' ? '#16A34A' : '#DC2626');
+          svg.setAttribute('stroke-width','1.8'); svg.setAttribute('stroke-linecap','round'); svg.setAttribute('stroke-linejoin','round');
+          const l1 = document.createElementNS(svgNS,'line');
+          const l2 = document.createElementNS(svgNS,'polyline');
+          if(t.type==='credit'){
+            l1.setAttribute('x1','12'); l1.setAttribute('y1','19'); l1.setAttribute('x2','12'); l1.setAttribute('y2','5');
+            l2.setAttribute('points','5 12 12 5 19 12');
+          } else {
+            l1.setAttribute('x1','12'); l1.setAttribute('y1','5'); l1.setAttribute('x2','12'); l1.setAttribute('y2','19');
+            l2.setAttribute('points','19 12 12 19 5 12');
+          }
+          svg.appendChild(l1); svg.appendChild(l2);
+          iconBox.appendChild(svg);
+          row.appendChild(iconBox);
+
+          const mid = document.createElement('div');
+          mid.style.flex = '1';
+          const title = document.createElement('div');
+          title.className = 'row-title';
+          title.textContent = t.reason || 'Wallet transaction';
+          const sub = document.createElement('div');
+          sub.className = 'row-sub';
+          sub.textContent = new Date(t.created_at).toLocaleString();
+          mid.appendChild(title); mid.appendChild(sub);
+          row.appendChild(mid);
+
+          const amt = document.createElement('div');
+          amt.style.fontSize = '14px'; amt.style.fontWeight = '800';
+          amt.style.color = t.type==='credit' ? '#16A34A' : '#DC2626';
+          amt.textContent = (t.type==='credit'?'+':'-') + nairaFmt(t.amount_kobo);
+          row.appendChild(amt);
+
+          el.appendChild(row);
+        });
+      }).catch(()=>{});
+  }
+
+  function loadWithdrawals(){
+    fetch(API+'/api/wallet/withdrawals', { headers: getAuthHeader() })
+      .then(r=>r.json()).then(data=>{
+        const list = data.withdrawals || [];
+        const el = document.getElementById('wd-list');
+        const empty = document.getElementById('wd-empty');
+        el.replaceChildren();
+        if(list.length===0){ empty.classList.remove('hidden'); return; }
+        empty.classList.add('hidden');
+
+        const badgeClass = { pending:'badge-pending', approved:'badge-approved', paid:'badge-paid', failed:'badge-failed' };
+
+        list.forEach(w=>{
+          const card = document.createElement('div');
+          card.className = 'card-white';
+          card.style.marginBottom = '10px';
+
+          const topRow = document.createElement('div');
+          topRow.style.display = 'flex'; topRow.style.justifyContent = 'space-between'; topRow.style.alignItems = 'center';
+          const amt = document.createElement('div');
+          amt.style.fontSize = '15px'; amt.style.fontWeight = '900';
+          amt.textContent = nairaFmt(w.amount_kobo);
+          const badge = document.createElement('span');
+          badge.className = 'badge ' + (badgeClass[w.status] || 'badge-pending');
+          badge.textContent = w.status;
+          topRow.appendChild(amt); topRow.appendChild(badge);
+          card.appendChild(topRow);
+
+          const bankLine = document.createElement('div');
+          bankLine.style.fontSize = '12px'; bankLine.style.fontWeight = '600'; bankLine.style.color = '#8B95A5'; bankLine.style.marginTop = '4px';
+          bankLine.textContent = (w.bank_name || '') + ' •••• ' + String(w.account_number || '').slice(-4);
+          card.appendChild(bankLine);
+
+          const metaLine = document.createElement('div');
+          metaLine.style.fontSize = '11px'; metaLine.style.fontWeight = '600'; metaLine.style.color = '#8B95A5'; metaLine.style.marginTop = '4px';
+          metaLine.textContent = new Date(w.created_at).toLocaleString() + ' · ' + (w.reference || '');
+          card.appendChild(metaLine);
+
+          el.appendChild(card);
+        });
+      }).catch(()=>{});
+  }
+
+  // ============ BANKS ============
+  function loadBanks(){
+    if(state.banks.length) return;
+    fetch(API+'/api/banks').then(r=>r.json()).then(data=>{ state.banks = data.banks || []; }).catch(()=>{});
+  }
+
+  function showBankList(){ renderBankList(state.banks); }
+
+  function filterBanks(){
+    const q = document.getElementById('bank-search').value.toLowerCase();
+    renderBankList(state.banks.filter(b=>b.name.toLowerCase().includes(q)));
+  }
+
+  function renderBankList(list){
+    const el = document.getElementById('bank-list');
+    el.replaceChildren();
+    if(!list.length){ el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+
+    list.slice(0,40).forEach(b=>{
+      const row = document.createElement('div');
+      row.style.padding = '12px 14px'; row.style.fontSize = '13px'; row.style.fontWeight = '600'; row.style.borderBottom = '1px solid #EAECEF';
+      row.textContent = b.name;
+      row.addEventListener('click', ()=> selectBank(b.code, b.name));
+      el.appendChild(row);
+    });
+  }
+
+  function selectBank(code, name){
+    state.selectedBankCode = code;
+    document.getElementById('bank-search').value = name;
+    document.getElementById('bank-list').classList.add('hidden');
+    maybeResolveAccount();
+  }
+
+  let resolveTimer = null;
+  function maybeResolveAccount(){
+    const num = document.getElementById('account-number').value.trim();
+    clearTimeout(resolveTimer);
+    document.getElementById('account-name-row').classList.add('hidden');
+    state.resolvedAccountName = null;
+    if(num.length===10 && state.selectedBankCode){
+      resolveTimer = setTimeout(()=>{
+        fetch(API+'/api/banks/resolve', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ bank_code: state.selectedBankCode, account_number: num })
+        }).then(r=>r.json()).then(data=>{
+          if(data.account_name){
+            state.resolvedAccountName = data.account_name;
+            document.getElementById('account-name-text').textContent = data.account_name;
+            document.getElementById('account-name-row').classList.remove('hidden');
+          }
+        }).catch(()=>{});
+      }, 400);
+    }
+  }
+
+  // ============ WITHDRAWAL — PIN MODAL FLOW (no prompt()) ============
+  function submitWithdrawal(){
+    const amountNaira = parseFloat(document.getElementById('wd-amount').value);
+    if(!amountNaira || amountNaira < 1000){ alert('Minimum withdrawal is ₦1,000'); return; }
+    if(!state.selectedBankCode || !state.resolvedAccountName){ alert('Please link and verify a bank account'); return; }
+    const accountNumber = document.getElementById('account-number').value.trim();
+
+    state.pendingWithdrawal = {
+      amount_kobo: Math.round(amountNaira*100),
+      bank_name: document.getElementById('bank-search').value,
+      bank_code: state.selectedBankCode,
+      account_number: accountNumber,
+      account_name: state.resolvedAccountName
+    };
+
+    if(!state.hasPin){
+      openSetPinModal();
+    } else {
+      openWithdrawPinModal();
+    }
+  }
+
+  // ============ SHARED PIN SHEET (set-pin + withdrawal confirm) ============
+  let pinModal = { mode: null, value: '', firstPin: '' };
+
+  function renderPinKeypad(){
+    const keys = ['1','2','3','4','5','6','7','8','9','','0','back'];
+    const pad = document.getElementById('pin-sheet-keypad');
+    pad.replaceChildren();
+    keys.forEach(k=>{
+      if(k===''){ pad.appendChild(document.createElement('div')); return; }
+      const btn = document.createElement('button');
+      btn.className = 'pin-key';
+      btn.type = 'button';
+      if(k==='back'){
+        const svgNS='http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNS,'svg');
+        svg.setAttribute('width','20'); svg.setAttribute('height','20'); svg.setAttribute('viewBox','0 0 24 24');
+        svg.setAttribute('fill','none'); svg.setAttribute('stroke','#101828'); svg.setAttribute('stroke-width','1.8');
+        svg.setAttribute('stroke-linecap','round'); svg.setAttribute('stroke-linejoin','round');
+        const path = document.createElementNS(svgNS,'path');
+        path.setAttribute('d','M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z');
+        const l1 = document.createElementNS(svgNS,'line'); l1.setAttribute('x1','18'); l1.setAttribute('y1','9'); l1.setAttribute('x2','12'); l1.setAttribute('y2','15');
+        const l2 = document.createElementNS(svgNS,'line'); l2.setAttribute('x1','12'); l2.setAttribute('y1','9'); l2.setAttribute('x2','18'); l2.setAttribute('y2','15');
+        svg.appendChild(path); svg.appendChild(l1); svg.appendChild(l2);
+        btn.appendChild(svg);
+        btn.addEventListener('click', pinSheetBackspace);
+      } else {
+        btn.textContent = k;
+        btn.addEventListener('click', ()=>pinSheetPress(k));
+      }
+      pad.appendChild(btn);
+    });
+  }
+
+  function updatePinSheetDots(){
+    document.querySelectorAll('#pin-sheet-dots .pin-dot').forEach((d,i)=>{
+      d.classList.toggle('filled', i < pinModal.value.length);
+    });
+  }
+
+  function showPinError(msg){
+    const el = document.getElementById('pin-sheet-error');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+  function clearPinError(){
+    document.getElementById('pin-sheet-error').classList.add('hidden');
+  }
+
+  function resetPinSheetUI(){
+    document.getElementById('pin-sheet-keypad').classList.remove('hidden');
+    document.getElementById('pin-sheet-dots').classList.remove('hidden');
+    document.getElementById('pin-sheet-action').classList.add('hidden');
+  }
+
+  function openSetPinModal(){
+    pinModal = { mode:'set-new', value:'', firstPin:'' };
+    document.getElementById('pin-sheet-title').textContent = 'Set your PIN';
+    document.getElementById('pin-sheet-sub').textContent = 'Create a 4-digit PIN to secure withdrawals';
+    clearPinError();
+    resetPinSheetUI();
+    renderPinKeypad();
+    updatePinSheetDots();
+    document.getElementById('pin-sheet-overlay').classList.add('open');
+  }
+
+  function openWithdrawPinModal(){
+    pinModal = { mode:'withdraw', value:'', firstPin:'' };
+    document.getElementById('pin-sheet-title').textContent = 'Enter your PIN';
+    document.getElementById('pin-sheet-sub').textContent = 'Confirm this withdrawal securely';
+    clearPinError();
+    resetPinSheetUI();
+    renderPinKeypad();
+    updatePinSheetDots();
+    document.getElementById('pin-sheet-overlay').classList.add('open');
+  }
+
+  function closePinSheet(){
+    document.getElementById('pin-sheet-overlay').classList.remove('open');
+    pinModal = { mode:null, value:'', firstPin:'' };
+    state.pendingWithdrawal = null;
+  }
+  function closePinSheetOutside(e){ if(e.target.id==='pin-sheet-overlay') closePinSheet(); }
+
+  function pinSheetPress(d){
+    if(pinModal.value.length>=4) return;
+    clearPinError();
+    pinModal.value += d;
+    updatePinSheetDots();
+    if(pinModal.value.length===4){
+      setTimeout(handlePinComplete, 200);
+    }
+  }
+  function pinSheetBackspace(){
+    pinModal.value = pinModal.value.slice(0,-1);
+    updatePinSheetDots();
+  }
+
+  function handlePinComplete(){
+    if(pinModal.mode === 'set-new'){
+      pinModal.firstPin = pinModal.value;
+      pinModal.value = '';
+      pinModal.mode = 'set-confirm';
+      document.getElementById('pin-sheet-sub').textContent = 'Confirm your PIN';
+      updatePinSheetDots();
+      return;
+    }
+    if(pinModal.mode === 'set-confirm'){
+      if(pinModal.value !== pinModal.firstPin){
+        showPinError('PINs do not match. Try again.');
+        pinModal.mode = 'set-new';
+        pinModal.firstPin = '';
+        pinModal.value = '';
+        document.getElementById('pin-sheet-sub').textContent = 'Create a 4-digit PIN to secure withdrawals';
+        updatePinSheetDots();
+        return;
+      }
+      submitSetPin(pinModal.firstPin, pinModal.value);
+      return;
+    }
+    if(pinModal.mode === 'withdraw'){
+      submitWithdrawalWithPin(pinModal.value);
+      return;
+    }
+  }
+
+  function submitSetPin(pin, confirmPin){
+    document.getElementById('pin-sheet-keypad').classList.add('hidden');
+    fetch(API+'/api/wallet/set-pin', {
+      method:'POST', headers: jsonHeaders(),
+      body: JSON.stringify({ pin, confirm_pin: confirmPin })
+    })
+    .then(r=>r.json().then(data=>({status:r.status, data})))
+    .then(({status, data})=>{
+      if(status!==200 || data.error){
+        showPinError(data.error || 'Could not set PIN. Try again.');
+        pinModal = { mode:'set-new', value:'', firstPin:'' };
+        document.getElementById('pin-sheet-sub').textContent = 'Create a 4-digit PIN to secure withdrawals';
+        document.getElementById('pin-sheet-keypad').classList.remove('hidden');
+        updatePinSheetDots();
+        return;
+      }
+      state.hasPin = true;
+      haptic();
+      if(state.pendingWithdrawal){
+        openWithdrawPinModal();
+      } else {
+        closePinSheet();
+      }
+    })
+    .catch(()=>{
+      showPinError('Network error. Try again.');
+      pinModal = { mode:'set-new', value:'', firstPin:'' };
+      document.getElementById('pin-sheet-keypad').classList.remove('hidden');
+      updatePinSheetDots();
+    });
+  }
+
+  function submitWithdrawalWithPin(pin){
+    const payload = state.pendingWithdrawal;
+    if(!payload){ closePinSheet(); return; }
+    document.getElementById('pin-sheet-keypad').classList.add('hidden');
+
+    fetch(API+'/api/wallet/withdraw', {
+      method:'POST', headers: jsonHeaders(),
+      body: JSON.stringify(Object.assign({}, payload, { pin }))
+    })
+    .then(r=>r.json().then(data=>({status:r.status, data})))
+    .then(({status, data})=>{
+      if(status===200 && !data.error){
+        closePinSheet();
+        alert('Withdrawal request submitted');
+        document.getElementById('wd-amount').value='';
+        loadWithdrawals(); loadBalance();
+        return;
+      }
+
+      const code = data.code || '';
+      if(code === 'PIN_NOT_SET' || status===403){
+        showPinError('Set your PIN first.');
+        document.getElementById('pin-sheet-action-btn').textContent = 'Set PIN';
+        document.getElementById('pin-sheet-action-btn').onclick = ()=> openSetPinModal();
+        document.getElementById('pin-sheet-action').classList.remove('hidden');
+        document.getElementById('pin-sheet-dots').classList.add('hidden');
+        return;
+      }
+      if(code === 'RATE_LIMITED' || status===429){
+        showPinError('Too many attempts. Try again in 15 minutes.');
+        setTimeout(closePinSheet, 2000);
+        return;
+      }
+      if(code === 'PIN_INVALID' || status===401){
+        showPinError('Incorrect PIN. Try again.');
+        pinModal.value = '';
+        document.getElementById('pin-sheet-keypad').classList.remove('hidden');
+        updatePinSheetDots();
+        return;
+      }
+
+      showPinError(data.error || 'Withdrawal failed. Try again.');
+      pinModal.value = '';
+      document.getElementById('pin-sheet-keypad').classList.remove('hidden');
+      updatePinSheetDots();
+    })
+    .catch(()=>{
+      showPinError('Network error. Try again.');
+      pinModal.value = '';
+      document.getElementById('pin-sheet-keypad').classList.remove('hidden');
+      updatePinSheetDots();
+    });
+  }
+
+  // ============ FUND SHEET ============
+  function openFundSheet(){
+    document.getElementById('fund-sheet-overlay').classList.add('open');
+    document.getElementById('fund-email').value = state.fund.email || '';
+    loadSavedCards();
+    goFundStep(1);
+  }
+  function closeFundSheet(){ document.getElementById('fund-sheet-overlay').classList.remove('open'); }
+  function closeFundSheetOutside(e){ if(e.target.id==='fund-sheet-overlay') closeFundSheet(); }
+
+  function setChipAmount(v, el){
+    document.getElementById('fund-amount').value = v.toLocaleString('en-NG');
+    document.querySelectorAll('#fund-chips .chip').forEach(c=>c.classList.remove('active'));
+    el.classList.add('active');
+    state.fund.amount = v;
+  }
+
+  function onAmountInput(){
+    const raw = document.getElementById('fund-amount').value.replace(/[^\d]/g,'');
+    state.fund.amount = parseInt(raw,10) || 0;
+    document.querySelectorAll('#fund-chips .chip').forEach(c=>c.classList.remove('active'));
+  }
+
+  function toggleSaveCard(){
+    const t = document.getElementById('save-card-toggle');
+    t.classList.toggle('on');
+    state.fund.saveCard = t.classList.contains('on');
+  }
+
+  function loadSavedCards(){
+    fetch(API+'/api/wallet/cards', { headers: getAuthHeader() })
+      .then(r=>r.json()).then(data=>{
+        state.savedCards = data.cards || [];
+        const section = document.getElementById('saved-cards-section');
+        const list = document.getElementById('saved-cards-list');
+        list.replaceChildren();
+        if(!state.savedCards.length){ section.classList.add('hidden'); return; }
+        section.classList.remove('hidden');
+
+        state.savedCards.forEach(c=>{
+          const row = document.createElement('div');
+          row.className = 'saved-card-row';
+
+          const svgNS = 'http://www.w3.org/2000/svg';
+          const svg = document.createElementNS(svgNS,'svg');
+          svg.setAttribute('width','22'); svg.setAttribute('height','22'); svg.setAttribute('viewBox','0 0 24 24');
+          svg.setAttribute('fill','none'); svg.setAttribute('stroke','#101828'); svg.setAttribute('stroke-width','1.8');
+          svg.setAttribute('stroke-linecap','round'); svg.setAttribute('stroke-linejoin','round');
+          const rect = document.createElementNS(svgNS,'rect');
+          rect.setAttribute('x','1'); rect.setAttribute('y','4'); rect.setAttribute('width','22'); rect.setAttribute('height','16'); rect.setAttribute('rx','2');
+          const line = document.createElementNS(svgNS,'line');
+          line.setAttribute('x1','1'); line.setAttribute('y1','10'); line.setAttribute('x2','23'); line.setAttribute('y2','10');
+          svg.appendChild(rect); svg.appendChild(line);
+          row.appendChild(svg);
+
+          const mid = document.createElement('div');
+          mid.style.flex = '1';
+          const title = document.createElement('div');
+          title.style.fontSize = '13px'; title.style.fontWeight = '800';
+          title.textContent = (c.brand || '').toUpperCase() + ' •••• ' + (c.last4 || '');
+          const sub = document.createElement('div');
+          sub.style.fontSize = '11px'; sub.style.fontWeight = '600'; sub.style.color = '#8B95A5';
+          sub.textContent = 'Expires ' + c.exp_month + '/' + c.exp_year;
+          mid.appendChild(title); mid.appendChild(sub);
+          row.appendChild(mid);
+
+          row.addEventListener('click', ()=>{
+            document.querySelectorAll('.saved-card-row').forEach(r=>r.classList.remove('selected'));
+            row.classList.add('selected');
+            state.selectedCardId = c.id;
+          });
+
+          list.appendChild(row);
+        });
+      }).catch(()=>{});
+  }
+
+  function goFundStep(step){
+    for(let i=1;i<=2;i++){
+      document.getElementById('fund-step-'+i).classList.toggle('hidden', i!==step);
+    }
+    document.querySelectorAll('.step-dots span').forEach(d=>{
+      d.classList.toggle('active', parseInt(d.dataset.step)===step);
+    });
+
+    if(step===1) return;
+
+    if(step===2){
+      if(!state.fund.amount || state.fund.amount < 100){
+        alert('Enter a valid amount (min ₦100)');
+        goFundStep(1);
+        return;
+      }
+      state.fund.email = document.getElementById('fund-email').value.trim();
+      state.fund.phone = document.getElementById('fund-phone').value.trim();
+      if(!state.fund.email){ alert('Email is required'); goFundStep(1); return; }
+
+      document.getElementById('confirm-amount').textContent = nairaFmt(state.fund.amount*100);
+      document.getElementById('confirm-email').textContent = state.fund.email;
+      document.getElementById('fund-pay-btn-text').textContent = 'Pay ' + nairaFmt(state.fund.amount*100);
+    }
+  }
+
+  // ============ PAYSTACK INLINE ============
+  function payNow(){
+    const btn = document.getElementById('fund-pay-btn');
+    btn.disabled = true;
+
+    const payload = {
+      amount_kobo: state.fund.amount*100,
+      email: state.fund.email,
+      save_card: state.fund.saveCard,
+      card_id: state.selectedCardId || null
+    };
+
+    fetch(API+'/api/wallet/fund/initialize', { method:'POST', headers: jsonHeaders(), body: JSON.stringify(payload) })
+    .then(r=>r.json().then(data=>({status:r.status,data})))
+    .then(({status,data})=>{
+      if(status>=400 || data.error){ alert(data.error || 'Could not start payment'); btn.disabled=false; return; }
+
+      if(data.charge_immediately){
+        handleFundSuccess(data.reference, data.amount_kobo);
+        return;
+      }
+
+      const handler = PaystackPop.setup({
+        key: data.public_key,
+        email: state.fund.email,
+        amount: state.fund.amount*100,
+        ref: data.reference,
+        callback: function(response){ verifyTransaction(response.reference); },
+        onClose: function(){ btn.disabled = false; }
+      });
+      handler.openIframe();
+    })
+    .catch(()=>{ alert('Could not start payment. Try again.'); btn.disabled = false; });
+  }
+
+  function verifyTransaction(reference){
+    fetch(API+'/api/wallet/verify-transaction', {
+      method:'POST', headers: jsonHeaders(), body: JSON.stringify({ reference })
+    })
+    .then(r=>r.json())
+    .then(data=>{
+      if(data.status==='success'){
+        handleFundSuccess(reference, data.amount_kobo);
+      } else {
+        alert('Payment could not be verified. Contact support if debited.');
+      }
+    })
+    .catch(()=>alert('Verification failed. Contact support if debited.'));
+  }
+
+  function handleFundSuccess(reference, amountKobo){
+    closeFundSheet();
+    loadBalance();
+    document.getElementById('receipt-amount').textContent = nairaFmt(amountKobo || state.fund.amount*100);
+    document.getElementById('receipt-ref').textContent = reference;
+    document.getElementById('receipt-date').textContent = new Date().toLocaleString();
+    window._lastReceipt = { reference, amount: amountKobo || state.fund.amount*100, date:new Date().toISOString() };
+    goPage('pg-receipt');
+  }
+
+  function downloadReceipt(){
+    const r = window._lastReceipt;
+    if(!r) return;
+    const content = `PayLock Receipt\nReference: ${r.reference}\nAmount: ${nairaFmt(r.amount)}\nDate: ${new Date(r.date).toLocaleString()}\nStatus: Paid`;
+    const blob = new Blob([content], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'paylock-receipt-'+r.reference+'.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  init();
+
+  return {
+    retryAuth, goPage, navTab, toggleBalanceVisibility, submitWithdrawal,
+    closeFundSheet, closeFundSheetOutside, openFundSheet, downloadReceipt,
+    closePinSheet, closePinSheetOutside
+  };
+})();
+</script>
+</body>
+</html>
