@@ -538,7 +538,9 @@ const PayLock = (function(){
 
   const API = '';
   const tg = window.Telegram ? window.Telegram.WebApp : null;
-  const TG_INIT_DATA = tg ? (tg.initData || null) : null;
+  // NOTE: do NOT cache tg.initData once at load time. Telegram WebApp sessions
+  // can be resumed/backgrounded and initData should always be read live at
+  // the moment of each request, not captured once into a constant.
 
   let state = {
     user: null,
@@ -559,10 +561,14 @@ const PayLock = (function(){
   let coverFile = null;
   let productFile = null;
 
-  // ============ AUTH HEADER ============
+  // ============ AUTH HEADER (always reads tg.initData live) ============
   function getAuthHeader(){
-    if(!TG_INIT_DATA) return {};
-    return { 'Authorization': 'tma ' + TG_INIT_DATA };
+    const initData = (tg && tg.initData) ? tg.initData : '';
+    if(!initData) return {};
+    return {
+      'Authorization': 'tma ' + initData,
+      'X-Telegram-Init-Data': initData
+    };
   }
 
   function jsonHeaders(){
@@ -601,10 +607,16 @@ const PayLock = (function(){
   }
 
   function validateAuth(){
+    const initData = (tg && tg.initData) ? tg.initData : '';
+
     fetch(API+'/api/auth/validate', {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ initData: tg.initData })
+      headers:{
+        'Content-Type':'application/json',
+        'X-Telegram-Init-Data': initData,
+        'Authorization': 'tma ' + initData
+      },
+      body: JSON.stringify({ init_data: initData, initData: initData })
     })
     .then(r=>{ if(!r.ok) throw new Error('verify_failed'); return r.json(); })
     .then(data=>{
@@ -675,7 +687,7 @@ const PayLock = (function(){
 
   function navTab(id){ haptic(); goPage(id); }
 
-  // ============ FEE MODEL (must match backend exactly) ============
+  // ============ FEE MODEL (must match backend exactly — UNCHANGED) ============
   function computeFees(priceNaira){
     const price_kobo = Math.round(priceNaira * 100);
     const PLATFORM_FEE = 20000;
@@ -1022,7 +1034,8 @@ const PayLock = (function(){
   // ============ BANKS ============
   function loadBanks(){
     if(state.banks.length) return;
-    fetch(API+'/api/banks').then(r=>r.json()).then(data=>{ state.banks = data.banks || []; }).catch(()=>{});
+    fetch(API+'/api/banks', { headers: getAuthHeader() })
+      .then(r=>r.json()).then(data=>{ state.banks = data.banks || []; }).catch(()=>{});
   }
 
   function showBankList(){ renderBankList(state.banks); }
@@ -1063,7 +1076,7 @@ const PayLock = (function(){
     if(num.length===10 && state.selectedBankCode){
       resolveTimer = setTimeout(()=>{
         fetch(API+'/api/banks/resolve', {
-          method:'POST', headers:{'Content-Type':'application/json'},
+          method:'POST', headers: Object.assign({'Content-Type':'application/json'}, getAuthHeader()),
           body: JSON.stringify({ bank_code: state.selectedBankCode, account_number: num })
         }).then(r=>r.json()).then(data=>{
           if(data.account_name){
