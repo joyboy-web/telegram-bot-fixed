@@ -8,7 +8,7 @@
 #   BOT_TOKEN
 #   PAYSTACK_BASE (optional, defaults to https://api.paystack.co)
 #
-# Required Supabase migrations — see top of chat message / deployment notes:
+# Required Supabase migrations:
 #   users.pin_hash, users.pin_fail_count, users.pin_locked_until
 #   escrow_orders table
 # =============================================================================
@@ -46,7 +46,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
 PAYSTACK_SECRET_KEY = os.environ.get("PAYSTACK_SECRET_KEY")
 PAYSTACK_PUBLIC_KEY = os.environ.get("PAYSTACK_PUBLIC_KEY")
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
+BOT_TOKEN = (os.environ.get("BOT_TOKEN") or "").strip()
 PAYSTACK_BASE = os.environ.get("PAYSTACK_BASE", "https://api.paystack.co")
 
 logging.basicConfig(level=logging.INFO)
@@ -96,6 +96,8 @@ MAX_PRODUCT_BYTES = 50 * 1024 * 1024
 COVER_BUCKET = "product-covers"
 PRODUCT_FILE_BUCKET = "product-files"
 
+INIT_DATA_MAX_AGE_SECONDS = 7 * 24 * 60 * 60  # 7 days — soft/warn-only check
+
 # -----------------------------------------------------------------------------
 # Fee model (LOCKED — do not alter)
 # -----------------------------------------------------------------------------
@@ -125,7 +127,7 @@ def calc_fees(price_kobo):
     }
 
 # -----------------------------------------------------------------------------
-# Helpers
+# Helpers — generic
 # -----------------------------------------------------------------------------
 
 def secure_name(filename):
@@ -140,15 +142,61 @@ def _allowed_file(filename, allowed_exts):
     return ext in allowed_exts
 
 
+def extract_init_data():
+    """
+    Looks for Telegram initData across every transport method the frontend may
+    use, in priority order:
+      1. X-Telegram-Init-Data header
+      2. Authorization: tma <initData> header
+      3. JSON body key: init_data
+      4. JSON body key: initData
+      5. Form data key: init_data or initData
+    Returns the raw initData string, or '' if none found.
+    """
+    header_val = request.headers.get("X-Telegram-Init-Data", "").strip()
+    if header_val:
+        return header_val
+
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("tma "):
+        candidate = auth_header[4:].strip()
+        if candidate:
+            return candidate
+
+    data = request.get_json(silent=True) or {}
+    if data.get("init_data"):
+        return str(data["init_data"]).strip()
+    if data.get("initData"):
+        return str(data["initData"]).strip()
+
+    form_val = request.form.get("init_data") or request.form.get("initData")
+    if form_val:
+        return form_val.strip()
+
+    return ""
+
+
 def verify_init_data(init_data):
-    """Validates Telegram WebApp initData per Telegram's documented HMAC scheme."""
+    """
+    Validates Telegram WebApp initData per Telegram's documented HMAC scheme.
+
+    auth_date expiry is a SOFT check (warns only, never blocks) — hard-blocking
+    on age caused false "Verification failed" errors for legitimate sessions
+    carrying slightly older initData (e.g. across BOT_TOKEN rotation/revoke,
+    backgrounded WebApp resumes). Only a hash mismatch blocks authentication.
+    """
     try:
-        parsed = dict(parse_qsl(init_data, strict_parsing=True))
+        parsed = dict(parse_qsl(init_data, keep_blank_values=True))
     except ValueError:
+        logging.warning(
+            "verify_init_data: parse_qsl failed, init_data length=%s",
+            len(init_data or ""),
+        )
         return None
 
     received_hash = parsed.pop("hash", None)
     if not received_hash:
+        logging.warning("verify_init_data: no hash field present in initData")
         return None
 
     data_check_string = "\n".join(f"{k}={parsed[k]}" for k in sorted(parsed.keys()))
@@ -156,23 +204,33 @@ def verify_init_data(init_data):
     computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(computed_hash, received_hash):
+        logging.warning(
+            "verify_init_data: HASH MISMATCH. received_hash=%s computed_hash=%s bot_token_len=%s",
+            received_hash, computed_hash, len(BOT_TOKEN or ""),
+        )
         return None
 
     auth_date = parsed.get("auth_date")
     if auth_date:
         try:
-            if time.time() - int(auth_date) > 86400:
-                return None
+            age_seconds = time.time() - int(auth_date)
+            if age_seconds > INIT_DATA_MAX_AGE_SECONDS:
+                logging.warning(
+                    "verify_init_data: initData is %.0f seconds old (>7 days) — allowing, warn-only",
+                    age_seconds,
+                )
         except ValueError:
             pass
 
     user_json = parsed.get("user")
     if not user_json:
+        logging.warning("verify_init_data: no 'user' field present in initData")
         return None
 
     try:
         return json.loads(user_json)
     except (TypeError, ValueError):
+        logging.warning("verify_init_data: failed to json.loads the 'user' field")
         return None
 
 
@@ -201,11 +259,7 @@ def get_or_create_user(tg_user):
 def require_auth(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("tma "):
-            return jsonify({"error": "Unauthorized"}), 401
-
-        init_data = auth_header[4:].strip()
+        init_data = extract_init_data()
         if not init_data:
             return jsonify({"error": "Unauthorized"}), 401
 
@@ -254,9 +308,8 @@ def _save_card_from_authorization(telegram_id, authorization):
 def get_held_kobo(telegram_id):
     """
     Sum of seller_gets_kobo currently sitting in escrow (status='held') for this
-    user as a seller — informational 'pending clearance' figure. Wrapped
-    defensively: if escrow_orders doesn't exist yet (migration not run), this
-    returns 0 instead of crashing wallet/balance.
+    user as a seller. Wrapped defensively: if escrow_orders doesn't exist yet
+    (migration not run), this returns 0 instead of crashing wallet/balance.
     """
     try:
         res = (
@@ -288,8 +341,7 @@ def health():
 @app.route("/api/auth/validate", methods=["POST"])
 @limiter.limit("30 per minute")
 def auth_validate():
-    data = request.get_json(silent=True) or {}
-    init_data = (data.get("init_data") or "").strip()
+    init_data = extract_init_data()
 
     if not init_data:
         return jsonify({"error": "init_data is required"}), 400
@@ -346,20 +398,30 @@ def products_create(user):
     name = (request.form.get("name") or "").strip()
     description = (request.form.get("description") or "").strip()
     category = (request.form.get("category") or "").strip()
-    price_raw = request.form.get("price")
 
-    if not name or not price_raw:
+    price_raw = request.form.get("price") or request.form.get("price_naira")
+    price_kobo_raw = request.form.get("price_kobo")
+
+    price_kobo = None
+
+    if price_kobo_raw:
+        try:
+            price_kobo = int(round(float(price_kobo_raw)))
+        except ValueError:
+            return jsonify({"error": "Invalid price_kobo"}), 400
+    elif price_raw:
+        try:
+            price_naira = float(price_raw)
+        except ValueError:
+            return jsonify({"error": "Invalid price"}), 400
+        price_kobo = round_half_up(price_naira * 100)
+
+    if not name or not price_kobo:
         return jsonify({"error": "Name and price are required"}), 400
 
-    try:
-        price_naira = float(price_raw)
-    except ValueError:
-        return jsonify({"error": "Invalid price"}), 400
-
-    if price_naira <= 0:
+    if price_kobo <= 0:
         return jsonify({"error": "Price must be greater than zero"}), 400
 
-    price_kobo = round_half_up(price_naira * 100)
     fees = calc_fees(price_kobo)
 
     cover = request.files.get("cover")
