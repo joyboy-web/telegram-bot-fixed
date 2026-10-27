@@ -142,6 +142,25 @@ def _allowed_file(filename, allowed_exts):
     return ext in allowed_exts
 
 
+# --- is_public fix: shared helper to detect Postgres "undefined column" (42703) errors ---
+def is_missing_column_error(e):
+    """
+    Detects a Postgres 'undefined_column' error (SQLSTATE 42703) raised by
+    PostgREST via postgrest.exceptions.APIError, which happens when the
+    PostgREST schema cache hasn't picked up a newly-added column (e.g.
+    products.is_public) yet. Used to degrade gracefully instead of crashing.
+    """
+    try:
+        if getattr(e, "code", None) == "42703":
+            return True
+        err_str = str(e)
+        if "42703" in err_str or "does not exist" in err_str.lower():
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def extract_init_data():
     """
     Looks for Telegram initData across every transport method the frontend may
@@ -371,15 +390,35 @@ def auth_validate():
 
 @app.route("/api/products", methods=["GET"])
 def products_list():
-    res = (
-        supabase.table("products")
-        .select("*")
-        .eq("is_public", True)
-        .order("created_at", desc=True)
-        .limit(200)
-        .execute()
-    )
-    return jsonify({"products": res.data or []}), 200
+    # --- is_public fix: query wrapped in try/except so a stale PostgREST
+    # schema cache (column exists in Postgres but not yet visible to
+    # PostgREST) degrades gracefully instead of crashing with a 500 ---
+    try:
+        res = (
+            supabase.table("products")
+            .select("*")
+            .eq("is_public", True)
+            .order("created_at", desc=True)
+            .limit(200)
+            .execute()
+        )
+        return jsonify({"products": res.data or []}), 200
+    except Exception as e:
+        if is_missing_column_error(e):
+            logging.warning(
+                "products_list: 'is_public' column missing from PostgREST schema cache, "
+                "retrying without the filter. error=%s", e
+            )
+            res = (
+                supabase.table("products")
+                .select("*")
+                .order("created_at", desc=True)
+                .limit(200)
+                .execute()
+            )
+            return jsonify({"products": res.data or []}), 200
+        logging.exception("products_list: unexpected error")
+        return jsonify({"error": "Could not load products"}), 500
 
 
 @app.route("/api/products/<product_id>", methods=["GET"])
@@ -460,7 +499,7 @@ def products_create(user):
         )
         file_url = supabase.storage.from_(PRODUCT_FILE_BUCKET).get_public_url(file_path)
 
-    insert_res = supabase.table("products").insert({
+    insert_payload = {
         "seller_id": user["telegram_id"],
         "name": name,
         "description": description,
@@ -472,8 +511,24 @@ def products_create(user):
         "image_url": image_url,
         "file_url": file_url,
         "category": category or None,
-        "is_public": True,
-    }).execute()
+        "is_public": True,  # --- is_public fix: dropped on retry below if column missing ---
+    }
+
+    # --- is_public fix: insert wrapped in try/except; on a stale-schema-cache
+    # 42703 error, retry once with "is_public" removed from the payload so
+    # product creation never hard-crashes because of this one column ---
+    try:
+        insert_res = supabase.table("products").insert(insert_payload).execute()
+    except Exception as e:
+        if is_missing_column_error(e):
+            logging.warning(
+                "products_create: 'is_public' column missing from PostgREST schema cache, "
+                "retrying insert without it. error=%s", e
+            )
+            insert_payload.pop("is_public", None)
+            insert_res = supabase.table("products").insert(insert_payload).execute()
+        else:
+            raise
 
     return jsonify({"product": (insert_res.data or [None])[0]}), 201
 
@@ -868,7 +923,11 @@ def wallet_buy(user, product_id):
 
     product = rows[0]
 
-    if not product.get("is_public"):
+    # --- is_public fix: if the column is missing from the row entirely
+    # (stale schema cache), .get() returns None — treat that as "public"
+    # (fail-open) rather than blocking every purchase. Only an explicit
+    # False still blocks the purchase. ---
+    if product.get("is_public") is False:
         return jsonify({"error": "Product is not available"}), 400
     if int(product["seller_id"]) == int(user["telegram_id"]):
         return jsonify({"error": "You cannot buy your own product"}), 400
