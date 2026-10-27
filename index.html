@@ -122,6 +122,19 @@
   .upload-box input[type=file]{position:absolute; inset:0; opacity:0; cursor:pointer;}
   .upload-box p{font-size:12px; font-weight:700; color:var(--muted);}
   .upload-box span.hint{font-size:10px; color:var(--muted); font-weight:500;}
+
+  /* ===== Toast system (replaces alert()) ===== */
+  .toast{position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:#101828; color:#fff; padding:14px 18px; border-radius:14px; font-size:13px; font-weight:700; z-index:99999; box-shadow:0 8px 24px rgba(0,0,0,0.25);}
+
+  /* ===== Touch responsiveness pass (cosmetic only) ===== */
+  *{-webkit-tap-highlight-color:transparent;}
+  button, a, .card-white, .chip, .row-tap, .tab-item, .saved-card-row, .upload-box{
+    touch-action:manipulation;
+    transition:transform 150ms ease, opacity 150ms ease, background 150ms ease;
+  }
+  button:active, a:active, .card-white:active, .chip:active, .row-tap:active, .tab-item:active, .saved-card-row:active, .upload-box:active{
+    transform:scale(0.97);
+  }
 </style>
 </head>
 <body>
@@ -172,7 +185,7 @@
             <h1 style="font-size:22px; font-weight:900;" id="home-greeting">Hi there</h1>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11.5V6a2 2 0 00-4 0"></path><path d="M14 10V4a2 2 0 00-4 0v2"></path><path d="M10 10.5V6a2 2 0 00-4 0v8"></path><path d="M6 14v-2.5a2 2 0 00-4 0c0 4 2 10 9 10h2c4 0 6-2.5 6-6v-4"></path></svg>
           </div>
-          <p style="font-size:12px; font-weight:500; color:#8B95A5; margin-top:4px;">Your escrow is secure. No fake data — all live.</p>
+          <p style="font-size:12px; font-weight:500; color:#8B95A5; margin-top:4px;">Your escrow is secure. Every transaction is protected and verified in real-time.</p>
         </div>
 
         <div style="margin-top:18px; border-radius:22px; padding:22px; background:linear-gradient(145deg,#0B1220,#111827); color:#fff;">
@@ -561,6 +574,15 @@ const PayLock = (function(){
   let coverFile = null;
   let productFile = null;
 
+  // ============ TOAST (replaces alert()) ============
+  function showToast(msg){
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(), 3000);
+  }
+
   // ============ AUTH HEADER (always reads tg.initData live) ============
   function getAuthHeader(){
     const initData = (tg && tg.initData) ? tg.initData : '';
@@ -734,12 +756,12 @@ const PayLock = (function(){
     if(!file) return;
 
     if(!ALLOWED_COVER_TYPES.includes(file.type)){
-      alert('Cover must be JPG, PNG or WEBP');
+      showToast('Cover must be JPG, PNG or WEBP');
       e.target.value = '';
       return;
     }
     if(file.size > MAX_COVER_BYTES){
-      alert('Cover image must be max 5MB');
+      showToast('Cover image must be max 5MB');
       e.target.value = '';
       return;
     }
@@ -771,12 +793,12 @@ const PayLock = (function(){
 
     const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
     if(!ALLOWED_FILE_EXT.includes(ext)){
-      alert('File must be ZIP, PDF, MP4 or DOCX');
+      showToast('File must be ZIP, PDF, MP4 or DOCX');
       e.target.value = '';
       return;
     }
     if(file.size > MAX_FILE_BYTES){
-      alert('File exceeds 50MB limit');
+      showToast('File exceeds 50MB limit');
       e.target.value = '';
       return;
     }
@@ -818,8 +840,8 @@ const PayLock = (function(){
     const category = document.getElementById('sell-category').value.trim();
     const priceNaira = parseFloat(document.getElementById('sell-price').value);
 
-    if(!coverFile){ alert('Cover image is required'); return; }
-    if(!name || !priceNaira || priceNaira<=0){ alert('Enter a valid name and price'); return; }
+    if(!coverFile){ showToast('Cover image is required'); return; }
+    if(!name || !priceNaira || priceNaira<=0){ showToast('Enter a valid name and price'); return; }
 
     const btn = document.getElementById('sell-submit-btn');
     btn.disabled = true; btn.textContent = 'Listing...';
@@ -835,8 +857,8 @@ const PayLock = (function(){
     fetch(API+'/api/products', { method:'POST', headers: getAuthHeader(), body: fd })
       .then(r=>r.json().then(data=>({status:r.status, data})))
       .then(({status, data})=>{
-        if(status!==201 || data.error){ alert(data.error || 'Failed to list product'); btn.disabled=false; btn.textContent='List product'; return; }
-        alert('Product listed successfully');
+        if(status!==201 || data.error){ showToast(data.error || 'Failed to list product'); btn.disabled=false; btn.textContent='List product'; return; }
+        showToast('Product listed successfully');
         document.getElementById('sell-form').reset();
         coverFile = null; productFile = null;
         btn.disabled=false; btn.textContent='List product';
@@ -844,7 +866,7 @@ const PayLock = (function(){
         goPage('pg-home');
       })
       .catch(()=>{
-        alert('Failed to list product. Try again.');
+        showToast('Failed to list product. Try again.');
         btn.disabled=false; btn.textContent='List product';
       });
   }
@@ -1051,7 +1073,7 @@ const PayLock = (function(){
     if(!list.length){ el.classList.add('hidden'); return; }
     el.classList.remove('hidden');
 
-    list.slice(0,40).forEach(b=>{
+    list.slice(0,100).forEach(b=>{
       const row = document.createElement('div');
       row.style.padding = '12px 14px'; row.style.fontSize = '13px'; row.style.fontWeight = '600'; row.style.borderBottom = '1px solid #EAECEF';
       row.textContent = b.name;
@@ -1092,8 +1114,8 @@ const PayLock = (function(){
   // ============ WITHDRAWAL — PIN MODAL FLOW (no prompt()) ============
   function submitWithdrawal(){
     const amountNaira = parseFloat(document.getElementById('wd-amount').value);
-    if(!amountNaira || amountNaira < 1000){ alert('Minimum withdrawal is ₦1,000'); return; }
-    if(!state.selectedBankCode || !state.resolvedAccountName){ alert('Please link and verify a bank account'); return; }
+    if(!amountNaira || amountNaira < 1000){ showToast('Minimum withdrawal is ₦1,000'); return; }
+    if(!state.selectedBankCode || !state.resolvedAccountName){ showToast('Please link and verify a bank account'); return; }
     const accountNumber = document.getElementById('account-number').value.trim();
 
     state.pendingWithdrawal = {
@@ -1281,7 +1303,7 @@ const PayLock = (function(){
     .then(({status, data})=>{
       if(status===200 && !data.error){
         closePinSheet();
-        alert('Withdrawal request submitted');
+        showToast('Withdrawal request submitted');
         document.getElementById('wd-amount').value='';
         loadWithdrawals(); loadBalance();
         return;
@@ -1411,13 +1433,13 @@ const PayLock = (function(){
 
     if(step===2){
       if(!state.fund.amount || state.fund.amount < 100){
-        alert('Enter a valid amount (min ₦100)');
+        showToast('Enter a valid amount (min ₦100)');
         goFundStep(1);
         return;
       }
       state.fund.email = document.getElementById('fund-email').value.trim();
       state.fund.phone = document.getElementById('fund-phone').value.trim();
-      if(!state.fund.email){ alert('Email is required'); goFundStep(1); return; }
+      if(!state.fund.email){ showToast('Email is required'); goFundStep(1); return; }
 
       document.getElementById('confirm-amount').textContent = nairaFmt(state.fund.amount*100);
       document.getElementById('confirm-email').textContent = state.fund.email;
@@ -1440,7 +1462,7 @@ const PayLock = (function(){
     fetch(API+'/api/wallet/fund/initialize', { method:'POST', headers: jsonHeaders(), body: JSON.stringify(payload) })
     .then(r=>r.json().then(data=>({status:r.status,data})))
     .then(({status,data})=>{
-      if(status>=400 || data.error){ alert(data.error || 'Could not start payment'); btn.disabled=false; return; }
+      if(status>=400 || data.error){ showToast(data.error || 'Could not start payment'); btn.disabled=false; return; }
 
       if(data.charge_immediately){
         handleFundSuccess(data.reference, data.amount_kobo);
@@ -1457,7 +1479,7 @@ const PayLock = (function(){
       });
       handler.openIframe();
     })
-    .catch(()=>{ alert('Could not start payment. Try again.'); btn.disabled = false; });
+    .catch(()=>{ showToast('Could not start payment. Try again.'); btn.disabled = false; });
   }
 
   function verifyTransaction(reference){
@@ -1469,10 +1491,10 @@ const PayLock = (function(){
       if(data.status==='success'){
         handleFundSuccess(reference, data.amount_kobo);
       } else {
-        alert('Payment could not be verified. Contact support if debited.');
+        showToast('Payment could not be verified. Contact support if debited.');
       }
     })
-    .catch(()=>alert('Verification failed. Contact support if debited.'));
+    .catch(()=>showToast('Verification failed. Contact support if debited.'));
   }
 
   function handleFundSuccess(reference, amountKobo){
