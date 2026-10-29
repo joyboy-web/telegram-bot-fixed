@@ -340,6 +340,13 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8B95A5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </div>
         </div>
+
+        <div class="section-label" style="margin-top:22px;">Escrow orders</div>
+        <div id="escrow-list"></div>
+        <div id="escrow-empty" class="empty-state hidden">
+          <div class="icon-box"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#101828" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0110 0v4"></path></svg></div>
+          <p>No escrow orders yet</p>
+        </div>
       </section>
 
       <section id="pg-tx" class="page">
@@ -703,7 +710,7 @@ const PayLock = (function(){
     document.querySelectorAll('.tab-item').forEach(t=>t.classList.toggle('active', t.dataset.tab===id));
     if(id==='pg-wd'){ loadBanks(); loadWithdrawals(); loadBalance(); }
     if(id==='pg-tx'){ loadTransactions(); }
-    if(id==='pg-wallet'){ loadBalance(); }
+    if(id==='pg-wallet'){ loadBalance(); loadEscrowOrders(); }
     window.scrollTo(0,0);
   }
 
@@ -922,8 +929,139 @@ const PayLock = (function(){
       price.textContent = nairaFmt(p.buyer_pays_kobo || 0);
       card.appendChild(price);
 
+      // ===== BUY BUTTON (added) =====
+      const buyBtn = document.createElement('button');
+      buyBtn.className = 'pay-btn';
+      buyBtn.style.marginTop = '8px';
+      buyBtn.style.height = '36px';
+      buyBtn.style.fontSize = '11px';
+      buyBtn.style.borderRadius = '10px';
+      buyBtn.type = 'button';
+      buyBtn.textContent = 'Buy';
+      buyBtn.addEventListener('click', (ev)=>{
+        ev.stopPropagation();
+        buyProduct(p.id, buyBtn);
+      });
+      card.appendChild(buyBtn);
+
       grid.appendChild(card);
     });
+  }
+
+  // ============ BUY (added) ============
+  function buyProduct(productId, btn){
+    if(!productId) return;
+    if(btn){ btn.disabled = true; btn.textContent = 'Processing...'; }
+
+    fetch(API+'/api/wallet/buy/'+productId, {
+      method: 'POST',
+      headers: getAuthHeader()
+    })
+      .then(r=>r.json().then(data=>({status:r.status, data})))
+      .then(({status, data})=>{
+        if(status!==201 || data.error){
+          showToast(data.error || 'Purchase failed');
+          if(btn){ btn.disabled=false; btn.textContent='Buy'; }
+          return;
+        }
+        showToast('Purchase successful — funds held in escrow');
+        loadBalance();
+        if(btn){ btn.disabled=false; btn.textContent='Buy'; }
+      })
+      .catch(()=>{
+        showToast('Network error. Try again.');
+        if(btn){ btn.disabled=false; btn.textContent='Buy'; }
+      });
+  }
+
+  // ============ ESCROW ORDERS (added) ============
+  function loadEscrowOrders(){
+    fetch(API+'/api/escrow/list', { headers: getAuthHeader() })
+      .then(r=>r.json()).then(data=>{
+        renderEscrowList(data.orders || []);
+      }).catch(()=>{});
+  }
+
+  function renderEscrowList(list){
+    const el = document.getElementById('escrow-list');
+    const empty = document.getElementById('escrow-empty');
+    el.replaceChildren();
+
+    if(!list || list.length===0){ empty.classList.remove('hidden'); return; }
+    empty.classList.add('hidden');
+
+    const badgeClass = { held:'badge-pending', released:'badge-paid', disputed:'badge-failed' };
+
+    list.forEach(o=>{
+      const card = document.createElement('div');
+      card.className = 'card-white';
+      card.style.marginBottom = '10px';
+
+      const topRow = document.createElement('div');
+      topRow.style.display = 'flex';
+      topRow.style.justifyContent = 'space-between';
+      topRow.style.alignItems = 'center';
+
+      const amt = document.createElement('div');
+      amt.style.fontSize = '15px';
+      amt.style.fontWeight = '900';
+      amt.textContent = nairaFmt(o.buyer_pays_kobo || 0);
+
+      const badge = document.createElement('span');
+      badge.className = 'badge ' + (badgeClass[o.status] || 'badge-pending');
+      badge.textContent = o.status || 'held';
+
+      topRow.appendChild(amt);
+      topRow.appendChild(badge);
+      card.appendChild(topRow);
+
+      const refLine = document.createElement('div');
+      refLine.style.fontSize = '11px';
+      refLine.style.fontWeight = '600';
+      refLine.style.color = '#8B95A5';
+      refLine.style.marginTop = '4px';
+      refLine.textContent = (o.reference || '') + ' · ' + (o.created_at ? new Date(o.created_at).toLocaleString() : '');
+      card.appendChild(refLine);
+
+      if(o.status === 'held' && String(o.buyer_id) === String(state.telegram_id)){
+        const btn = document.createElement('button');
+        btn.className = 'pay-btn';
+        btn.type = 'button';
+        btn.style.marginTop = '10px';
+        btn.style.height = '42px';
+        btn.style.fontSize = '12px';
+        btn.textContent = 'Confirm Delivery';
+        btn.addEventListener('click', ()=> confirmDelivery(o.id, btn));
+        card.appendChild(btn);
+      }
+
+      el.appendChild(card);
+    });
+  }
+
+  function confirmDelivery(orderId, btn){
+    if(btn){ btn.disabled = true; btn.textContent = 'Confirming...'; }
+
+    fetch(API+'/api/escrow/confirm', {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ order_id: orderId })
+    })
+      .then(r=>r.json().then(data=>({status:r.status, data})))
+      .then(({status, data})=>{
+        if(status!==200 || data.error){
+          showToast(data.error || 'Could not confirm delivery');
+          if(btn){ btn.disabled=false; btn.textContent='Confirm Delivery'; }
+          return;
+        }
+        showToast('Delivery confirmed — seller has been paid');
+        loadEscrowOrders();
+        loadBalance();
+      })
+      .catch(()=>{
+        showToast('Network error. Try again.');
+        if(btn){ btn.disabled=false; btn.textContent='Confirm Delivery'; }
+      });
   }
 
   // ============ WALLET BALANCE ============
