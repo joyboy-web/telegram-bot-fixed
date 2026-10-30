@@ -73,11 +73,11 @@ def apply_transaction(
         try:
             db.table("wallet_transactions").insert(
                 {
-                    "telegram_id": telegram_id,
-                    "amount_kobo": amount,
+                    "user_id": telegram_id,
                     "type": tx_type,
+                    "amount_kobo": amount,
+                    "reason": tx_type,
                     "reference": reference,
-                    "meta": meta or {},
                 }
             ).execute()
         except Exception as e:
