@@ -13,6 +13,7 @@
 #   escrow_orders table
 #   products.owner_id (NOT NULL) — must be populated alongside seller_id
 #   products.title (NOT NULL) — must be populated alongside name
+#   products.price (NOT NULL) — must be populated alongside price_kobo
 # =============================================================================
 
 import os
@@ -498,12 +499,13 @@ def products_create(user):
         "seller_id": str(user["telegram_id"]),
         "title": name,
         "name": name,
-        "description": description,
+        "price": price_kobo,
         "price_kobo": price_kobo,
         "buyer_pays_kobo": fees["buyer_pays_kobo"],
         "seller_gets_kobo": fees["seller_gets_kobo"],
         "platform_fee_kobo": fees["platform_fee_kobo"],
         "paystack_fee_kobo": fees["paystack_fee_kobo"],
+        "description": description,
         "image_url": image_url,
         "file_url": file_url,
         "category": category or None,
