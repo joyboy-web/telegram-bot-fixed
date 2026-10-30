@@ -11,6 +11,7 @@
 # Required Supabase migrations:
 #   users.pin_hash, users.pin_fail_count, users.pin_locked_until
 #   escrow_orders table
+#   products.owner_id (NOT NULL) — must be populated alongside seller_id
 # =============================================================================
 
 import os
@@ -486,8 +487,14 @@ def products_create(user):
         )
         file_url = supabase.storage.from_(PRODUCT_FILE_BUCKET).get_public_url(file_path)
 
+    # FIXED owner_id NOT NULL violation (23502) — products.owner_id has a
+    # NOT NULL constraint but was never being populated, only seller_id was.
+    # Both are now written as the same value, explicitly cast to string so
+    # the payload can never silently send an int where Postgres/PostgREST
+    # expects text (and vice versa never sends None for owner_id again).
     insert_payload = {
-        "seller_id": user["telegram_id"],
+        "owner_id": str(user["telegram_id"]),
+        "seller_id": str(user["telegram_id"]),
         "name": name,
         "description": description,
         "price_kobo": price_kobo,
@@ -748,16 +755,41 @@ def resolve_bank(user):
     if not account_number or not bank_code:
         return jsonify({"error": "account_number and bank_code are required"}), 400
 
-    resp = requests.get(
-        f"{PAYSTACK_BASE}/bank/resolve",
-        headers=PAYSTACK_HEADERS,
-        params={"account_number": account_number, "bank_code": bank_code},
-        timeout=15,
+    # FIXED: added detailed logging of the outbound Paystack request/response
+    # and now surface Paystack's real error message to the frontend instead
+    # of a generic "Could not resolve account" 400 on every failure — this
+    # was making the real cause (invalid bank_code, Paystack rate limit,
+    # Paystack 5xx, auth header issue, etc.) impossible to diagnose from logs.
+    logging.info(
+        "banks/resolve: requesting Paystack resolve account_number=%s bank_code=%s",
+        account_number, bank_code,
     )
-    resp_data = resp.json()
+
+    try:
+        resp = requests.get(
+            f"{PAYSTACK_BASE}/bank/resolve",
+            headers=PAYSTACK_HEADERS,
+            params={"account_number": account_number, "bank_code": bank_code},
+            timeout=15,
+        )
+    except requests.RequestException:
+        logging.exception("banks/resolve: request to Paystack failed (network/timeout)")
+        return jsonify({"error": "Could not reach Paystack. Please try again."}), 502
+
+    logging.info(
+        "banks/resolve: Paystack response status=%s body=%s",
+        resp.status_code, resp.text,
+    )
+
+    try:
+        resp_data = resp.json()
+    except ValueError:
+        logging.warning("banks/resolve: Paystack response was not valid JSON: %s", resp.text)
+        return jsonify({"error": resp.text or "Could not resolve account"}), 400
 
     if not resp.ok or not resp_data.get("status"):
-        return jsonify({"error": "Could not resolve account"}), 400
+        error_message = resp_data.get("message") or resp.text or "Could not resolve account"
+        return jsonify({"error": error_message}), 400
 
     account_name = (resp_data.get("data") or {}).get("account_name")
     return jsonify({"account_name": account_name}), 200
