@@ -12,6 +12,7 @@
 #   users.pin_hash, users.pin_fail_count, users.pin_locked_until
 #   escrow_orders table
 #   products.owner_id (NOT NULL) — must be populated alongside seller_id
+#   products.title (NOT NULL) — must be populated alongside name
 # =============================================================================
 
 import os
@@ -495,6 +496,7 @@ def products_create(user):
     insert_payload = {
         "owner_id": str(user["telegram_id"]),
         "seller_id": str(user["telegram_id"]),
+        "title": name,
         "name": name,
         "description": description,
         "price_kobo": price_kobo,
