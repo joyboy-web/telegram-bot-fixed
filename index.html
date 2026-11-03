@@ -581,6 +581,9 @@ const PayLock = (function(){
   let coverFile = null;
   let productFile = null;
 
+  // Session-only duplicate product-file guard (client-side; cleared on reload).
+  const uploadedFileFingerprints = new Set();
+
   // ============ TOAST (replaces alert()) ============
   function showToast(msg){
     const t = document.createElement('div');
@@ -757,6 +760,50 @@ const PayLock = (function(){
   const ALLOWED_FILE_EXT = ['.zip','.pdf','.mp4','.docx'];
   const MAX_COVER_BYTES = 5 * 1024 * 1024;
   const MAX_FILE_BYTES = 50 * 1024 * 1024;
+  const FINGERPRINT_HASH_BYTES = 1024 * 1024; // hash first 1MB only (fast on mobile)
+
+  // Fingerprint = name|size|lastModified, plus SHA-256 of the first 1MB when
+  // SubtleCrypto is available. Falls back to name|size|lastModified otherwise.
+  async function getFileFingerprint(file){
+    const base = `${file.name}|${file.size}|${file.lastModified}`;
+    try{
+      if(window.crypto && window.crypto.subtle && typeof file.slice === 'function'){
+        const buf = await file.slice(0, FINGERPRINT_HASH_BYTES).arrayBuffer();
+        const digest = await window.crypto.subtle.digest('SHA-256', buf);
+        const hex = Array.from(new Uint8Array(digest))
+          .map(b=>b.toString(16).padStart(2,'0')).join('');
+        return base + '|' + hex;
+      }
+    }catch(_){
+      // fall through to the base fingerprint
+    }
+    return base;
+  }
+
+  // Restores both upload boxes to their original empty state and re-attaches
+  // the change listeners (innerHTML replacement drops the old ones).
+  function resetUploadBoxes(){
+    const coverBox = document.getElementById('cover-box');
+    const fileBox = document.getElementById('file-box');
+
+    if(coverBox){
+      coverBox.innerHTML =
+        '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8B95A5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>' +
+        '<p>Upload cover image</p>' +
+        '<span class="hint">JPG, PNG or WEBP — max 5MB</span>' +
+        '<input type="file" id="cover-input" accept="image/jpeg,image/png,image/webp">';
+      document.getElementById('cover-input').addEventListener('change', handleCover);
+    }
+
+    if(fileBox){
+      fileBox.innerHTML =
+        '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8B95A5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>' +
+        '<p>Upload product file</p>' +
+        '<span class="hint">ZIP, PDF, MP4, DOCX — max 50MB</span>' +
+        '<input type="file" id="file-input" accept=".zip,.pdf,.mp4,.docx">';
+      document.getElementById('file-input').addEventListener('change', handleFile);
+    }
+  }
 
   function handleCover(e){
     const file = e.target.files[0];
@@ -794,7 +841,7 @@ const PayLock = (function(){
     reader.readAsDataURL(file);
   }
 
-  function handleFile(e){
+  async function handleFile(e){
     const file = e.target.files[0];
     if(!file) return;
 
@@ -806,6 +853,14 @@ const PayLock = (function(){
     }
     if(file.size > MAX_FILE_BYTES){
       showToast('File exceeds 50MB limit');
+      e.target.value = '';
+      return;
+    }
+
+    // Duplicate guard: reject before touching productFile or the file-box UI.
+    const fingerprint = await getFileFingerprint(file);
+    if(uploadedFileFingerprints.has(fingerprint)){
+      showToast('You have already uploaded this file. Choose a different file.');
       e.target.value = '';
       return;
     }
@@ -840,42 +895,75 @@ const PayLock = (function(){
     box.appendChild(input);
   }
 
-  function submitSellForm(e){
+  async function submitSellForm(e){
     e.preventDefault();
     const name = document.getElementById('sell-name').value.trim();
     const desc = document.getElementById('sell-desc').value.trim();
     const category = document.getElementById('sell-category').value.trim();
     const priceNaira = parseFloat(document.getElementById('sell-price').value);
 
-    if(!coverFile){ showToast('Cover image is required'); return; }
+    if(!coverFile){ showToast('Cover image is required - please re-select'); return; }
     if(!name || !priceNaira || priceNaira<=0){ showToast('Enter a valid name and price'); return; }
 
     const btn = document.getElementById('sell-submit-btn');
     btn.disabled = true; btn.textContent = 'Listing...';
 
-    const fd = new FormData();
-    fd.append('name', name);
-    fd.append('description', desc);
-    fd.append('category', category);
-    fd.append('price_naira', priceNaira);
-    fd.append('cover', coverFile);
-    if(productFile) fd.append('product_file', productFile);
+    // Snapshot the files for this submit so later state changes cannot affect it.
+    const coverToSend = coverFile;
+    const fileToSend = productFile;
 
-    fetch(API+'/api/products', { method:'POST', headers: getAuthHeader(), body: fd })
-      .then(r=>r.json().then(data=>({status:r.status, data})))
-      .then(({status, data})=>{
-        if(status!==201 || data.error){ showToast(data.error || 'Failed to list product'); btn.disabled=false; btn.textContent='List product'; return; }
-        showToast('Product listed successfully');
-        document.getElementById('sell-form').reset();
-        coverFile = null; productFile = null;
-        btn.disabled=false; btn.textContent='List product';
-        loadProducts();
-        goPage('pg-home');
-      })
-      .catch(()=>{
-        showToast('Failed to list product. Try again.');
-        btn.disabled=false; btn.textContent='List product';
+    try{
+      // Duplicate guard (computed once, reused on success). Blocks the POST.
+      let fingerprint = null;
+      if(fileToSend){
+        fingerprint = await getFileFingerprint(fileToSend);
+        if(uploadedFileFingerprints.has(fingerprint)){
+          showToast('Duplicate product file detected — you already listed this file');
+          btn.disabled = false; btn.textContent = 'List product';
+          return;
+        }
+      }
+
+      const fd = new FormData();
+      fd.append('name', name);
+      fd.append('description', desc);
+      fd.append('category', category);
+      fd.append('price_naira', priceNaira);
+      fd.append('cover', coverToSend);
+      if(fileToSend) fd.append('product_file', fileToSend);
+
+      const res = await fetch(API+'/api/products', { method:'POST', headers: getAuthHeader(), body: fd });
+      const raw = await res.text();
+
+      let data = null;
+      try{ data = JSON.parse(raw); }catch(_){ data = null; }
+
+      if(res.status !== 201 || (data && data.error)){
+        console.error('POST /api/products failed', res.status, raw);
+        const msg = (data && data.error) ? data.error : ('Failed to list product (HTTP ' + res.status + ')');
+        showToast(msg);
+        btn.disabled = false; btn.textContent = 'List product';
+        return;
+      }
+
+      // Success (201): remember the file for this session before clearing state.
+      if(fingerprint) uploadedFileFingerprints.add(fingerprint);
+
+      showToast('Product listed successfully');
+      document.getElementById('sell-form').reset();
+      coverFile = null; productFile = null;
+      resetUploadBoxes();
+      ['fee-product','fee-escrow','fee-total','fee-seller'].forEach(id=>{
+        document.getElementById(id).textContent = '₦0.00';
       });
+      btn.disabled = false; btn.textContent = 'List product';
+      loadProducts();
+      goPage('pg-home');
+    }catch(err){
+      console.error('submitSellForm error', err);
+      showToast('Network error: ' + err.message);
+      btn.disabled = false; btn.textContent = 'List product';
+    }
   }
 
   // ============ PRODUCTS — SAFE RENDERING ============
