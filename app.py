@@ -1,6 +1,8 @@
+### FILE: app.py
+```python
 # =============================================================================
 # PayLock — Production Flask backend
-# Deploy: gunicorn app:app --bind 0.0.0.0:$PORT   (Procfile: web: gunicorn app:app)
+# Deploy: gunicorn main:app --bind 0.0.0.0:$PORT   (Procfile: web: gunicorn main:app)
 #
 # Required env vars:
 #   SUPABASE_URL, SUPABASE_SERVICE_KEY
@@ -10,6 +12,8 @@
 #
 # Required Supabase migrations:
 #   users.pin_hash, users.pin_fail_count, users.pin_locked_until
+#   users.deleted_at, users.email, users.phone, users.account_name
+#   products.is_hidden (see supabase_migration.sql)
 #   escrow_orders table
 #   products.owner_id (NOT NULL) — must be populated alongside seller_id
 #   products.title (NOT NULL) — must be populated alongside name
@@ -38,6 +42,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from supabase import create_client, Client
 from dotenv import load_dotenv
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # -----------------------------------------------------------------------------
 # Env + clients
@@ -57,7 +62,21 @@ logging.basicConfig(level=logging.INFO)
 if not all([SUPABASE_URL, SUPABASE_SERVICE_KEY, PAYSTACK_SECRET_KEY, PAYSTACK_PUBLIC_KEY, BOT_TOKEN]):
     logging.warning("One or more required environment variables are missing.")
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+# Boot safety: a missing SUPABASE_URL / SUPABASE_SERVICE_KEY must not crash the
+# import. It logs a clear error instead; requests that need the database will
+# fail individually until the variables are set.
+supabase: Client = None
+try:
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        raise ValueError("SUPABASE_URL and/or SUPABASE_SERVICE_KEY is not set")
+    supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+except Exception as exc:
+    logging.error(
+        "Supabase client was NOT created (%s). Set SUPABASE_URL and "
+        "SUPABASE_SERVICE_KEY; database features are unavailable until then.",
+        exc,
+    )
+    supabase = None
 
 PAYSTACK_HEADERS = {
     "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
@@ -69,8 +88,15 @@ PAYSTACK_HEADERS = {
 # -----------------------------------------------------------------------------
 
 app = Flask(__name__, static_folder=None)
+
+# Render terminates TLS at its proxy. Trust exactly one proxy hop so that
+# get_remote_address (rate limiter) sees the real client IP, not the proxy's.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
 CORS(app)
 
+# NOTE: memory:// storage is per-process. It is NOT shared across gunicorn
+# workers. With more than 1 worker, switch to a Redis storage_uri.
 limiter = Limiter(
     get_remote_address,
     app=app,
@@ -143,6 +169,25 @@ def _allowed_file(filename, allowed_exts):
         return False
     ext = filename.rsplit(".", 1)[-1].lower()
     return ext in allowed_exts
+
+
+def _lock_seconds_remaining(locked_until):
+    """
+    Seconds left on a PIN lock (0 if there is no lock, it has expired, or the
+    stored value cannot be parsed).
+    """
+    if not locked_until:
+        return 0
+    try:
+        lu = datetime.fromisoformat(str(locked_until).replace("Z", "+00:00"))
+        if lu.tzinfo is None:
+            lu = lu.replace(tzinfo=timezone.utc)
+        remaining = (lu - datetime.now(timezone.utc)).total_seconds()
+        if remaining > 0:
+            return int(math.ceil(remaining))
+    except ValueError:
+        pass
+    return 0
 
 
 def extract_init_data():
@@ -274,6 +319,9 @@ def require_auth(f):
         if not user:
             return jsonify({"error": "Could not load user"}), 401
 
+        if user.get("deleted_at"):
+            return jsonify({"error": "Account deleted", "code": "ACCOUNT_DELETED"}), 403
+
         return f(user, *args, **kwargs)
     return wrapper
 
@@ -328,6 +376,99 @@ def get_held_kobo(telegram_id):
         return 0
 
 
+# -----------------------------------------------------------------------------
+# Helpers — wallet
+# -----------------------------------------------------------------------------
+
+def _amount_kobo_from(data):
+    """
+    Reads an amount from a JSON body. Priority: amount_kobo (kobo),
+    amount_naira (naira), amount (naira). Returns int kobo, or None if invalid.
+    """
+    try:
+        if data.get("amount_kobo") not in (None, ""):
+            return int(round_half_up(float(data["amount_kobo"])))
+        if data.get("amount_naira") not in (None, ""):
+            return int(round_half_up(float(data["amount_naira"]) * 100))
+        if data.get("amount") not in (None, ""):
+            return int(round_half_up(float(data["amount"]) * 100))
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+def _restore_balance(telegram_id, amount_kobo):
+    """Adds a previously debited amount back onto the user's current balance."""
+    res = supabase.table("users").select("balance_kobo").eq("telegram_id", telegram_id).limit(1).execute()
+    rows = res.data or []
+    current = int(rows[0].get("balance_kobo") or 0) if rows else 0
+    supabase.table("users").update({"balance_kobo": current + int(amount_kobo)}).eq("telegram_id", telegram_id).execute()
+
+
+def _wallet_funding_already_credited(reference):
+    """True if a wallet_transactions row for this reference is already marked wallet_funding."""
+    res = (
+        supabase.table("wallet_transactions")
+        .select("id")
+        .eq("reference", reference)
+        .eq("reason", "wallet_funding")
+        .limit(1)
+        .execute()
+    )
+    return bool(res.data)
+
+
+def _credit_wallet_funding(tx, paid_kobo):
+    """
+    Credits a verified Paystack payment to the wallet exactly once.
+    Shared by /api/wallet/verify-transaction and /api/webhook/paystack.
+
+    Returns the new balance (int) if this call credited the wallet, or None if
+    the payment was already credited (nothing is credited again).
+    """
+    reference = tx["reference"]
+    user_id = tx["user_id"]
+
+    # Re-check right before crediting (verify + webhook race guard).
+    if _wallet_funding_already_credited(reference):
+        return None
+
+    # Atomic claim: only one caller can flip pending -> wallet_funding.
+    claim = (
+        supabase.table("wallet_transactions")
+        .update({"reason": "wallet_funding", "amount_kobo": paid_kobo})
+        .eq("reference", reference)
+        .eq("user_id", user_id)
+        .eq("reason", "wallet_funding_pending")
+        .execute()
+    )
+    if not claim.data:
+        return None
+
+    try:
+        user_res = supabase.table("users").select("balance_kobo").eq("telegram_id", user_id).limit(1).execute()
+        rows = user_res.data or []
+        current_balance = int(rows[0].get("balance_kobo") or 0) if rows else 0
+        new_balance = current_balance + int(paid_kobo)
+        supabase.table("users").update({"balance_kobo": new_balance}).eq("telegram_id", user_id).execute()
+    except Exception:
+        # Credit failed: release the claim so verify/webhook can retry.
+        try:
+            (
+                supabase.table("wallet_transactions")
+                .update({"reason": "wallet_funding_pending"})
+                .eq("reference", reference)
+                .eq("user_id", user_id)
+                .eq("reason", "wallet_funding")
+                .execute()
+            )
+        except Exception:
+            logging.exception("_credit_wallet_funding: failed to release claim for %s", reference)
+        raise
+
+    return new_balance
+
+
 # =============================================================================
 # Health
 # =============================================================================
@@ -357,6 +498,9 @@ def auth_validate():
     if not user:
         return jsonify({"error": "Could not load user"}), 500
 
+    if user and user.get("deleted_at"):
+        return jsonify(error="Account deleted", code="ACCOUNT_DELETED"), 403
+
     return jsonify({
         "ok": True,
         "user": {
@@ -372,21 +516,22 @@ def auth_validate():
 # Products
 # =============================================================================
 
+PRODUCT_PUBLIC_COLUMNS = (
+    "id,name,description,price_kobo,buyer_pays_kobo,"
+    "seller_gets_kobo,image_url,file_url,seller_id,"
+    "created_at,category"
+)
+
+
 @app.route("/api/products", methods=["GET"])
 def products_list():
-    # FIXED is_public removed — this route must NEVER reference the
-    # is_public column again, in any form: no .eq("is_public", ...) filter,
-    # no select("*") where is_public could leak in, no try/except
-    # detect-and-retry fallback. Explicit column list only. Any failure of
-    # any kind returns an empty list with HTTP 200 — never a 500.
+    # Explicit columns only. Never select("*"), never reference is_public.
+    # Hidden products (deleted sellers) are excluded via is_hidden.
     try:
         res = (
             supabase.table("products")
-            .select(
-                "id,name,description,price_kobo,buyer_pays_kobo,"
-                "seller_gets_kobo,image_url,file_url,seller_id,"
-                "created_at,category"
-            )
+            .select(PRODUCT_PUBLIC_COLUMNS)
+            .eq("is_hidden", False)
             .order("created_at", desc=True)
             .limit(200)
             .execute()
@@ -399,104 +544,108 @@ def products_list():
 
 @app.route("/api/products/<product_id>", methods=["GET"])
 def products_get(product_id):
-    try:
-        res = (
-            supabase.table("products")
-            .select(
-                "id,name,description,price_kobo,buyer_pays_kobo,"
-                "seller_gets_kobo,platform_fee_kobo,paystack_fee_kobo,"
-                "image_url,file_url,seller_id,created_at,category"
-            )
-            .eq("id", product_id)
-            .limit(1)
-            .execute()
-        )
-        rows = res.data or []
-        if not rows:
-            return jsonify({"error": "Product not found"}), 404
-        return jsonify({"product": rows[0]}), 200
-    except Exception:
-        logging.exception("products_get: failed for product_id=%s", product_id)
-        return jsonify({"error": "Product not found"}), 404
+    res = (
+        supabase.table("products")
+        .select(PRODUCT_PUBLIC_COLUMNS + ",platform_fee_kobo,paystack_fee_kobo,is_hidden")
+        .eq("id", product_id)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    if not rows or rows[0].get("is_hidden"):
+        return jsonify({"error": "Product not found", "code": "PRODUCT_NOT_FOUND"}), 404
+
+    product = rows[0]
+    product.pop("is_hidden", None)
+    return jsonify({"product": product}), 200
 
 
 @app.route("/api/products", methods=["POST"])
 @require_auth
 @limiter.limit("10 per minute")
 def products_create(user):
+    tid = user["telegram_id"]
+
     name = (request.form.get("name") or "").strip()
     description = (request.form.get("description") or "").strip()
     category = (request.form.get("category") or "").strip()
 
-    price_raw = request.form.get("price") or request.form.get("price_naira")
-    price_kobo_raw = request.form.get("price_kobo")
+    if not name:
+        return jsonify({"error": "Product name is required"}), 400
 
     price_kobo = None
+    try:
+        if request.form.get("price_kobo"):
+            price_kobo = int(request.form.get("price_kobo"))
+        else:
+            naira_raw = request.form.get("price_naira") or request.form.get("price")
+            if naira_raw:
+                price_kobo = round_half_up(float(naira_raw) * 100)
+    except (TypeError, ValueError):
+        price_kobo = None
 
-    if price_kobo_raw:
-        try:
-            price_kobo = int(round(float(price_kobo_raw)))
-        except ValueError:
-            return jsonify({"error": "Invalid price_kobo"}), 400
-    elif price_raw:
-        try:
-            price_naira = float(price_raw)
-        except ValueError:
-            return jsonify({"error": "Invalid price"}), 400
-        price_kobo = round_half_up(price_naira * 100)
-
-    if not name or not price_kobo:
-        return jsonify({"error": "Name and price are required"}), 400
-
-    if price_kobo <= 0:
-        return jsonify({"error": "Price must be greater than zero"}), 400
+    if not price_kobo or price_kobo <= 0:
+        return jsonify({"error": "A valid price is required"}), 400
 
     fees = calc_fees(price_kobo)
+    if fees["seller_gets_kobo"] <= 0:
+        return jsonify({"error": "Price is too low to cover fees"}), 400
 
     cover = request.files.get("cover")
-    if not cover or cover.filename == "":
+    if not cover or not cover.filename:
         return jsonify({"error": "Cover image is required"}), 400
     if not _allowed_file(cover.filename, ALLOWED_COVER_EXT):
-        return jsonify({"error": "Cover must be JPG, PNG, or WEBP"}), 400
+        return jsonify({"error": "Cover must be JPG, PNG or WEBP"}), 400
 
     cover_bytes = cover.read()
+    if not cover_bytes:
+        return jsonify({"error": "Cover image is empty"}), 400
     if len(cover_bytes) > MAX_COVER_BYTES:
-        return jsonify({"error": "Cover image must be under 5MB"}), 400
+        return jsonify({"error": "Cover image must be 5MB or less"}), 400
 
-    cover_path = f"{user['telegram_id']}/{uuid.uuid4().hex}_{secure_name(cover.filename)}"
-    supabase.storage.from_(COVER_BUCKET).upload(
-        path=cover_path,
-        file=cover_bytes,
-        file_options={"content-type": cover.mimetype or "application/octet-stream"},
-    )
-    image_url = supabase.storage.from_(COVER_BUCKET).get_public_url(cover_path)
-
-    file_url = None
     product_file = request.files.get("product_file")
+    file_bytes = None
     if product_file and product_file.filename:
         if not _allowed_file(product_file.filename, ALLOWED_PRODUCT_EXT):
-            return jsonify({"error": "Product file must be ZIP, PDF, MP4, or DOCX"}), 400
+            return jsonify({"error": "Product file must be ZIP, PDF, MP4 or DOCX"}), 400
+        file_bytes = product_file.read()
+        if not file_bytes:
+            return jsonify({"error": "Product file is empty"}), 400
+        if len(file_bytes) > MAX_PRODUCT_BYTES:
+            return jsonify({"error": "Product file must be 50MB or less"}), 400
 
-        pf_bytes = product_file.read()
-        if len(pf_bytes) > MAX_PRODUCT_BYTES:
-            return jsonify({"error": "Product file must be under 50MB"}), 400
-
-        file_path = f"{user['telegram_id']}/{uuid.uuid4().hex}_{secure_name(product_file.filename)}"
-        supabase.storage.from_(PRODUCT_FILE_BUCKET).upload(
-            path=file_path,
-            file=pf_bytes,
-            file_options={"content-type": product_file.mimetype or "application/octet-stream"},
+    image_url = None
+    try:
+        cover_path = f"{tid}/{uuid.uuid4().hex}_{secure_name(cover.filename)}"
+        supabase.storage.from_(COVER_BUCKET).upload(
+            path=cover_path,
+            file=cover_bytes,
+            file_options={"content-type": cover.mimetype or "image/jpeg"},
         )
-        file_url = supabase.storage.from_(PRODUCT_FILE_BUCKET).get_public_url(file_path)
+        image_url = supabase.storage.from_(COVER_BUCKET).get_public_url(cover_path)
+    except Exception:
+        logging.exception("products_create: cover upload failed for telegram_id=%s", tid)
+        return jsonify({"error": "Cover upload failed"}), 500
 
-    # FIXED owner_id NOT NULL violation (23502) — products.owner_id has a
-    # NOT NULL constraint but was never being populated, only seller_id was.
-    # Both are now written as the same value, explicitly cast to string so
-    # the payload can never silently send an int where Postgres/PostgREST
-    # expects text (and vice versa never sends None for owner_id again).
+    file_url = None
+    if file_bytes is not None:
+        try:
+            file_path = f"{tid}/{uuid.uuid4().hex}_{secure_name(product_file.filename)}"
+            supabase.storage.from_(PRODUCT_FILE_BUCKET).upload(
+                path=file_path,
+                file=file_bytes,
+                file_options={"content-type": product_file.mimetype or "application/octet-stream"},
+            )
+            file_url = supabase.storage.from_(PRODUCT_FILE_BUCKET).get_public_url(file_path)
+        except Exception:
+            logging.exception("products_create: product file upload failed for telegram_id=%s", tid)
+            return jsonify({"error": "Product file upload failed"}), 500
+
+    # NEVER insert is_public. owner_id/title/price are NOT NULL columns and must
+    # be populated alongside seller_id/name/price_kobo.
     insert_payload = {
-        "owner_id": str(user["telegram_id"]),
-        "seller_id": str(user["telegram_id"]),
+        "owner_id": str(tid),
+        "seller_id": str(tid),
         "title": name,
         "name": name,
         "price": price_kobo,
@@ -508,48 +657,43 @@ def products_create(user):
         "description": description,
         "image_url": image_url,
         "file_url": file_url,
-        "category": category or None,
-        # FIXED is_public removed — this key is never inserted, under any
-        # condition, regardless of whether the column exists in Postgres.
-        # A stale PostgREST schema cache on this column must never be able
-        # to break product creation again.
+        "category": category,
     }
 
     try:
-        insert_res = supabase.table("products").insert(insert_payload).execute()
+        res = supabase.table("products").insert(insert_payload).execute()
+        rows = res.data or []
     except Exception:
-        logging.exception("products_create: insert failed")
-        return jsonify({"error": "Could not create product. Please try again."}), 500
+        logging.exception("products_create: insert failed for telegram_id=%s", tid)
+        return jsonify({"error": "Could not create product"}), 500
 
-    return jsonify({"product": (insert_res.data or [None])[0]}), 201
+    return jsonify({"product": rows[0] if rows else insert_payload}), 201
 
 
 # =============================================================================
-# Wallet — balance / history
+# Wallet — balance + transactions
 # =============================================================================
 
 @app.route("/api/wallet/balance", methods=["GET"])
 @require_auth
 def wallet_balance(user):
-    res = supabase.table("users").select("balance_kobo").eq("telegram_id", user["telegram_id"]).limit(1).execute()
-    rows = res.data or []
-    balance_kobo = int(rows[0].get("balance_kobo") or 0) if rows else 0
-    held_kobo = get_held_kobo(user["telegram_id"])
-
+    tid = user["telegram_id"]
+    balance = int(user.get("balance_kobo") or 0)
     return jsonify({
-        "balance_kobo": balance_kobo,
-        "held_kobo": held_kobo,
-        "available_kobo": balance_kobo,
+        "balance_kobo": balance,
+        "held_kobo": get_held_kobo(tid),
+        "available_kobo": balance,
     }), 200
 
 
 @app.route("/api/wallet/transactions", methods=["GET"])
 @require_auth
 def wallet_transactions(user):
+    tid = user["telegram_id"]
     res = (
         supabase.table("wallet_transactions")
         .select("*")
-        .eq("user_id", user["telegram_id"])
+        .eq("user_id", tid)
         .order("created_at", desc=True)
         .limit(100)
         .execute()
@@ -558,26 +702,28 @@ def wallet_transactions(user):
 
 
 # =============================================================================
-# Wallet — funding
+# Wallet — funding (Paystack)
 # =============================================================================
 
 @app.route("/api/wallet/fund/initialize", methods=["POST"])
 @require_auth
 @limiter.limit("10 per minute")
 def wallet_fund_initialize(user):
+    tid = user["telegram_id"]
     data = request.get_json(silent=True) or {}
-    amount_kobo = int(data.get("amount_kobo") or 0)
-    email = (data.get("email") or "").strip()
 
-    if amount_kobo < 10000:
-        return jsonify({"error": "Minimum funding amount is NGN100"}), 400
+    amount_kobo = _amount_kobo_from(data)
+    if amount_kobo is None or amount_kobo < 10000:
+        return jsonify({"error": "Minimum funding amount is ₦100"}), 400
+
+    email = (data.get("email") or "").strip()
     if not email or "@" not in email:
         return jsonify({"error": "A valid email is required"}), 400
 
-    reference = f"PLK-{uuid.uuid4().hex[:20]}"
+    reference = "PLK-" + uuid.uuid4().hex[:20]
 
     supabase.table("wallet_transactions").insert({
-        "user_id": user["telegram_id"],
+        "user_id": tid,
         "type": "credit",
         "amount_kobo": amount_kobo,
         "reason": "wallet_funding_pending",
@@ -596,66 +742,82 @@ def wallet_fund_initialize(user):
 @require_auth
 @limiter.limit("20 per minute")
 def wallet_verify_transaction(user):
+    tid = user["telegram_id"]
     data = request.get_json(silent=True) or {}
     reference = (data.get("reference") or "").strip()
-
     if not reference:
         return jsonify({"error": "reference is required"}), 400
 
-    tx_res = supabase.table("wallet_transactions").select("*").eq("reference", reference).limit(1).execute()
-    tx_rows = tx_res.data or []
-
-    if not tx_rows:
+    tx_res = (
+        supabase.table("wallet_transactions")
+        .select("*")
+        .eq("reference", reference)
+        .limit(1)
+        .execute()
+    )
+    rows = tx_res.data or []
+    if not rows:
         return jsonify({"error": "Transaction not found"}), 404
 
-    tx = tx_rows[0]
-
-    if int(tx.get("user_id") or 0) != int(user["telegram_id"]):
+    tx = rows[0]
+    if int(tx.get("user_id")) != int(tid):
         return jsonify({"error": "Forbidden"}), 403
-
-    ps_resp = requests.get(
-        f"{PAYSTACK_BASE}/transaction/verify/{reference}",
-        headers=PAYSTACK_HEADERS,
-        timeout=15,
-    )
-    ps_data = ps_resp.json()
-
-    if not ps_resp.ok or not ps_data.get("status"):
-        return jsonify({"status": "failed"}), 400
-
-    ps_tx = ps_data.get("data") or {}
-
-    if ps_tx.get("status") != "success":
-        return jsonify({"status": "failed"}), 400
-
-    amount_kobo = int(ps_tx.get("amount") or tx.get("amount_kobo") or 0)
 
     if tx.get("reason") == "wallet_funding":
         return jsonify({
             "status": "success",
             "credited": True,
             "already_credited": True,
-            "amount_kobo": tx.get("amount_kobo"),
+            "amount_kobo": int(tx.get("amount_kobo") or 0),
             "reference": reference,
         }), 200
 
-    user_res = supabase.table("users").select("balance_kobo").eq("telegram_id", user["telegram_id"]).limit(1).execute()
-    current_balance = int((user_res.data or [{}])[0].get("balance_kobo") or 0)
-    new_balance = current_balance + amount_kobo
+    if tx.get("reason") != "wallet_funding_pending":
+        return jsonify({"error": "Not a funding reference"}), 400
 
-    supabase.table("users").update({"balance_kobo": new_balance}).eq("telegram_id", user["telegram_id"]).execute()
-    supabase.table("wallet_transactions").update(
-        {"reason": "wallet_funding", "amount_kobo": amount_kobo}
-    ).eq("reference", reference).execute()
+    try:
+        ps_res = requests.get(
+            f"{PAYSTACK_BASE}/transaction/verify/{reference}",
+            headers=PAYSTACK_HEADERS,
+            timeout=20,
+        )
+        ps_body = ps_res.json()
+    except (requests.RequestException, ValueError):
+        logging.exception("wallet_verify_transaction: Paystack verify failed for %s", reference)
+        return jsonify({"error": "Could not reach Paystack"}), 502
 
-    authorization = ps_tx.get("authorization") or {}
+    pdata = ps_body.get("data") or {}
+    if not ps_body.get("status") or pdata.get("status") != "success":
+        return jsonify({"status": "failed", "error": "Payment was not successful"}), 400
+
+    try:
+        paid_kobo = int(pdata.get("amount") or 0)
+    except (TypeError, ValueError):
+        paid_kobo = 0
+    if paid_kobo <= 0:
+        return jsonify({"status": "failed", "error": "Invalid payment amount"}), 400
+
+    new_balance = _credit_wallet_funding(tx, paid_kobo)
+    if new_balance is None:
+        return jsonify({
+            "status": "success",
+            "credited": True,
+            "already_credited": True,
+            "amount_kobo": paid_kobo,
+            "reference": reference,
+        }), 200
+
+    authorization = pdata.get("authorization") or {}
     if authorization.get("reusable"):
-        _save_card_from_authorization(user["telegram_id"], authorization)
+        try:
+            _save_card_from_authorization(tid, authorization)
+        except Exception:
+            logging.exception("wallet_verify_transaction: saving card failed for %s", reference)
 
     return jsonify({
         "status": "success",
         "credited": True,
-        "amount_kobo": amount_kobo,
+        "amount_kobo": paid_kobo,
         "reference": reference,
     }), 200
 
@@ -667,11 +829,11 @@ def wallet_verify_transaction(user):
 @app.route("/api/wallet/cards", methods=["GET"])
 @require_auth
 def wallet_cards(user):
+    tid = user["telegram_id"]
     res = (
         supabase.table("saved_cards")
-        .select("id,last4,brand,exp_month,exp_year,is_default")
-        .eq("user_id", user["telegram_id"])
-        .order("is_default", desc=True)
+        .select("id,last4,exp_month,exp_year,brand,is_default")
+        .eq("user_id", tid)
         .execute()
     )
     return jsonify({"cards": res.data or []}), 200
@@ -679,8 +841,9 @@ def wallet_cards(user):
 
 @app.route("/api/wallet/cards/<card_id>", methods=["DELETE"])
 @require_auth
-def wallet_card_delete(user, card_id):
-    supabase.table("saved_cards").delete().eq("id", card_id).eq("user_id", user["telegram_id"]).execute()
+def wallet_cards_delete(user, card_id):
+    tid = user["telegram_id"]
+    supabase.table("saved_cards").delete().eq("id", card_id).eq("user_id", tid).execute()
     return jsonify({"status": "success"}), 200
 
 
@@ -691,7 +854,8 @@ def wallet_card_delete(user, card_id):
 @app.route("/api/wallet/pin-status", methods=["GET"])
 @require_auth
 def wallet_pin_status(user):
-    res = supabase.table("users").select("pin_hash").eq("telegram_id", user["telegram_id"]).limit(1).execute()
+    tid = user["telegram_id"]
+    res = supabase.table("users").select("pin_hash").eq("telegram_id", tid).limit(1).execute()
     rows = res.data or []
     has_pin = bool(rows and rows[0].get("pin_hash"))
     return jsonify({"has_pin": has_pin}), 200
@@ -701,29 +865,30 @@ def wallet_pin_status(user):
 @require_auth
 @limiter.limit("5 per minute")
 def wallet_set_pin(user):
+    tid = user["telegram_id"]
     data = request.get_json(silent=True) or {}
-    pin = str(data.get("pin") or "").strip()
-    confirm_pin = str(data.get("confirm_pin") or "").strip()
+
+    pin = str(data.get("pin") or "")
+    confirm_pin = str(data.get("confirm_pin") or data.get("pin_confirm") or data.get("confirm") or "")
 
     if not re.fullmatch(r"\d{4}", pin):
         return jsonify({"error": "PIN must be exactly 4 digits"}), 400
     if pin != confirm_pin:
         return jsonify({"error": "PINs do not match"}), 400
 
-    existing = supabase.table("users").select("pin_hash").eq("telegram_id", user["telegram_id"]).limit(1).execute()
-    rows = existing.data or []
+    res = supabase.table("users").select("pin_hash").eq("telegram_id", tid).limit(1).execute()
+    rows = res.data or []
     if rows and rows[0].get("pin_hash"):
-        return jsonify({"error": "A PIN is already set for this account", "code": "PIN_ALREADY_SET"}), 409
+        return jsonify({"error": "PIN already set", "code": "PIN_ALREADY_SET"}), 409
 
     pin_hash = bcrypt.hashpw(pin.encode(), bcrypt.gensalt()).decode()
-
     supabase.table("users").update({
         "pin_hash": pin_hash,
         "pin_fail_count": 0,
         "pin_locked_until": None,
-    }).eq("telegram_id", user["telegram_id"]).execute()
+    }).eq("telegram_id", tid).execute()
 
-    return jsonify({"status": "success", "has_pin": True}), 200
+    return jsonify({"status": "success", "success": True, "has_pin": True}), 200
 
 
 # =============================================================================
@@ -732,71 +897,77 @@ def wallet_set_pin(user):
 
 @app.route("/api/banks", methods=["GET"])
 @require_auth
-def list_banks(user):
-    resp = requests.get(
-        f"{PAYSTACK_BASE}/bank",
-        headers=PAYSTACK_HEADERS,
-        params={"currency": "NGN"},
-        timeout=15,
-    )
-    data = resp.json()
+def banks_list(user):
+    banks = []
+    next_cursor = None
+    try:
+        for _ in range(5):
+            params = {"currency": "NGN", "perPage": 100, "use_cursor": "true"}
+            if next_cursor:
+                params["next"] = next_cursor
+            ps_res = requests.get(
+                f"{PAYSTACK_BASE}/bank",
+                headers=PAYSTACK_HEADERS,
+                params=params,
+                timeout=20,
+            )
+            body = ps_res.json()
+            if not body.get("status"):
+                logging.warning("banks_list: Paystack error: %s", body)
+                if not banks:
+                    return jsonify({"error": body.get("message") or "Could not load banks"}), 502
+                break
+            for b in (body.get("data") or []):
+                if b.get("active") is False:
+                    continue
+                banks.append({"name": b.get("name"), "code": b.get("code")})
+            next_cursor = (body.get("meta") or {}).get("next")
+            if not next_cursor:
+                break
+    except (requests.RequestException, ValueError):
+        logging.exception("banks_list: request to Paystack failed")
+        if not banks:
+            return jsonify({"error": "Could not reach Paystack"}), 502
 
-    if not resp.ok or not data.get("status"):
-        return jsonify({"error": "Could not load banks"}), 502
-
-    banks = [{"name": b["name"], "code": b["code"]} for b in data.get("data", [])]
+    banks.sort(key=lambda b: (b.get("name") or "").lower())
     return jsonify({"banks": banks}), 200
 
 
 @app.route("/api/banks/resolve", methods=["POST"])
 @require_auth
 @limiter.limit("20 per minute")
-def resolve_bank(user):
+def banks_resolve(user):
     data = request.get_json(silent=True) or {}
-    account_number = (data.get("account_number") or "").strip()
-    bank_code = (data.get("bank_code") or "").strip()
+    account_number = str(data.get("account_number") or "").strip()
+    bank_code = str(data.get("bank_code") or "").strip()
 
     if not account_number or not bank_code:
         return jsonify({"error": "account_number and bank_code are required"}), 400
 
-    # FIXED: added detailed logging of the outbound Paystack request/response
-    # and now surface Paystack's real error message to the frontend instead
-    # of a generic "Could not resolve account" 400 on every failure — this
-    # was making the real cause (invalid bank_code, Paystack rate limit,
-    # Paystack 5xx, auth header issue, etc.) impossible to diagnose from logs.
     logging.info(
-        "banks/resolve: requesting Paystack resolve account_number=%s bank_code=%s",
-        account_number, bank_code,
+        "banks_resolve: request bank_code=%s account_number=******%s",
+        bank_code, account_number[-4:],
     )
 
     try:
-        resp = requests.get(
+        ps_res = requests.get(
             f"{PAYSTACK_BASE}/bank/resolve",
             headers=PAYSTACK_HEADERS,
             params={"account_number": account_number, "bank_code": bank_code},
-            timeout=15,
+            timeout=20,
         )
-    except requests.RequestException:
-        logging.exception("banks/resolve: request to Paystack failed (network/timeout)")
-        return jsonify({"error": "Could not reach Paystack. Please try again."}), 502
+        body = ps_res.json()
+    except (requests.RequestException, ValueError) as exc:
+        logging.exception("banks_resolve: request to Paystack failed")
+        return jsonify({"error": f"Could not reach Paystack: {exc}"}), 502
 
-    logging.info(
-        "banks/resolve: Paystack response status=%s body=%s",
-        resp.status_code, resp.text,
-    )
+    logging.info("banks_resolve: Paystack response http=%s body=%s", ps_res.status_code, body)
 
-    try:
-        resp_data = resp.json()
-    except ValueError:
-        logging.warning("banks/resolve: Paystack response was not valid JSON: %s", resp.text)
-        return jsonify({"error": resp.text or "Could not resolve account"}), 400
+    if not body.get("status"):
+        return jsonify({"error": body.get("message") or "Could not resolve account"}), 400
 
-    if not resp.ok or not resp_data.get("status"):
-        error_message = resp_data.get("message") or resp.text or "Could not resolve account"
-        return jsonify({"error": error_message}), 400
-
-    account_name = (resp_data.get("data") or {}).get("account_name")
-    return jsonify({"account_name": account_name}), 200
+    info = body.get("data") or {}
+    return jsonify({"account_name": info.get("account_name")}), 200
 
 
 # =============================================================================
@@ -807,116 +978,147 @@ def resolve_bank(user):
 @require_auth
 @limiter.limit("10 per minute")
 def wallet_withdraw(user):
+    tid = user["telegram_id"]
     data = request.get_json(silent=True) or {}
-    pin = str(data.get("pin") or "").strip()
-    amount_kobo = int(data.get("amount_kobo") or 0)
-    bank_code = (data.get("bank_code") or "").strip()
-    bank_name = (data.get("bank_name") or "").strip()
-    account_number = (data.get("account_number") or "").strip()
-    account_name = (data.get("account_name") or "").strip()
 
-    if amount_kobo < WITHDRAWAL_MIN_KOBO:
-        return jsonify({
-            "error": f"Minimum withdrawal is NGN{WITHDRAWAL_MIN_KOBO // 100}",
-            "code": "AMOUNT_TOO_LOW",
-        }), 400
+    amount_kobo = _amount_kobo_from(data)
+    if amount_kobo is None or amount_kobo < WITHDRAWAL_MIN_KOBO:
+        return jsonify({"error": "Minimum withdrawal is ₦1,000", "code": "AMOUNT_TOO_LOW"}), 400
 
+    bank_code = str(data.get("bank_code") or "").strip()
+    bank_name = str(data.get("bank_name") or "").strip()
+    account_number = str(data.get("account_number") or "").strip()
+    account_name = str(data.get("account_name") or "").strip()
     if not bank_code or not account_number or not account_name:
-        return jsonify({"error": "Bank details are required", "code": "BANK_REQUIRED"}), 400
+        return jsonify({"error": "Bank details are required"}), 400
 
+    pin = str(data.get("pin") or "")
     if not re.fullmatch(r"\d{4}", pin):
-        return jsonify({"error": "A valid 4-digit PIN is required", "code": "PIN_INVALID"}), 400
+        return jsonify({"error": "A 4-digit PIN is required", "code": "PIN_INVALID"}), 400
 
     user_res = (
         supabase.table("users")
         .select("balance_kobo,pin_hash,pin_fail_count,pin_locked_until")
-        .eq("telegram_id", user["telegram_id"])
+        .eq("telegram_id", tid)
         .limit(1)
         .execute()
     )
     rows = user_res.data or []
     if not rows:
         return jsonify({"error": "User not found"}), 404
-
     u = rows[0]
 
-    if not u.get("pin_hash"):
-        return jsonify({"error": "Set your withdrawal PIN first", "code": "PIN_NOT_SET"}), 403
+    pin_hash = u.get("pin_hash")
+    if not pin_hash:
+        return jsonify({"error": "Set a PIN before withdrawing", "code": "PIN_NOT_SET"}), 403
 
-    locked_until = u.get("pin_locked_until")
-    if locked_until:
-        try:
-            lu = datetime.fromisoformat(str(locked_until).replace("Z", "+00:00"))
-            if lu > datetime.now(timezone.utc):
-                return jsonify({
-                    "error": "Too many attempts. Try again in 15 minutes.",
-                    "code": "RATE_LIMITED",
-                }), 429
-        except ValueError:
-            pass
+    remaining = _lock_seconds_remaining(u.get("pin_locked_until"))
+    if remaining > 0:
+        return jsonify({
+            "error": "Too many wrong PIN attempts. Try again later.",
+            "code": "RATE_LIMITED",
+            "retry_after": remaining,
+        }), 429
 
-    if not bcrypt.checkpw(pin.encode(), u["pin_hash"].encode()):
-        fail_count = int(u.get("pin_fail_count") or 0) + 1
-        update_payload = {"pin_fail_count": fail_count}
+    try:
+        pin_ok = bcrypt.checkpw(pin.encode(), str(pin_hash).encode())
+    except ValueError:
+        pin_ok = False
 
-        if fail_count >= PIN_FAIL_LIMIT:
-            update_payload["pin_locked_until"] = (
-                datetime.now(timezone.utc) + timedelta(minutes=PIN_LOCK_MINUTES)
-            ).isoformat()
-            update_payload["pin_fail_count"] = 0
-
-        supabase.table("users").update(update_payload).eq("telegram_id", user["telegram_id"]).execute()
-
-        if fail_count >= PIN_FAIL_LIMIT:
+    if not pin_ok:
+        fails = int(u.get("pin_fail_count") or 0) + 1
+        if fails >= PIN_FAIL_LIMIT:
+            locked_until = (datetime.now(timezone.utc) + timedelta(minutes=PIN_LOCK_MINUTES)).isoformat()
+            supabase.table("users").update({
+                "pin_fail_count": 0,
+                "pin_locked_until": locked_until,
+            }).eq("telegram_id", tid).execute()
             return jsonify({
-                "error": "Too many attempts. Try again in 15 minutes.",
+                "error": "Too many wrong PIN attempts. Try again later.",
                 "code": "RATE_LIMITED",
+                "retry_after": PIN_LOCK_MINUTES * 60,
             }), 429
+        supabase.table("users").update({"pin_fail_count": fails}).eq("telegram_id", tid).execute()
+        return jsonify({
+            "error": "Incorrect PIN",
+            "code": "PIN_INVALID",
+            "attempts_left": PIN_FAIL_LIMIT - fails,
+        }), 401
 
-        return jsonify({"error": "Incorrect PIN", "code": "PIN_INVALID"}), 401
+    if int(u.get("pin_fail_count") or 0) != 0 or u.get("pin_locked_until"):
+        supabase.table("users").update({
+            "pin_fail_count": 0,
+            "pin_locked_until": None,
+        }).eq("telegram_id", tid).execute()
 
-    supabase.table("users").update(
-        {"pin_fail_count": 0, "pin_locked_until": None}
-    ).eq("telegram_id", user["telegram_id"]).execute()
+    balance = int(u.get("balance_kobo") or 0)
+    if amount_kobo > balance:
+        return jsonify({"error": "Insufficient balance", "code": "INSUFFICIENT_BALANCE"}), 400
 
-    balance_kobo = int(u.get("balance_kobo") or 0)
-    if amount_kobo > balance_kobo:
-        return jsonify({"error": "Insufficient available balance", "code": "INSUFFICIENT_BALANCE"}), 400
+    # Debit (guarded so a concurrent balance change cannot be overwritten).
+    debit = (
+        supabase.table("users")
+        .update({"balance_kobo": balance - amount_kobo})
+        .eq("telegram_id", tid)
+        .eq("balance_kobo", balance)
+        .execute()
+    )
+    if not debit.data:
+        return jsonify({"error": "Balance changed, please retry"}), 409
 
-    new_balance = balance_kobo - amount_kobo
-    reference = f"WD-{uuid.uuid4().hex[:20]}"
+    reference = "WD-" + uuid.uuid4().hex[:20]
 
-    supabase.table("users").update({"balance_kobo": new_balance}).eq("telegram_id", user["telegram_id"]).execute()
+    # Balance is now debited. If either insert fails, revert the debit before
+    # returning the error so no money is lost.
+    tx_inserted = False
+    try:
+        supabase.table("wallet_transactions").insert({
+            "user_id": tid,
+            "type": "debit",
+            "amount_kobo": amount_kobo,
+            "reason": "withdrawal",
+            "reference": reference,
+        }).execute()
+        tx_inserted = True
 
-    supabase.table("wallet_transactions").insert({
-        "user_id": user["telegram_id"],
-        "type": "debit",
-        "amount_kobo": amount_kobo,
-        "reason": "withdrawal",
+        supabase.table("withdrawals").insert({
+            "user_id": tid,
+            "amount_kobo": amount_kobo,
+            "bank_code": bank_code,
+            "bank_name": bank_name,
+            "account_number": account_number,
+            "account_name": account_name,
+            "status": "pending",
+            "reference": reference,
+        }).execute()
+    except Exception:
+        logging.exception("wallet_withdraw: insert failed after debit, reverting balance for telegram_id=%s", tid)
+        try:
+            _restore_balance(tid, amount_kobo)
+        except Exception:
+            logging.exception("wallet_withdraw: CRITICAL balance revert failed for telegram_id=%s amount=%s", tid, amount_kobo)
+        if tx_inserted:
+            try:
+                supabase.table("wallet_transactions").delete().eq("reference", reference).execute()
+            except Exception:
+                logging.exception("wallet_withdraw: could not remove orphan transaction %s", reference)
+        return jsonify({"error": "Withdrawal could not be created. Your balance was not changed."}), 500
+
+    return jsonify({
+        "status": "success",
         "reference": reference,
-    }).execute()
-
-    supabase.table("withdrawals").insert({
-        "user_id": user["telegram_id"],
         "amount_kobo": amount_kobo,
-        "bank_name": bank_name,
-        "bank_code": bank_code,
-        "account_number": account_number,
-        "account_name": account_name,
-        "status": "pending",
-        "reference": reference,
-    }).execute()
-
-    return jsonify({"status": "success", "reference": reference, "amount_kobo": amount_kobo}), 200
+    }), 200
 
 
 @app.route("/api/wallet/withdrawals", methods=["GET"])
 @require_auth
 def wallet_withdrawals(user):
+    tid = user["telegram_id"]
     res = (
         supabase.table("withdrawals")
         .select("*")
-        .eq("user_id", user["telegram_id"])
+        .eq("user_id", tid)
         .order("created_at", desc=True)
         .limit(100)
         .execute()
@@ -925,22 +1127,18 @@ def wallet_withdrawals(user):
 
 
 # =============================================================================
-# Buy / Purchase — escrow
+# Wallet — buy (escrow)
 # =============================================================================
 
 @app.route("/api/wallet/buy/<product_id>", methods=["POST"])
 @require_auth
 @limiter.limit("10 per minute")
 def wallet_buy(user, product_id):
-    # FIXED is_public removed — product selection below uses an explicit
-    # column list (no "*") and this route no longer references is_public
-    # anywhere, including the old fail-open availability check.
+    tid = user["telegram_id"]
+
     prod_res = (
         supabase.table("products")
-        .select(
-            "id,name,price_kobo,buyer_pays_kobo,seller_gets_kobo,"
-            "platform_fee_kobo,seller_id"
-        )
+        .select("id,name,price_kobo,buyer_pays_kobo,seller_gets_kobo,platform_fee_kobo,seller_id,is_hidden")
         .eq("id", product_id)
         .limit(1)
         .execute()
@@ -950,56 +1148,77 @@ def wallet_buy(user, product_id):
         return jsonify({"error": "Product not found"}), 404
 
     product = rows[0]
+    if product.get("is_hidden"):
+        return jsonify({"error": "Product is no longer available", "code": "PRODUCT_UNAVAILABLE"}), 410
 
-    if int(product["seller_id"]) == int(user["telegram_id"]):
+    if str(product.get("seller_id")) == str(tid):
         return jsonify({"error": "You cannot buy your own product"}), 400
 
-    buyer_pays_kobo = int(product["buyer_pays_kobo"])
+    buyer_pays = int(product.get("buyer_pays_kobo") or 0)
+    seller_gets = int(product.get("seller_gets_kobo") or 0)
+    if buyer_pays <= 0:
+        return jsonify({"error": "Product price is invalid"}), 400
 
-    user_res = supabase.table("users").select("balance_kobo").eq("telegram_id", user["telegram_id"]).limit(1).execute()
-    u_rows = user_res.data or []
-    if not u_rows:
-        return jsonify({"error": "User not found"}), 404
+    bal_res = supabase.table("users").select("balance_kobo").eq("telegram_id", tid).limit(1).execute()
+    bal_rows = bal_res.data or []
+    balance = int(bal_rows[0].get("balance_kobo") or 0) if bal_rows else 0
+    if balance < buyer_pays:
+        return jsonify({"error": "Insufficient balance", "code": "INSUFFICIENT_BALANCE"}), 400
 
-    balance_kobo = int(u_rows[0].get("balance_kobo") or 0)
+    debit = (
+        supabase.table("users")
+        .update({"balance_kobo": balance - buyer_pays})
+        .eq("telegram_id", tid)
+        .eq("balance_kobo", balance)
+        .execute()
+    )
+    if not debit.data:
+        return jsonify({"error": "Balance changed, please retry"}), 409
 
-    if buyer_pays_kobo > balance_kobo:
-        return jsonify({
-            "error": "Insufficient balance. Please fund your wallet.",
-            "code": "INSUFFICIENT_BALANCE",
-        }), 400
-
-    new_balance = balance_kobo - buyer_pays_kobo
-    reference = f"ESC-{uuid.uuid4().hex[:20]}"
+    reference = "ESC-" + uuid.uuid4().hex[:20]
     release_at = (datetime.now(timezone.utc) + timedelta(days=ESCROW_HOLD_DAYS)).isoformat()
 
-    supabase.table("users").update({"balance_kobo": new_balance}).eq("telegram_id", user["telegram_id"]).execute()
+    tx_inserted = False
+    try:
+        supabase.table("wallet_transactions").insert({
+            "user_id": tid,
+            "type": "debit",
+            "amount_kobo": buyer_pays,
+            "reason": "escrow_purchase",
+            "reference": reference,
+        }).execute()
+        tx_inserted = True
 
-    supabase.table("wallet_transactions").insert({
-        "user_id": user["telegram_id"],
-        "type": "debit",
-        "amount_kobo": buyer_pays_kobo,
-        "reason": "escrow_purchase",
-        "reference": reference,
-    }).execute()
-
-    escrow_res = supabase.table("escrow_orders").insert({
-        "product_id": product_id,
-        "buyer_id": user["telegram_id"],
-        "seller_id": product["seller_id"],
-        "price_kobo": product["price_kobo"],
-        "buyer_pays_kobo": buyer_pays_kobo,
-        "seller_gets_kobo": product["seller_gets_kobo"],
-        "platform_fee_kobo": product["platform_fee_kobo"],
-        "status": "held",
-        "reference": reference,
-        "release_at": release_at,
-    }).execute()
+        order_res = supabase.table("escrow_orders").insert({
+            "product_id": product.get("id"),
+            "buyer_id": int(tid),
+            "seller_id": int(product.get("seller_id")),
+            "price_kobo": int(product.get("price_kobo") or 0),
+            "buyer_pays_kobo": buyer_pays,
+            "seller_gets_kobo": seller_gets,
+            "platform_fee_kobo": int(product.get("platform_fee_kobo") or PLATFORM_FEE_KOBO),
+            "status": "held",
+            "reference": reference,
+            "release_at": release_at,
+        }).execute()
+        order_rows = order_res.data or []
+    except Exception:
+        logging.exception("wallet_buy: failed after debit, reverting balance for telegram_id=%s", tid)
+        try:
+            _restore_balance(tid, buyer_pays)
+        except Exception:
+            logging.exception("wallet_buy: CRITICAL balance revert failed for telegram_id=%s amount=%s", tid, buyer_pays)
+        if tx_inserted:
+            try:
+                supabase.table("wallet_transactions").delete().eq("reference", reference).execute()
+            except Exception:
+                logging.exception("wallet_buy: could not remove orphan transaction %s", reference)
+        return jsonify({"error": "Purchase failed. Your balance was not changed."}), 500
 
     return jsonify({
         "status": "success",
         "reference": reference,
-        "order": (escrow_res.data or [None])[0],
+        "order": order_rows[0] if order_rows else None,
     }), 201
 
 
@@ -1009,47 +1228,190 @@ def wallet_buy(user, product_id):
 
 @app.route("/api/webhook/paystack", methods=["POST"])
 def paystack_webhook():
-    signature = request.headers.get("x-paystack-signature", "")
-    body = request.get_data()
+    if not PAYSTACK_SECRET_KEY:
+        logging.error("paystack_webhook: PAYSTACK_SECRET_KEY is not set")
+        return jsonify({"error": "Webhook not configured"}), 500
 
-    computed = hmac.new(PAYSTACK_SECRET_KEY.encode(), body, hashlib.sha512).hexdigest()
-    if not hmac.compare_digest(computed, signature):
+    raw_body = request.get_data()
+    signature = request.headers.get("x-paystack-signature", "")
+    expected = hmac.new(PAYSTACK_SECRET_KEY.encode(), raw_body, hashlib.sha512).hexdigest()
+    if not signature or not hmac.compare_digest(expected, signature):
         return jsonify({"error": "Invalid signature"}), 401
 
-    event = request.get_json(silent=True) or {}
-    event_type = event.get("event")
-    data = event.get("data") or {}
+    try:
+        event = json.loads(raw_body.decode("utf-8") or "{}")
+    except (ValueError, UnicodeDecodeError):
+        return jsonify({"error": "Invalid payload"}), 400
 
-    if event_type == "charge.success":
-        reference = data.get("reference")
-        if reference:
-            tx_res = supabase.table("wallet_transactions").select("*").eq("reference", reference).limit(1).execute()
-            tx_rows = tx_res.data or []
+    if event.get("event") != "charge.success":
+        return jsonify({"status": "received"}), 200
 
-            if tx_rows and tx_rows[0].get("reason") != "wallet_funding":
-                tx = tx_rows[0]
-                amount_kobo = int(data.get("amount") or tx.get("amount_kobo") or 0)
+    pdata = event.get("data") or {}
+    reference = pdata.get("reference")
+    if not reference:
+        return jsonify({"status": "received"}), 200
 
-                user_res = supabase.table("users").select("balance_kobo").eq("telegram_id", tx["user_id"]).limit(1).execute()
-                current_balance = int((user_res.data or [{}])[0].get("balance_kobo") or 0)
+    try:
+        tx_res = (
+            supabase.table("wallet_transactions")
+            .select("*")
+            .eq("reference", reference)
+            .limit(1)
+            .execute()
+        )
+        rows = tx_res.data or []
+        if not rows:
+            return jsonify({"status": "received"}), 200
 
-                supabase.table("users").update(
-                    {"balance_kobo": current_balance + amount_kobo}
-                ).eq("telegram_id", tx["user_id"]).execute()
+        tx = rows[0]
+        if tx.get("reason") == "wallet_funding":
+            return jsonify({"status": "received"}), 200
 
-                supabase.table("wallet_transactions").update(
-                    {"reason": "wallet_funding", "amount_kobo": amount_kobo}
-                ).eq("reference", reference).execute()
+        try:
+            paid_kobo = int(pdata.get("amount") or 0)
+        except (TypeError, ValueError):
+            paid_kobo = 0
+        if paid_kobo <= 0:
+            return jsonify({"status": "received"}), 200
 
-                authorization = data.get("authorization") or {}
-                if authorization.get("reusable"):
-                    _save_card_from_authorization(tx["user_id"], authorization)
+        new_balance = _credit_wallet_funding(tx, paid_kobo)
+        if new_balance is None:
+            return jsonify({"status": "received"}), 200
+
+        authorization = pdata.get("authorization") or {}
+        if authorization.get("reusable"):
+            try:
+                _save_card_from_authorization(tx["user_id"], authorization)
+            except Exception:
+                logging.exception("paystack_webhook: saving card failed for %s", reference)
+    except Exception:
+        logging.exception("paystack_webhook: processing failed for %s", reference)
+        return jsonify({"error": "Processing failed"}), 500
 
     return jsonify({"status": "received"}), 200
 
 
 # =============================================================================
-# Static frontend (single-service deployment) — must stay before error handlers
+# Account deletion (soft delete)
+# =============================================================================
+
+# PIN is for withdrawals + sensitive actions (delete account)
+@app.route("/api/account", methods=["DELETE"])
+@require_auth
+@limiter.limit("3 per hour")
+def account_delete(user):
+    tid = user["telegram_id"]
+    data = request.get_json(silent=True) or {}
+
+    user_res = (
+        supabase.table("users")
+        .select("balance_kobo,pin_hash,pin_fail_count,pin_locked_until,deleted_at")
+        .eq("telegram_id", tid)
+        .limit(1)
+        .execute()
+    )
+    rows = user_res.data or []
+    if not rows:
+        return jsonify({"error": "User not found"}), 404
+
+    u = rows[0]
+
+    if u.get("deleted_at"):
+        return jsonify({"error": "Account deleted", "code": "ACCOUNT_DELETED"}), 403
+
+    pin_hash = u.get("pin_hash")
+
+    if pin_hash:
+        remaining = _lock_seconds_remaining(u.get("pin_locked_until"))
+        if remaining > 0:
+            return jsonify({
+                "error": "Too many wrong PIN attempts. Try again later.",
+                "code": "RATE_LIMITED",
+                "retry_after": remaining,
+            }), 429
+
+    if int(u.get("balance_kobo") or 0) > 0:
+        return jsonify({
+            "error": "Withdraw your wallet balance before deleting your account.",
+            "code": "FUNDS_PENDING",
+        }), 409
+
+    try:
+        open_orders = (
+            supabase.table("escrow_orders")
+            .select("id")
+            .in_("status", ["held", "disputed"])
+            .or_(f"buyer_id.eq.{tid},seller_id.eq.{tid}")
+            .limit(1)
+            .execute()
+        )
+    except Exception:
+        # Fail closed: if we cannot prove there are no open orders, do not delete.
+        logging.exception("account_delete: escrow check failed for telegram_id=%s", tid)
+        return jsonify({"error": "Could not delete account. Please try again.", "code": "DELETE_FAILED"}), 500
+
+    if open_orders.data:
+        return jsonify({
+            "error": "You have open escrow orders. Complete or resolve them first.",
+            "code": "FUNDS_PENDING",
+        }), 409
+
+    if pin_hash:
+        pin = str(data.get("pin") or "")
+        if not re.fullmatch(r"\d{4}", pin):
+            return jsonify({"error": "A 4-digit PIN is required", "code": "PIN_REQUIRED"}), 400
+
+        try:
+            pin_ok = bcrypt.checkpw(pin.encode(), str(pin_hash).encode())
+        except ValueError:
+            pin_ok = False
+
+        if not pin_ok:
+            fails = int(u.get("pin_fail_count") or 0) + 1
+            if fails >= PIN_FAIL_LIMIT:
+                locked_until = (datetime.now(timezone.utc) + timedelta(minutes=PIN_LOCK_MINUTES)).isoformat()
+                supabase.table("users").update({
+                    "pin_fail_count": 0,
+                    "pin_locked_until": locked_until,
+                }).eq("telegram_id", tid).execute()
+                return jsonify({
+                    "error": "Too many wrong PIN attempts. Try again later.",
+                    "code": "RATE_LIMITED",
+                    "retry_after": PIN_LOCK_MINUTES * 60,
+                }), 429
+            supabase.table("users").update({"pin_fail_count": fails}).eq("telegram_id", tid).execute()
+            return jsonify({
+                "error": "Incorrect PIN",
+                "code": "PIN_INVALID",
+                "attempts_left": PIN_FAIL_LIMIT - fails,
+            }), 401
+
+        supabase.table("users").update({
+            "pin_fail_count": 0,
+            "pin_locked_until": None,
+        }).eq("telegram_id", tid).execute()
+    else:
+        if data.get("confirm") is not True:
+            return jsonify({"error": "Confirmation required", "code": "CONFIRM_REQUIRED"}), 400
+
+    # Hide the user's listings (both ownership columns are populated on insert).
+    supabase.table("products").update({"is_hidden": True}).eq("seller_id", str(tid)).execute()
+    supabase.table("products").update({"is_hidden": True}).eq("owner_id", str(tid)).execute()
+
+    # Soft delete + anonymize. first_name, last_name, username and all
+    # transactions are kept.
+    supabase.table("users").update({
+        "deleted_at": datetime.now(timezone.utc).isoformat(),
+        "email": "deleted_" + str(tid) + "@deleted.local",
+        "phone": "",
+        "account_name": "DELETED",
+    }).eq("telegram_id", tid).execute()
+
+    return jsonify(deleted=True), 200
+
+
+# =============================================================================
+# Frontend (index.html only)
 # =============================================================================
 
 @app.route("/", defaults={"path": ""})
@@ -1057,11 +1419,8 @@ def paystack_webhook():
 def serve_frontend(path):
     if path.startswith("api/"):
         abort(404)
-
-    full_path = os.path.join(app.root_path, path)
-    if path and os.path.isfile(full_path):
-        return send_from_directory(app.root_path, path)
-
+    if path and path != "index.html":
+        abort(404)
     return send_from_directory(app.root_path, "index.html")
 
 
@@ -1070,25 +1429,27 @@ def serve_frontend(path):
 # =============================================================================
 
 @app.errorhandler(404)
-def not_found(e):
+def handle_404(e):
     return jsonify({"error": "Not found"}), 404
 
 
 @app.errorhandler(429)
-def rate_limited(e):
+def handle_429(e):
     return jsonify({"error": "Too many requests", "code": "RATE_LIMITED"}), 429
 
 
 @app.errorhandler(500)
-def server_error(e):
-    logging.exception("Unhandled server error")
+def handle_500(e):
+    original = getattr(e, "original_exception", None) or e
+    logging.error("Unhandled server error: %s", original, exc_info=original)
     return jsonify({"error": "Internal server error"}), 500
 
 
 # =============================================================================
-# Entrypoint
+# Local entrypoint (production uses: gunicorn main:app)
 # =============================================================================
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+```
