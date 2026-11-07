@@ -1488,7 +1488,7 @@ function handlePinComplete(){
       renderPinHeader();
       updateDots();
       setPinError('PINs do not match. Try again.');
-    } els {  
+    } else {  
       submitNewPin(pin);
     }
   } else if (mode === 'withdraw') {
@@ -1512,7 +1512,7 @@ async function submitNewPin(pin){
     } else {
       pinModal.mode = 'set-new';
       pinModal.firstPin = ''; 
-      pinModal.valuel = '';     renderPinHeader();
+      pinModal.value = '';     renderPinHeader();
       updateDots();
       setPinError(r.data.error || 'Could not set PIN');
     }
