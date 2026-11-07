@@ -115,7 +115,7 @@ WITHDRAWAL_MIN_KOBO = 100000       # NGN 1000 minimum withdrawal
 PIN_FAIL_LIMIT = 5
 PIN_LOCK_MINUTES = 15
 
-ESCROW_HOLD_DAYS = 48
+ESCROW_HOLD_HOURS = 48
 
 ALLOWED_COVER_EXT = {"jpg", "jpeg", "png", "webp"}
 ALLOWED_PRODUCT_EXT = {"zip", "pdf", "mp4", "docx"}
