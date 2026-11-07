@@ -1511,8 +1511,7 @@ async function submitNewPin(pin){
       closePinModal();
     } else {
       pinModal.mode = 'set-new';
-      pinModal.firstPin = '';
-      pinModal.value = '';
+      pinModal.firstPin = ''days    pinModal.value = '';
       renderPinHeader();
       updateDots();
       setPinError(r.data.error || 'Could not set PIN');
@@ -1662,7 +1661,7 @@ const TERMS = [
   ['2. Your account', ['You sign in through Telegram. You are responsible for activity on your account and for keeping your withdrawal PIN secret.']],
   ['3. Listings', ['Sellers may list digital products they own or have the right to sell. Listings must be accurate and must not contain illegal, infringing or harmful content. We may hide listings that break these rules.']],
   ['4. Fees', ['PayLock charges a flat platform fee of ₦200 plus the payment processor fee. The combined fee is split equally between buyer and seller. The buyer pays the price plus their share, and the seller receives the price minus their share.']],
-  ['5. Escrow', ['When you buy a product, your payment is held in escrow for up to 3 days. The buyer can confirm delivery to release the funds to the seller earlier. If the buyer does nothing, funds are automatically released to the seller when the hold period ends, unless the order is disputed.']],
+  ['5. Escrow', ['When you buy a product, your payment is held in escrow for up to 48 hours (2 days). The buyer can confirm delivery to release the funds to the seller earlier. If the buyer does nothing, funds are automatically released to the seller when the hold period ends, unless the order is disputed.']],
   ['6. Wallet and withdrawals', ['Funds you add to your wallet can be used to buy products or withdrawn to your bank account. Withdrawals require your 4-digit PIN. Repeated wrong PIN entries lock withdrawals for 15 minutes.']],
   ['7. Refunds & Disputes', ['Tap Dispute on any held order to freeze escrow. Support via @PayLockOfficialBot. Fraudulent seller → blacklist + report + refund to buyer.']],
   ['8. Prohibited use', ['You may not use PayLock for fraud, money laundering, stolen content or any unlawful activity. We may suspend accounts that do.']],
