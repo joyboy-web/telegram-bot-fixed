@@ -1488,8 +1488,7 @@ function handlePinComplete(){
       renderPinHeader();
       updateDots();
       setPinError('PINs do not match. Try again.');
-    } else {
-      submitNewPin(pin);
+    } els''days    submitNewPin(pin);
     }
   } else if (mode === 'withdraw') {
     submitWithdrawalWithPin(pin);
@@ -1511,7 +1510,7 @@ async function submitNewPin(pin){
       closePinModal();
     } else {
       pinModal.mode = 'set-new';
-      pinModal.firstPin = ''days    pinModal.value = '';
+      pinModal.firstPin = '';   pinModal.value = '';
       renderPinHeader();
       updateDots();
       setPinError(r.data.error || 'Could not set PIN');
