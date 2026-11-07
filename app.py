@@ -1176,7 +1176,7 @@ def wallet_buy(user, product_id):
         return jsonify({"error": "Balance changed, please retry"}), 409
 
     reference = "ESC-" + uuid.uuid4().hex[:20]
-    release_at = (datetime.now(timezone.utc) + timedelta(days=ESCROW_HOLD_DAYS)).isoformat()
+    release_at = (datetime.now(timezone.utc) + timedelta(hours=ESCROW_HOLD_HOURS)).isoformat()
 
     tx_inserted = False
     try:
