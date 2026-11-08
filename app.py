@@ -1,5 +1,3 @@
-### FILE: app.py
-```python
 # =============================================================================
 # PayLock — Production Flask backend
 # Deploy: gunicorn main:app --bind 0.0.0.0:$PORT   (Procfile: web: gunicorn main:app)
@@ -663,9 +661,25 @@ def products_create(user):
     try:
         res = supabase.table("products").insert(insert_payload).execute()
         rows = res.data or []
-    except Exception:
-        logging.exception("products_create: insert failed for telegram_id=%s", tid)
-        return jsonify({"error": "Could not create product"}), 500
+    except Exception as exc:
+        # If the products table has no category column, the insert fails on that
+        # key alone. Retry once WITHOUT category so listings keep working.
+        if "category" in str(exc).lower():
+            logging.warning(
+                "products_create: insert failed on category column, retrying without category for telegram_id=%s",
+                tid,
+            )
+            fallback_payload = {k: v for k, v in insert_payload.items() if k != "category"}
+            try:
+                res = supabase.table("products").insert(fallback_payload).execute()
+                rows = res.data or []
+                insert_payload = fallback_payload
+            except Exception:
+                logging.exception("products_create: fallback insert (no category) failed for telegram_id=%s", tid)
+                return jsonify({"error": "Could not create product"}), 500
+        else:
+            logging.exception("products_create: insert failed for telegram_id=%s", tid)
+            return jsonify({"error": "Could not create product"}), 500
 
     return jsonify({"product": rows[0] if rows else insert_payload}), 201
 
@@ -961,7 +975,7 @@ def banks_resolve(user):
         logging.exception("banks_resolve: request to Paystack failed")
         return jsonify({"error": f"Could not reach Paystack: {exc}"}), 502
 
-    logging.info("banks_resolve: Paystack response http=%s body=%s", ps_res.status_code, body)
+    logging.info("banks_resolve: http=%s status=%s", ps_res.status_code, body.get("status"))
 
     if not body.get("status"):
         return jsonify({"error": body.get("message") or "Could not resolve account"}), 400
@@ -973,6 +987,60 @@ def banks_resolve(user):
 # =============================================================================
 # Wallet — withdrawals
 # =============================================================================
+
+# Transfer recipients already created in this process, keyed by
+# (telegram_id, bank_code, account_number). In-process only: it resets on
+# restart and is not shared across gunicorn workers.
+_RECIPIENT_CACHE = {}
+
+# Paystack transfer statuses that mean the money will NOT be sent.
+_TRANSFER_FAILED_STATUSES = {"failed", "reversed", "rejected", "blocked", "abandoned"}
+
+
+def _paystack_post(path, payload):
+    """POSTs JSON to Paystack. Returns (http_status, body_dict)."""
+    ps_res = requests.post(
+        f"{PAYSTACK_BASE}{path}",
+        headers=PAYSTACK_HEADERS,
+        json=payload,
+        timeout=30,
+    )
+    try:
+        body = ps_res.json()
+    except ValueError:
+        body = {}
+    return ps_res.status_code, body
+
+
+def _get_recipient_code(tid, bank_code, account_number, account_name):
+    """
+    Returns a Paystack transfer recipient_code for this user + account, reusing
+    one created earlier in this process instead of creating a duplicate.
+    Raises RuntimeError if Paystack does not return a recipient.
+    """
+    key = (int(tid), bank_code, account_number)
+    cached = _RECIPIENT_CACHE.get(key)
+    if cached:
+        return cached
+
+    http_status, body = _paystack_post("/transferrecipient", {
+        "type": "nuban",
+        "name": account_name,
+        "account_number": account_number,
+        "bank_code": bank_code,
+        "currency": "NGN",
+    })
+    code = (body.get("data") or {}).get("recipient_code")
+    logging.info(
+        "wallet_withdraw: transferrecipient http=%s status=%s",
+        http_status, body.get("status"),
+    )
+    if not body.get("status") or not code:
+        raise RuntimeError(f"Paystack transferrecipient failed: {body.get('message')}")
+
+    _RECIPIENT_CACHE[key] = code
+    return code
+
 
 @app.route("/api/wallet/withdraw", methods=["POST"])
 @require_auth
@@ -1066,7 +1134,9 @@ def wallet_withdraw(user):
     if not debit.data:
         return jsonify({"error": "Balance changed, please retry"}), 409
 
-    reference = "WD-" + uuid.uuid4().hex[:20]
+    # Paystack requires transfer references to be lowercase letters, digits,
+    # "-" or "_" (16-50 chars), so the reference is generated lowercase.
+    reference = "wd-" + uuid.uuid4().hex[:20]
 
     # Balance is now debited. If either insert fails, revert the debit before
     # returning the error so no money is lost.
@@ -1104,6 +1174,56 @@ def wallet_withdraw(user):
                 logging.exception("wallet_withdraw: could not remove orphan transaction %s", reference)
         return jsonify({"error": "Withdrawal could not be created. Your balance was not changed."}), 500
 
+    # Debit + both rows exist. Now actually pay the user through Paystack.
+    transfer_status = "pending"
+    try:
+        recipient_code = _get_recipient_code(tid, bank_code, account_number, account_name)
+
+        http_status, body = _paystack_post("/transfer", {
+            "source": "balance",
+            "amount": amount_kobo,
+            "recipient": recipient_code,
+            "reference": reference,
+            "reason": "PayLock withdrawal",
+        })
+        logging.info(
+            "wallet_withdraw: transfer http=%s status=%s reference=%s",
+            http_status, body.get("status"), reference,
+        )
+        if not body.get("status"):
+            raise RuntimeError(f"Paystack transfer failed: {body.get('message')}")
+
+        transfer_status = str((body.get("data") or {}).get("status") or "pending").lower()
+        if transfer_status in _TRANSFER_FAILED_STATUSES:
+            raise RuntimeError(f"Paystack transfer returned status={transfer_status}")
+    except Exception:
+        logging.exception(
+            "wallet_withdraw: Paystack payout failed, reverting for telegram_id=%s reference=%s",
+            tid, reference,
+        )
+        # A stale cached recipient must not be reused on the next attempt.
+        _RECIPIENT_CACHE.pop((int(tid), bank_code, account_number), None)
+        try:
+            _restore_balance(tid, amount_kobo)
+        except Exception:
+            logging.exception("wallet_withdraw: CRITICAL balance revert failed for telegram_id=%s amount=%s", tid, amount_kobo)
+        try:
+            supabase.table("wallet_transactions").delete().eq("reference", reference).execute()
+        except Exception:
+            logging.exception("wallet_withdraw: could not remove orphan transaction %s", reference)
+        try:
+            supabase.table("withdrawals").delete().eq("reference", reference).execute()
+        except Exception:
+            logging.exception("wallet_withdraw: could not remove orphan withdrawal %s", reference)
+        return jsonify({"error": "Withdrawal could not be created. Your balance was not changed."}), 500
+
+    # Transfer accepted by Paystack: record its status. Never revert from here,
+    # the money is already on its way.
+    try:
+        supabase.table("withdrawals").update({"status": transfer_status}).eq("reference", reference).execute()
+    except Exception:
+        logging.exception("wallet_withdraw: could not update withdrawal status for %s", reference)
+
     return jsonify({
         "status": "success",
         "reference": reference,
@@ -1138,33 +1258,36 @@ def wallet_buy(user, product_id):
 
     prod_res = (
         supabase.table("products")
-        .select("id,name,price_kobo,buyer_pays_kobo,seller_gets_kobo,platform_fee_kobo,seller_id,is_hidden")
+        .select("id,seller_id,price_kobo,buyer_pays_kobo,seller_gets_kobo,platform_fee_kobo,is_hidden")
         .eq("id", product_id)
         .limit(1)
         .execute()
     )
-    rows = prod_res.data or []
-    if not rows:
-        return jsonify({"error": "Product not found"}), 404
+    prod_rows = prod_res.data or []
+    if not prod_rows:
+        return jsonify({"error": "Product not found", "code": "PRODUCT_NOT_FOUND"}), 404
 
-    product = rows[0]
+    product = prod_rows[0]
     if product.get("is_hidden"):
         return jsonify({"error": "Product is no longer available", "code": "PRODUCT_UNAVAILABLE"}), 410
 
     if str(product.get("seller_id")) == str(tid):
         return jsonify({"error": "You cannot buy your own product"}), 400
 
+    try:
+        seller_id_int = int(product.get("seller_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Product has no valid seller"}), 400
+
     buyer_pays = int(product.get("buyer_pays_kobo") or 0)
-    seller_gets = int(product.get("seller_gets_kobo") or 0)
     if buyer_pays <= 0:
         return jsonify({"error": "Product price is invalid"}), 400
 
-    bal_res = supabase.table("users").select("balance_kobo").eq("telegram_id", tid).limit(1).execute()
-    bal_rows = bal_res.data or []
-    balance = int(bal_rows[0].get("balance_kobo") or 0) if bal_rows else 0
+    balance = int(user.get("balance_kobo") or 0)
     if balance < buyer_pays:
         return jsonify({"error": "Insufficient balance", "code": "INSUFFICIENT_BALANCE"}), 400
 
+    # Debit (guarded so a concurrent balance change cannot be overwritten).
     debit = (
         supabase.table("users")
         .update({"balance_kobo": balance - buyer_pays})
@@ -1178,7 +1301,8 @@ def wallet_buy(user, product_id):
     reference = "ESC-" + uuid.uuid4().hex[:20]
     release_at = (datetime.now(timezone.utc) + timedelta(hours=ESCROW_HOLD_HOURS)).isoformat()
 
-    tx_inserted = False
+    # Balance is now debited. On any failure below, revert the debit and remove
+    # the orphan wallet transaction before returning the error.
     try:
         supabase.table("wallet_transactions").insert({
             "user_id": tid,
@@ -1187,20 +1311,20 @@ def wallet_buy(user, product_id):
             "reason": "escrow_purchase",
             "reference": reference,
         }).execute()
-        tx_inserted = True
 
-        order_res = supabase.table("escrow_orders").insert({
+        order_payload = {
             "product_id": product.get("id"),
             "buyer_id": int(tid),
-            "seller_id": int(product.get("seller_id")),
+            "seller_id": seller_id_int,
             "price_kobo": int(product.get("price_kobo") or 0),
             "buyer_pays_kobo": buyer_pays,
-            "seller_gets_kobo": seller_gets,
+            "seller_gets_kobo": int(product.get("seller_gets_kobo") or 0),
             "platform_fee_kobo": int(product.get("platform_fee_kobo") or PLATFORM_FEE_KOBO),
             "status": "held",
             "reference": reference,
             "release_at": release_at,
-        }).execute()
+        }
+        order_res = supabase.table("escrow_orders").insert(order_payload).execute()
         order_rows = order_res.data or []
     except Exception:
         logging.exception("wallet_buy: failed after debit, reverting balance for telegram_id=%s", tid)
@@ -1208,22 +1332,21 @@ def wallet_buy(user, product_id):
             _restore_balance(tid, buyer_pays)
         except Exception:
             logging.exception("wallet_buy: CRITICAL balance revert failed for telegram_id=%s amount=%s", tid, buyer_pays)
-        if tx_inserted:
-            try:
-                supabase.table("wallet_transactions").delete().eq("reference", reference).execute()
-            except Exception:
-                logging.exception("wallet_buy: could not remove orphan transaction %s", reference)
+        try:
+            supabase.table("wallet_transactions").delete().eq("reference", reference).execute()
+        except Exception:
+            logging.exception("wallet_buy: could not remove orphan transaction %s", reference)
         return jsonify({"error": "Purchase failed. Your balance was not changed."}), 500
 
     return jsonify({
         "status": "success",
         "reference": reference,
-        "order": order_rows[0] if order_rows else None,
+        "order": order_rows[0] if order_rows else order_payload,
     }), 201
 
 
 # =============================================================================
-# Paystack webhook
+# Paystack webhook (NO auth decorator — authenticated by HMAC signature)
 # =============================================================================
 
 @app.route("/api/webhook/paystack", methods=["POST"])
@@ -1234,24 +1357,24 @@ def paystack_webhook():
 
     raw_body = request.get_data()
     signature = request.headers.get("x-paystack-signature", "")
-    expected = hmac.new(PAYSTACK_SECRET_KEY.encode(), raw_body, hashlib.sha512).hexdigest()
-    if not signature or not hmac.compare_digest(expected, signature):
+    computed = hmac.new(PAYSTACK_SECRET_KEY.encode(), raw_body, hashlib.sha512).hexdigest()
+    if not hmac.compare_digest(computed, signature):
         return jsonify({"error": "Invalid signature"}), 401
 
     try:
-        event = json.loads(raw_body.decode("utf-8") or "{}")
-    except (ValueError, UnicodeDecodeError):
+        event = json.loads(raw_body)
+    except (TypeError, ValueError):
         return jsonify({"error": "Invalid payload"}), 400
 
     if event.get("event") != "charge.success":
         return jsonify({"status": "received"}), 200
 
-    pdata = event.get("data") or {}
-    reference = pdata.get("reference")
-    if not reference:
-        return jsonify({"status": "received"}), 200
-
     try:
+        pdata = event.get("data") or {}
+        reference = str(pdata.get("reference") or "").strip()
+        if not reference:
+            return jsonify({"status": "received"}), 200
+
         tx_res = (
             supabase.table("wallet_transactions")
             .select("*")
@@ -1259,11 +1382,11 @@ def paystack_webhook():
             .limit(1)
             .execute()
         )
-        rows = tx_res.data or []
-        if not rows:
+        tx_rows = tx_res.data or []
+        if not tx_rows:
             return jsonify({"status": "received"}), 200
 
-        tx = rows[0]
+        tx = tx_rows[0]
         if tx.get("reason") == "wallet_funding":
             return jsonify({"status": "received"}), 200
 
@@ -1285,17 +1408,16 @@ def paystack_webhook():
             except Exception:
                 logging.exception("paystack_webhook: saving card failed for %s", reference)
     except Exception:
-        logging.exception("paystack_webhook: processing failed for %s", reference)
+        logging.exception("paystack_webhook: processing failed")
         return jsonify({"error": "Processing failed"}), 500
 
     return jsonify({"status": "received"}), 200
 
 
 # =============================================================================
-# Account deletion (soft delete)
+# Account deletion
 # =============================================================================
 
-# PIN is for withdrawals + sensitive actions (delete account)
 @app.route("/api/account", methods=["DELETE"])
 @require_auth
 @limiter.limit("3 per hour")
@@ -1313,7 +1435,6 @@ def account_delete(user):
     rows = user_res.data or []
     if not rows:
         return jsonify({"error": "User not found"}), 404
-
     u = rows[0]
 
     if u.get("deleted_at"):
@@ -1330,14 +1451,16 @@ def account_delete(user):
                 "retry_after": remaining,
             }), 429
 
-    if int(u.get("balance_kobo") or 0) > 0:
+    balance = int(u.get("balance_kobo") or 0)
+    if balance > 0:
         return jsonify({
             "error": "Withdraw your wallet balance before deleting your account.",
             "code": "FUNDS_PENDING",
         }), 409
 
+    # Fail-closed: if open escrow cannot be verified, do not delete.
     try:
-        open_orders = (
+        open_res = (
             supabase.table("escrow_orders")
             .select("id")
             .in_("status", ["held", "disputed"])
@@ -1345,12 +1468,12 @@ def account_delete(user):
             .limit(1)
             .execute()
         )
+        has_open_escrow = bool(open_res.data)
     except Exception:
-        # Fail closed: if we cannot prove there are no open orders, do not delete.
         logging.exception("account_delete: escrow check failed for telegram_id=%s", tid)
         return jsonify({"error": "Could not delete account. Please try again.", "code": "DELETE_FAILED"}), 500
 
-    if open_orders.data:
+    if has_open_escrow:
         return jsonify({
             "error": "You have open escrow orders. Complete or resolve them first.",
             "code": "FUNDS_PENDING",
@@ -1394,24 +1517,31 @@ def account_delete(user):
         if data.get("confirm") is not True:
             return jsonify({"error": "Confirmation required", "code": "CONFIRM_REQUIRED"}), 400
 
-    # Hide the user's listings (both ownership columns are populated on insert).
-    supabase.table("products").update({"is_hidden": True}).eq("seller_id", str(tid)).execute()
-    supabase.table("products").update({"is_hidden": True}).eq("owner_id", str(tid)).execute()
+    # Hide the user's products by BOTH seller_id and owner_id.
+    try:
+        supabase.table("products").update({"is_hidden": True}).eq("seller_id", str(tid)).execute()
+        supabase.table("products").update({"is_hidden": True}).eq("owner_id", str(tid)).execute()
+    except Exception:
+        logging.exception("account_delete: hiding products failed for telegram_id=%s", tid)
+        return jsonify({"error": "Account could not be deleted. Please try again.", "code": "DELETE_FAILED"}), 500
 
-    # Soft delete + anonymize. first_name, last_name, username and all
-    # transactions are kept.
-    supabase.table("users").update({
-        "deleted_at": datetime.now(timezone.utc).isoformat(),
-        "email": "deleted_" + str(tid) + "@deleted.local",
-        "phone": "",
-        "account_name": "DELETED",
-    }).eq("telegram_id", tid).execute()
+    # Soft-delete + anonymize.
+    try:
+        supabase.table("users").update({
+            "deleted_at": datetime.now(timezone.utc).isoformat(),
+            "email": "deleted_" + str(tid) + "@deleted.local",
+            "phone": "",
+            "account_name": "DELETED",
+        }).eq("telegram_id", tid).execute()
+    except Exception:
+        logging.exception("account_delete: soft-delete failed for telegram_id=%s", tid)
+        return jsonify({"error": "Account could not be deleted. Please try again.", "code": "DELETE_FAILED"}), 500
 
-    return jsonify(deleted=True), 200
+    return jsonify({"deleted": True}), 200
 
 
 # =============================================================================
-# Frontend (index.html only)
+# Frontend (serves ONLY index.html)
 # =============================================================================
 
 @app.route("/", defaults={"path": ""})
@@ -1440,16 +1570,12 @@ def handle_429(e):
 
 @app.errorhandler(500)
 def handle_500(e):
-    original = getattr(e, "original_exception", None) or e
-    logging.error("Unhandled server error: %s", original, exc_info=original)
+    original = getattr(e, "original_exception", None)
+    logging.error("Internal server error: %r", original or e, exc_info=original)
     return jsonify({"error": "Internal server error"}), 500
 
 
-# =============================================================================
-# Local entrypoint (production uses: gunicorn main:app)
-# =============================================================================
-
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT") or 5000)
     app.run(host="0.0.0.0", port=port)
 ```
