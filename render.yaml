@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: paylock
+    runtime: python
+    # Starter or higher keeps the process awake so the auto-release worker keeps running
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: GUNICORN_CMD_ARGS
+        value: --timeout 120
+      - key: BOT_TOKEN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
