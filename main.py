@@ -37,7 +37,7 @@ def products_list_fixed():
         res = (
             supabase.table("products")
             .select(PRODUCT_COLUMNS)
-            .eq("is_hidden", False)
+            .eq(" ", False)
             .order("created_at", desc=True)
             .limit(200)
             .execute()
