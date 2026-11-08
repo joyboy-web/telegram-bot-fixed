@@ -54,25 +54,6 @@ app.view_functions["products_list"] = products_list_fixed
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-def _current_tid():
-    """Telegram ID of the authenticated user, set by require_auth (as int or None)."""
-    for name in ("user", "tg_user", "telegram_user", "current_user"):
-        u = getattr(request, name, None)
-        if isinstance(u, dict) and u.get("telegram_id") is not None:
-            try:
-                return int(u["telegram_id"])
-            except (TypeError, ValueError):
-                pass
-    for name in ("telegram_id", "user_id", "tg_id"):
-        v = getattr(request, name, None)
-        if v is not None:
-            try:
-                return int(v)
-            except (TypeError, ValueError):
-                pass
-    return None
-
-
 def _find_order(order_ref):
     """Look an escrow order up by id, falling back to reference."""
     try:
@@ -98,14 +79,10 @@ def _credit_seller(order):
             return
     seller_id = order["seller_id"]
     amount = int(order["seller_gets_kobo"])
-    # wallet_buy puts the FULL buyer_pays amount into the seller's held balance,
-    # so release must subtract buyer_pays_kobo from held (not seller_gets_kobo).
-    held_amount = int(order.get("buyer_pays_kobo") or amount)
-    user_res = supabase.table("users").select("balance_kobo,held_kobo").eq("telegram_id", seller_id).limit(1).execute()
+    user_res = supabase.table("users").select("balance_kobo").eq("telegram_id", seller_id).limit(1).execute()
     rows = user_res.data or []
     current_balance = int(rows[0].get("balance_kobo") or 0) if rows else 0
-    current_held = int(rows[0].get("held_kobo") or 0) if rows else 0
-    supabase.table("users").update({"balance_kobo": current_balance + amount, "held_kobo": max(0, current_held - held_amount)}).eq("telegram_id", seller_id).execute()
+    supabase.table("users").update({"balance_kobo": current_balance + amount}).eq("telegram_id", seller_id).execute()
     supabase.table("wallet_transactions").insert({"user_id": seller_id, "type": "credit", "amount_kobo": amount, "reason": "escrow_release", "reference": order.get("reference")}).execute()
 
 
@@ -115,7 +92,7 @@ def _credit_seller(order):
 @app.route("/api/escrow/confirm", methods=["POST"])
 @require_auth
 @limiter.limit("20 per minute")
-def escrow_confirm():
+def escrow_confirm(user):
     data = request.get_json(silent=True) or {}
     order_ref = data.get("order_id") or data.get("id") or data.get("reference")
     if not order_ref:
@@ -125,9 +102,9 @@ def escrow_confirm():
     if not order:
         return jsonify({"error": "Order not found"}), 404
 
-    tid = _current_tid()
+    tid = user["telegram_id"]
     try:
-        is_buyer = tid is not None and int(order.get("buyer_id")) == int(tid)
+        is_buyer = int(order.get("buyer_id")) == int(tid)
     except (TypeError, ValueError):
         is_buyer = False
     if not is_buyer:
@@ -166,7 +143,7 @@ def escrow_confirm():
 @app.route("/api/escrow/dispute", methods=["POST"])
 @require_auth
 @limiter.limit("20 per minute")
-def escrow_dispute():
+def escrow_dispute(user):
     data = request.get_json(silent=True) or {}
     order_ref = data.get("order_id") or data.get("id")
     reason = str(data.get("reason") or data.get("dispute_reason") or "").strip()
@@ -177,13 +154,13 @@ def escrow_dispute():
     if not order:
         return jsonify({"error": "Order not found"}), 404
 
-    tid = _current_tid()
+    tid = user["telegram_id"]
     try:
-        is_buyer = tid is not None and int(order.get("buyer_id")) == int(tid)
+        is_buyer = int(order.get("buyer_id")) == int(tid)
     except (TypeError, ValueError):
         is_buyer = False
     try:
-        is_seller = tid is not None and int(order.get("seller_id")) == int(tid)
+        is_seller = int(order.get("seller_id")) == int(tid)
     except (TypeError, ValueError):
         is_seller = False
     if not (is_buyer or is_seller):
@@ -209,10 +186,8 @@ def escrow_dispute():
 # ---------------------------------------------------------------------------
 @app.route("/api/escrow/list", methods=["GET"])
 @require_auth
-def escrow_list():
-    tid = _current_tid()
-    if tid is None:
-        return jsonify({"orders": []}), 200
+def escrow_list(user):
+    tid = user["telegram_id"]
     try:
         res = (
             supabase.table("escrow_orders")
