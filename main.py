@@ -44,7 +44,6 @@ def products_list_fixed():
             .limit(200)
             .execute()
         )
-  
         return jsonify({"products": res.data or []}), 200
     except Exception:
         logging.exception("products_list_fixed failed")
