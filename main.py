@@ -24,8 +24,10 @@ logging.basicConfig(level=logging.INFO)
 AUTO_RELEASE_INTERVAL_SECONDS = 5 * 60
 
 PRODUCT_COLUMNS = (
-    "id,name,description,price_kobo,buyer_pays_kobo,seller_gets_kobo,"
-    "image_url,file_url,seller_id,created_at,category"
+   "id,name,title,description,price,price_kobo,buyer_pays_kobo,"
+    "seller_gets_kobo,image_url,file_url,seller_id,owner_id,"
+    "created_at,category"
+) 
 )
 
 
@@ -37,10 +39,12 @@ def products_list_fixed():
         res = (
             supabase.table("products")
             .select(PRODUCT_COLUMNS)
+            .eq("is_hidden", False)
             .order("created_at", desc=True)
             .limit(200)
             .execute()
         )
+  
         return jsonify({"products": res.data or []}), 200
     except Exception:
         logging.exception("products_list_fixed failed")
