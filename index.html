@@ -176,6 +176,24 @@ h1,h2,h3,p{margin:0}
 .gate .btn{width:auto;min-width:180px;text-decoration:none}
 .spinner{width:38px;height:38px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--ink);animation:spin 0.8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===== CHAT ===== */
+#chat-product{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px}
+#chat-messages{display:flex;flex-direction:column;gap:8px;max-height:46vh;overflow-y:auto;margin-bottom:12px;padding:2px}
+.chat-msg{max-width:85%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.4;word-break:break-word;white-space:pre-wrap}
+.chat-msg-user{align-self:flex-end;background:var(--ink);color:var(--bg);border-bottom-right-radius:4px}
+.chat-msg-paylock{align-self:flex-start;background:var(--chip);color:var(--ink);border-bottom-left-radius:4px}
+.chat-msg-system{align-self:center;background:transparent;border:1px solid var(--line);color:var(--muted);font-size:12.5px;text-align:center}
+.chat-actions{display:flex;gap:8px;margin:12px 0}
+.chat-actions .btn{flex:1}
+.chat-inputbar{display:flex;gap:8px;align-items:center}
+#chat-input{flex:1;min-width:0}
+#chat-send{flex:none}
+
+/* ===== BLOCK E - RATING (new classes only) ===== */
+.rate-box { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); font-size: 14px; font-weight: 600; }
+.rate-star { background: none; border: 0; padding: 0 4px; font-size: 30px; line-height: 1.2; cursor: pointer; color: var(--muted); }
+.rate-star:disabled { cursor: default; }
 </style>
 </head>
 <body>
@@ -348,7 +366,30 @@ h1,h2,h3,p{margin:0}
   <!-- ============ CHAT ============ -->
   <section class="page" id="pg-chat">
     <h2 class="page-title">Chat</h2>
-    <div class="empty"><div class="big">No conversations yet</div></div>
+    <div class="empty" id="chat-empty"><div class="big">No conversations yet</div></div>
+    <div id="chat-root" style="display:none">
+      <div id="chat-product"></div>
+      <div id="chat-messages"></div>
+      <div id="ratingBox" class="rate-box" style="display:none">
+        <div id="rating-label">Rate this seller:</div>
+        <div id="rating-stars">
+          <button type="button" class="rate-star" id="star-1">&#9734;</button>
+          <button type="button" class="rate-star" id="star-2">&#9734;</button>
+          <button type="button" class="rate-star" id="star-3">&#9734;</button>
+          <button type="button" class="rate-star" id="star-4">&#9734;</button>
+          <button type="button" class="rate-star" id="star-5">&#9734;</button>
+        </div>
+      </div>
+      <div class="chat-actions">
+        <button class="btn" type="button" id="chat-buy-btn">Buy now</button>
+        <button class="btn" type="button" id="chat-confirm-btn" style="display:none">Confirm Delivery</button>
+        <button class="btn secondary" type="button" id="chat-dispute-btn" style="display:none">Dispute</button>
+      </div>
+      <div class="chat-inputbar">
+        <input class="input" id="chat-input" type="text" maxlength="500" autocomplete="off" placeholder="Type a message">
+        <button class="btn sm" type="button" id="chat-send">Send</button>
+      </div>
+    </div>
   </section>
 
   <!-- ============ BUY ============ -->
@@ -631,6 +672,7 @@ function el(tag, cls, text){
   return e;
 }
 function clearNode(n){ while (n.firstChild) n.removeChild(n.firstChild); }
+
 function svgIcon(paths, size){
   const s = document.createElementNS(SVGNS, 'svg');
   s.setAttribute('viewBox', '0 0 24 24');
@@ -837,7 +879,7 @@ function renderProductGrid(gridId, emptyId, list){
     card.appendChild(el('div', 'pprice', nairaFmt(p.buyer_pays_kobo)));
     const btn = el('button', 'btn sm', 'Buy');
     btn.type = 'button';
-    btn.addEventListener('click', function(){ buyProduct(p.id, btn); });
+    btn.addEventListener('click', function(){ openChat(p); });
     card.appendChild(btn);
     grid.appendChild(card);
   });
@@ -1708,6 +1750,447 @@ async function boot(){
   }
 }
 
+/* ===================== CHAT ===================== */
+const chatState = { product:null, messages:[], stage:'ask', orderId:null, busy:false, waitingComplaint:false, waitingOrderId:null, pendingStars:0, complaintText:null, ratingBusy:false };
+
+function chatPush(role, text){
+  chatState.messages.push({ role: role, text: String(text) });
+  renderChatMessages();
+}
+
+async function chatFetchOrders(){
+  try {
+    const r = await api('/api/escrow/list', { headers: getAuthHeader() });
+    return (r.res.ok && Array.isArray(r.data.orders)) ? r.data.orders : [];
+  } catch(e){ return []; }
+}
+
+function openChat(product){
+  // product == null: no message pushed, no state reset, just render + navigate
+  if(!product){ renderChatMessages(); goPage('pg-chat'); return; }
+
+  // same product with messages already in memory: do not reset
+  if(chatState.product && String(chatState.product.id)===String(product.id) && chatState.messages.length>0){
+    renderChatMessages(); goPage('pg-chat'); return;
+  }
+
+  // 4.5: nothing in memory for this product, try localStorage first
+  let saved = null;
+  try {
+    const raw = localStorage.getItem('paylock_chat_' + product.id);
+    if(raw) saved = JSON.parse(raw);
+  } catch(e){ saved = null; }
+
+  if(saved && Array.isArray(saved.messages)){
+    const okRoles = { paylock:1, user:1, system:1 };
+    const okStages = { ask:1, paid:1, done:1, seller:1 };
+    const msgs = saved.messages.filter(function(m){
+      return m && okRoles[m.role] && typeof m.text === 'string';
+    });
+    if(msgs.length > 0){
+      chatState.product = product;
+      chatState.messages = msgs;
+      chatState.stage = okStages[saved.stage] ? saved.stage : 'ask';
+      chatState.orderId = (saved.orderId !== undefined) ? saved.orderId : null;
+      chatState.busy = false;
+      renderChatMessages(); goPage('pg-chat'); return;
+    }
+  }
+
+  // fresh chat
+  chatState.product = product;
+  chatState.messages = [];
+  chatState.stage = 'ask';
+  chatState.orderId = null;
+  chatState.busy = false;
+
+  // 4.6: seller of this product?
+  const sid = (product.seller_id !== undefined && product.seller_id !== null) ? product.seller_id : product.owner_id;
+  const isSeller = (sid !== undefined && sid !== null && state.telegram_id !== undefined && state.telegram_id !== null)
+                   && String(sid) === String(state.telegram_id);
+
+  if(isSeller){
+    chatState.stage = 'seller';
+    chatPush('paylock', "A buyer is interested in your product.");
+  } else {
+    chatPush('paylock', "Do you want to continue the purchase of this product? Reply with 'yes' to continue.");
+  }
+  renderChatMessages();
+  goPage('pg-chat');
+}
+
+function renderChatMessages(){
+  const emptyEl = document.getElementById('chat-empty');
+  const rootEl = document.getElementById('chat-root');
+  if(!chatState.product){
+    if(emptyEl) emptyEl.style.display = '';
+    if(rootEl) rootEl.style.display = 'none';
+    return;
+  }
+  if(emptyEl) emptyEl.style.display = 'none';
+  if(rootEl) rootEl.style.display = '';
+
+  const p = chatState.product;
+  const card = document.getElementById('chat-product');
+  while(card.firstChild) card.removeChild(card.firstChild);
+  const nameEl = document.createElement('div');
+  nameEl.style.fontWeight = '700';
+  nameEl.textContent = p.title || p.name || p.product_name || 'Product';
+  const priceEl = document.createElement('div');
+  priceEl.style.color = 'var(--muted)';
+  priceEl.textContent = nairaFmt(p.buyer_pays_kobo || p.price_kobo || 0);
+  card.appendChild(nameEl);
+  card.appendChild(priceEl);
+
+  const box = document.getElementById('chat-messages');
+  while(box.firstChild) box.removeChild(box.firstChild);
+  chatState.messages.forEach(function(m){
+    const d = document.createElement('div');
+    d.className = 'chat-msg chat-msg-' + m.role;
+    d.textContent = m.text;
+    box.appendChild(d);
+  });
+
+  document.getElementById('chat-buy-btn').style.display = (chatState.stage === 'ask') ? '' : 'none';
+  document.getElementById('chat-confirm-btn').style.display = (chatState.stage === 'paid') ? '' : 'none';
+  document.getElementById('chat-dispute-btn').style.display = (chatState.stage === 'paid') ? '' : 'none';
+
+  try { if(box.lastChild) box.lastChild.scrollIntoView({ block: 'end' }); } catch(e){}
+
+  chatSave();
+  chatPoll();
+  renderRatingBox();
+}
+
+function chatSave(){
+  try {
+    if(!chatState.product) return;
+    localStorage.setItem('paylock_chat_' + chatState.product.id, JSON.stringify({
+      product: chatState.product,
+      messages: chatState.messages,
+      stage: chatState.stage,
+      orderId: chatState.orderId
+    }));
+  } catch(e){}
+}
+
+let chatPollTimer = null;
+
+function chatPoll(){
+  const needed = !!(chatState.product && chatState.orderId && chatState.stage !== 'done');
+  if(!needed){
+    if(chatPollTimer){ clearInterval(chatPollTimer); chatPollTimer = null; }
+    return;
+  }
+  if(chatPollTimer) return;
+
+  chatPollTimer = setInterval(async function(){
+    const pg = document.getElementById('pg-chat');
+    if(!pg || !pg.classList.contains('active') || !chatState.orderId || chatState.stage === 'done'){
+      clearInterval(chatPollTimer); chatPollTimer = null; return;
+    }
+    if(chatState.busy) return;
+
+    const watchedId = chatState.orderId;
+    const list = await chatFetchOrders();
+
+    if(chatState.busy || chatState.stage === 'done' || String(chatState.orderId) !== String(watchedId)) return;
+
+    const o = list.filter(function(x){ return String(x.id) === String(watchedId); })[0];
+    if(!o) return;
+
+    if(o.status === 'released'){
+      chatState.stage = 'done';
+      chatPush('system', "Seller has been paid");
+      clearInterval(chatPollTimer); chatPollTimer = null;
+      renderChatMessages();
+    } else if(o.status === 'disputed'){
+      chatState.stage = 'done';
+      chatPush('system', "Dispute opened - escrow frozen");
+      clearInterval(chatPollTimer); chatPollTimer = null;
+      renderChatMessages();
+    }
+  }, 10000);
+}
+
+/* ===================== BLOCK E - RATING ALONE ===================== */
+const ratingReleased = {};   // orderId -> true/false (cache of the "is released" check)
+const ratingChecking = {};   // orderId -> true while a check is in flight
+let ratingWired = false;
+
+// private helper: fill stars up to n in #FFC107
+const ratingFill = function(n){
+  const btns = document.querySelectorAll('#rating-stars .rate-star');
+  btns.forEach(function(b, i){
+    b.textContent = (i < n) ? '\u2605' : '\u2606';
+    b.style.color = (i < n) ? '#FFC107' : '';
+  });
+};
+
+function renderRatingBox(){
+  const box = document.getElementById('ratingBox');
+  if(!box) return;
+  const label = document.getElementById('rating-label');
+  const wrap = document.getElementById('rating-stars');
+  const p = chatState.product;
+  box.style.display = 'none';
+
+  // only: pg-chat product, an order, stage 'done'
+  if(!p || !chatState.orderId || chatState.stage !== 'done') return;
+
+  // buyer only (same check as 4.6)
+  const sid = (p.seller_id !== undefined && p.seller_id !== null) ? p.seller_id : p.owner_id;
+  const isSeller = (sid !== undefined && sid !== null && state.telegram_id !== undefined && state.telegram_id !== null)
+                   && String(sid) === String(state.telegram_id);
+  if(isSeller) return;
+
+  // only when the order is 'released' (stage 'done' is also used for disputed)
+  const oid = String(chatState.orderId);
+  if(ratingReleased[oid] !== true){
+    if(ratingReleased[oid] === undefined && !ratingChecking[oid]){
+      ratingChecking[oid] = true;
+      chatFetchOrders().then(function(list){
+        ratingChecking[oid] = false;
+        if(!list || list.length === 0) return;   // network blip: retry on a later render, no loop
+        const o = list.filter(function(x){ return String(x.id) === oid; })[0];
+        ratingReleased[oid] = !!(o && o.status === 'released');
+        renderRatingBox();
+      }).catch(function(){ ratingChecking[oid] = false; });
+    }
+    return;
+  }
+
+  // wire the stars once
+  if(!ratingWired){
+    ratingWired = true;
+    wrap.querySelectorAll('.rate-star').forEach(function(b, i){
+      const n = i + 1;
+      b.addEventListener('mouseover', function(){ if(!b.disabled) ratingFill(n); });
+      b.addEventListener('mouseout', function(){
+        if(!b.disabled) ratingFill(chatState.waitingComplaint ? (chatState.pendingStars || 0) : 0);
+      });
+      b.addEventListener('click', function(){
+        if(b.disabled) return;
+        ratingFill(n);
+        wrap.querySelectorAll('.rate-star').forEach(function(x){ x.disabled = true; });
+        submitRating(n);
+      });
+    });
+  }
+
+  box.style.display = '';
+
+  // already rated: text only, no stars
+  let rated = null, complaintSaved = false;
+  try {
+    rated = localStorage.getItem('rated_' + oid);
+    complaintSaved = localStorage.getItem('rated_complaint_' + oid) === '1';
+  } catch(e){}
+  if(rated){
+    const n = Math.max(1, Math.min(5, parseInt(rated, 10) || 1));
+    label.textContent = 'You rated ' + '\u2605'.repeat(n) + (complaintSaved ? ' + complaint saved' : '');
+    wrap.style.display = 'none';
+    return;
+  }
+
+  label.textContent = 'Rate this seller:';
+  wrap.style.display = '';
+
+  // restore a pending complaint after reload (chatSave does not store it)
+  let pending = null;
+  try { pending = localStorage.getItem('rate_pending_' + oid); } catch(e){}
+  if(pending && !(chatState.waitingComplaint && String(chatState.waitingOrderId) === oid)){
+    chatState.waitingComplaint = true;
+    chatState.waitingOrderId = oid;
+    chatState.pendingStars = parseInt(pending, 10) || 1;
+  }
+  const waiting = !!(chatState.waitingComplaint && String(chatState.waitingOrderId) === oid);
+  wrap.querySelectorAll('.rate-star').forEach(function(b){ b.disabled = waiting || !!chatState.ratingBusy; });
+  ratingFill(waiting ? (chatState.pendingStars || 0) : 0);
+}
+
+async function submitRating(stars){
+  const p = chatState.product, oid = chatState.orderId;
+  if(!p || !oid || chatState.ratingBusy) return;
+  stars = Math.round(Number(stars));
+  if(!(stars >= 1 && stars <= 5)) return;
+
+  // BAD (1-2): ask for the complaint first, send only after it is typed
+  let complaint = null;
+  if(stars <= 2){
+    if(chatState.complaintText){
+      complaint = String(chatState.complaintText).slice(0, 500);
+    } else {
+      chatState.waitingComplaint = true;
+      chatState.waitingOrderId = oid;
+      chatState.pendingStars = stars;
+      try { localStorage.setItem('rate_pending_' + oid, String(stars)); } catch(e){}
+      chatPush('system', "Sorry about that. What went wrong? Type your complaint here.");
+      chatSave();
+      renderChatMessages();
+      return;
+    }
+  }
+
+  chatState.ratingBusy = true;
+  let failed = false;
+  try {
+    const sellerId = p.seller_id !== undefined ? p.seller_id : p.owner_id;
+    const r = await api('/api/rate', {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        order_id: oid,
+        product_id: p.id,
+        buyer_id: state.telegram_id,
+        seller_id: sellerId,
+        stars: stars,
+        complaint_text: complaint
+      })
+    });
+    const data = (r && r.data) ? r.data : {};
+    const code = (r && r.res) ? r.res.status : 0;
+    const already = code === 409 || data.already_rated === true || data.error === 'already_rated' ||
+                    data.code === 'already_rated' || data.status === 'already_rated';
+
+    if(already){
+      // show the saved rating, no stars, no question
+      const saved = Number(data.stars);
+      const shown = (saved >= 1 && saved <= 5) ? Math.round(saved) : stars;
+      try {
+        localStorage.setItem('rated_' + oid, String(shown));
+        localStorage.removeItem('rate_pending_' + oid);
+      } catch(e){}
+      chatState.waitingComplaint = false;
+    } else if(r && r.res && r.res.ok){
+      try {
+        localStorage.setItem('rated_' + oid, String(stars));
+        localStorage.removeItem('rate_pending_' + oid);
+        if(complaint) localStorage.setItem('rated_complaint_' + oid, '1');
+      } catch(e){}
+      chatState.waitingComplaint = false;
+      if(complaint){
+        chatPush('system', "Thanks, your complaint has been saved.");
+      } else {
+        chatPush('system', "Thanks! You rated " + '\u2605'.repeat(stars));
+      }
+      chatSave();
+    } else {
+      failed = true;
+    }
+  } catch(e){
+    failed = true;
+  } finally {
+    chatState.complaintText = null;   // BAD flow: buyer retypes the complaint to retry
+    chatState.ratingBusy = false;
+  }
+  if(failed) showToast('Rating not saved, try again');
+  renderChatMessages();   // also re-renders the box (re-enables stars on a 3-5 failure)
+}
+
+function handleComplaintReply(){
+  if(!chatState.waitingComplaint || !chatState.orderId ||
+     String(chatState.waitingOrderId) !== String(chatState.orderId)) return false;
+  const input = document.getElementById('chat-input');
+  if(!input) return false;
+  const text = (input.value || '').trim();
+  if(!text) return true;                       // swallow empty sends while waiting
+  chatState.complaintText = text.slice(0, 500);   // plain text, max 500
+  input.value = '';
+  chatPush('user', text);
+  submitRating(chatState.pendingStars);
+  return true;
+}
+/* =================== END BLOCK E =================== */
+
+/* ---------- Chat: send + button wiring (reuses buyProduct / confirmDelivery / disputeEscrow) ---------- */
+function resetChatButtons(){
+  [['chat-buy-btn', 'Buy now'], ['chat-confirm-btn', 'Confirm Delivery'], ['chat-dispute-btn', 'Dispute']].forEach(function(x){
+    const b = document.getElementById(x[0]);
+    if(b){ b.textContent = x[1]; b.disabled = false; }
+  });
+}
+
+async function chatBuyFlow(btn){
+  const p = chatState.product;
+  if(!p || chatState.busy || chatState.stage !== 'ask') return;
+  chatState.busy = true;
+  try {
+    const before = await chatFetchOrders();
+    const known = {};
+    before.forEach(function(o){ known[String(o.id)] = true; });
+    await buyProduct(p.id, btn || document.getElementById('chat-buy-btn'));
+    const after = await chatFetchOrders();
+    const fresh = after.filter(function(o){
+      return !known[String(o.id)] && String(o.buyer_id) === String(state.telegram_id) && o.status === 'held';
+    });
+    const o = fresh.filter(function(x){ return String(x.product_id) === String(p.id); })[0] ||
+              (fresh.every(function(x){ return x.product_id === undefined; }) ? fresh[0] : undefined);
+    if(o){
+      chatState.orderId = o.id;
+      chatState.stage = 'paid';
+      chatPush('system', "Payment received. Your funds are held in escrow until you confirm delivery.");
+    } else {
+      chatPush('system', "Purchase was not completed.");
+    }
+  } finally {
+    chatState.busy = false;
+    resetChatButtons();
+    renderChatMessages();
+  }
+}
+
+async function chatOrderAction(btn, action, doneStatus, doneText){
+  if(!chatState.orderId || chatState.busy || chatState.stage !== 'paid') return;
+  chatState.busy = true;
+  const oid = chatState.orderId;
+  try {
+    await action(oid, btn);
+    const list = await chatFetchOrders();
+    const o = list.filter(function(x){ return String(x.id) === String(oid); })[0];
+    if(o && o.status === doneStatus && chatState.stage !== 'done'){
+      chatState.stage = 'done';
+      chatPush('system', doneText);
+    }
+  } finally {
+    chatState.busy = false;
+    resetChatButtons();
+    renderChatMessages();
+  }
+}
+
+async function sendChatMessage(){
+  if(handleComplaintReply()) return;
+  const input = document.getElementById('chat-input');
+  if(!input || chatState.busy) return;
+  const text = (input.value || '').trim();
+  if(!text) return;
+  input.value = '';
+  chatPush('user', text);
+  if(chatState.stage === 'ask' && text.toLowerCase() === 'yes'){
+    await chatBuyFlow(document.getElementById('chat-buy-btn'));
+  }
+}
+
+(function wireChatControls(){
+  const buyBtn = document.getElementById('chat-buy-btn');
+  const confirmBtn = document.getElementById('chat-confirm-btn');
+  const disputeBtn = document.getElementById('chat-dispute-btn');
+  const sendBtn = document.getElementById('chat-send');
+  const input = document.getElementById('chat-input');
+  if(buyBtn) buyBtn.addEventListener('click', function(){ chatBuyFlow(buyBtn); });
+  if(confirmBtn) confirmBtn.addEventListener('click', function(){
+    chatOrderAction(confirmBtn, confirmDelivery, 'released', "Seller has been paid");
+  });
+  if(disputeBtn) disputeBtn.addEventListener('click', function(){
+    chatOrderAction(disputeBtn, disputeEscrow, 'disputed', "Dispute opened - escrow frozen");
+  });
+  if(sendBtn) sendBtn.addEventListener('click', sendChatMessage);
+  if(input) input.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); sendChatMessage(); }
+  });
+})();
+
 function init(){
   applyTheme();
   if (tg) {
@@ -1750,4 +2233,3 @@ return {
 </script>
 </body>
 </html>
-```
