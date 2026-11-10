@@ -515,9 +515,10 @@ def auth_validate():
 # =============================================================================
 
 PRODUCT_PUBLIC_COLUMNS = (
-    "id,name,description,price_kobo,buyer_pays_kobo,"
-    "seller_gets_kobo,image_url,file_url,seller_id,"
+    "id,name,title,description,price,price_kobo,buyer_pays_kobo,"
+    "seller_gets_kobo,image_url,file_url,seller_id,owner_id,"
     "created_at,category"
+
 )
 
 
@@ -1539,7 +1540,70 @@ def account_delete(user):
 
     return jsonify({"deleted": True}), 200
 
+# =============================================================================
+# Ratings — Block E only, Rating Alone
+# =============================================================================
 
+@app.route("/api/rate", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def rate_seller(user):
+    tid = user["telegram_id"]
+    data = request.get_json(silent=True) or {}
+
+    order_id = str(data.get("order_id") or "").strip()
+    stars = data.get("stars")
+    complaint_text = data.get("complaint_text")
+
+    try:
+        stars = int(stars)
+    except (TypeError, ValueError):
+        return jsonify({"error": "stars 1-5 required"}), 400
+    if stars < 1 or stars > 5:
+        return jsonify({"error": "stars 1-5 required"}), 400
+    if not order_id:
+        return jsonify({"error": "order_id required"}), 400
+
+    if complaint_text is not None:
+        complaint_text = str(complaint_text).strip()[:500]
+        if stars >= 3:
+            complaint_text = None
+        if not complaint_text:
+            complaint_text = None
+
+    try:
+        existing = supabase.table("ratings").select("id,stars").eq("order_id", order_id).limit(1).execute()
+        if existing.data:
+            return jsonify({"already_rated": True, "stars": existing.data[0].get("stars")}), 200
+    except Exception:
+        pass
+
+    order_res = supabase.table("escrow_orders").select("id,product_id,buyer_id,seller_id,status").eq("id", order_id).limit(1).execute()
+    orders = order_res.data or []
+    if not orders:
+        return jsonify({"error": "Order not found"}), 404
+    order = orders[0]
+    if int(order.get("buyer_id")) != int(tid):
+        return jsonify({"error": "Forbidden - only buyer can rate"}), 403
+    if order.get("status") != "released":
+        return jsonify({"error": "Can only rate after released"}), 400
+
+    seller_id = int(order.get("seller_id"))
+    real_product_id = str(order.get("product_id"))
+
+    try:
+        res = supabase.table("ratings").insert({
+            "order_id": order_id,
+            "product_id": real_product_id,
+            "buyer_id": int(tid),
+            "seller_id": seller_id,
+            "stars": stars,
+            "complaint_text": complaint_text,
+        }).execute()
+        return jsonify({"status": "success", "rating": res.data[0] if res.data else {}}), 201
+    except Exception:
+        logging.exception("rate_seller failed order_id=%s", order_id)
+        return jsonify({"error": "Could not save rating"}), 500
 # =============================================================================
 # Frontend (serves ONLY index.html)
 # =============================================================================
