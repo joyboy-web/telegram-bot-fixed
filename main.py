@@ -28,8 +28,6 @@ PRODUCT_COLUMNS = (
     "seller_gets_kobo,image_url,file_url,seller_id,owner_id,"
     "created_at,category"
 ) 
-)
-
 
 # ---------------------------------------------------------------------------
 # Products override (no is_public in any form; always HTTP 200)
