@@ -194,6 +194,66 @@ h1,h2,h3,p{margin:0}
 .rate-box { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); font-size: 14px; font-weight: 600; }
 .rate-star { background: none; border: 0; padding: 0 4px; font-size: 30px; line-height: 1.2; cursor: pointer; color: var(--muted); }
 .rate-star:disabled { cursor: default; }
+
+/* ===== MINOR FIXES 1-9 + BATCH 4 (additive; later rules override) ===== */
+/* Fix 6: marketplace grid */
+.grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; width:100%; }
+.pcard{ min-width:0; overflow:hidden; cursor:pointer; }
+.pcard .ptitle{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.pcard .pprice{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+html,body{ overflow-x:hidden; }
+.app-shell{ overflow-x:hidden; }
+
+/* Fix 8 + 9: gate layout */
+.gate h2,.gate p{text-align:center;line-height:1.35;overflow-wrap:anywhere}
+.gate p{line-height:1.5;margin:0 auto}
+.gate-logo{width:64px;height:64px;border-radius:50%;background:var(--chip);color:var(--ink);display:flex;align-items:center;justify-content:center;margin-bottom:4px}
+.gate .gate-tg{width:100%;max-width:320px;min-width:0;margin-top:8px}
+
+/* Fix 3: chat header */
+.chat-head{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--card);margin-bottom:12px}
+.chat-head .back-btn{margin:0;padding:8px 12px;flex:none}
+.chat-head svg{flex:none}
+.chat-head-txt{flex:1;min-width:0;text-align:left}
+.chat-head-name{display:flex;align-items:center;gap:5px;font-weight:700;font-size:15px;line-height:1.2}
+.chat-head-sub{font-size:12px;color:var(--muted);line-height:1.3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-head-logo{color:var(--muted)}
+
+/* Fix 4: chat list */
+.chat-list-mode #chat-root,.chat-list-mode #chat-empty{display:none!important}
+#pg-chat:not(.chat-list-mode) #chat-list{display:none}
+.chat-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.chat-row:last-child{border-bottom:0}
+.chat-thumb{width:48px;height:48px;border-radius:12px;background:var(--chip);object-fit:cover;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.chat-row .mid{flex:1;min-width:0;text-align:left}
+.chat-row .t{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-row .s{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-meta{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
+.chat-time{font-size:11.5px;color:var(--muted)}
+.chat-badge{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--red);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+
+/* Fix 5: marketplace search + filter */
+.mk-bar{display:flex;justify-content:flex-end;margin:-6px 0 10px}
+.mk-bar .chip{display:inline-flex;align-items:center;gap:6px}
+.mk-search{margin-bottom:10px}
+
+/* Fix 2: product preview */
+.pv-img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:16px;background:var(--chip);display:block;margin-bottom:14px}
+.pv-price{font-size:22px;font-weight:800;margin-bottom:10px}
+.pv-desc{font-size:14px;color:var(--muted);margin-bottom:14px;white-space:pre-wrap;word-break:break-word}
+.pv-review{padding:8px 0;border-bottom:1px solid var(--line)}
+.pv-review:last-child{border-bottom:0}
+.pv-stars{color:#FFC107;font-size:16px}
+#pv-body .btn{margin-bottom:14px}
+
+/* B4-2 pill spacing */
+.esc-card .badge.b-held{margin-top:6px}
+
+/* B4-5 print receipt */
+@media print{
+  .tabbar,.btn,.btn-row,.back-btn,.toast,.overlay{display:none!important}
+  .app-shell{padding:0;max-width:none}
+}
 </style>
 </head>
 <body>
@@ -201,9 +261,10 @@ h1,h2,h3,p{margin:0}
 <!-- ============ GATE SCREENS ============ -->
 <div class="gate show" id="gate-loading"><div class="spinner"></div><p>Loading PayLock...</p></div>
 <div class="gate" id="gate-blocked">
+  <div class="gate-logo"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></div>
   <h2>Please open inside Telegram</h2>
   <p>PayLock only works as a Telegram Mini App.</p>
-  <a class="btn" href="https://t.me/PayLockOfficialBot/app">Open in Telegram</a>
+  <a class="btn gate-tg" href="https://t.me/PayLockOfficialBot/app"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>Open in Telegram</a>
 </div>
 <div class="gate" id="gate-error">
   <h2>Verification failed</h2>
@@ -366,8 +427,17 @@ h1,h2,h3,p{margin:0}
   <!-- ============ CHAT ============ -->
   <section class="page" id="pg-chat">
     <h2 class="page-title">Chat</h2>
+    <div id="chat-list"></div>
     <div class="empty" id="chat-empty"><div class="big">No conversations yet</div></div>
     <div id="chat-root" style="display:none">
+      <div class="chat-head" id="chat-head">
+        <button class="back-btn" type="button" id="chat-back" aria-label="Back to chats">‹</button>
+        <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><defs><clipPath id="pl-av-clip"><circle cx="20" cy="20" r="20"/></clipPath></defs><circle cx="20" cy="20" r="20" fill="#D1D5DB"/><g clip-path="url(#pl-av-clip)"><circle cx="20" cy="15" r="6.5" fill="#6B7280"/><ellipse cx="20" cy="37" rx="13" ry="10" fill="#6B7280"/></g></svg>
+        <div class="chat-head-txt">
+          <div class="chat-head-name">PayLock <svg width="16" height="16" viewBox="0 0 24 24" aria-label="Verified"><circle cx="12" cy="12" r="12" fill="#1D9BF0"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="chat-head-sub">Escrow protected • Online</div>
+        </div>
+      </div>
       <div id="chat-product"></div>
       <div id="chat-messages"></div>
       <div id="ratingBox" class="rate-box" style="display:none">
@@ -395,8 +465,18 @@ h1,h2,h3,p{margin:0}
   <!-- ============ BUY ============ -->
   <section class="page" id="pg-buy">
     <h2 class="page-title">Marketplace</h2>
+    <div class="mk-bar"><button class="chip" type="button" id="mk-toggle" aria-label="Search products">Search</button></div>
+    <div class="mk-search" id="mk-search" style="display:none"><input class="input" id="mk-input" type="text" autocomplete="off" placeholder="Search products"></div>
+    <div class="chips" id="mk-cats"></div>
+    <div class="chips" id="mk-sort"></div>
     <div class="grid" id="buy-grid"></div>
     <div class="empty" id="buy-empty" style="display:none"><div class="big">No products available</div>Check back soon.</div>
+  </section>
+
+  <!-- ============ PRODUCT PREVIEW ============ -->
+  <section class="page" id="pg-preview">
+    <button class="back-btn" type="button" onclick="PayLock.previewBack()">‹ Back</button>
+    <div id="pv-body"></div>
   </section>
 
   <!-- ============ WALLET ============ -->
@@ -511,6 +591,7 @@ h1,h2,h3,p{margin:0}
       <button class="btn secondary" type="button" onclick="PayLock.downloadReceipt()">Download receipt</button>
       <button class="btn" type="button" onclick="PayLock.goPage('pg-wallet')">Back to wallet</button>
     </div>
+    <button class="btn secondary" type="button" style="margin-top:10px" onclick="PayLock.printReceipt()">Download / Print Receipt</button>
   </section>
 
   <!-- ============ PRIVACY ============ -->
@@ -662,6 +743,8 @@ const pinModal = { mode: 'withdraw', value: '', firstPin: '', after: null, busy:
 const uploadedFileFingerprints = new Set();
 let banksLoaded = false;
 let resolveTimer = null;
+const verifiedRefs = new Set();   // Fix 7: each reference is verified once
+let fundVerifying = false;        // Fix 7: keeps Pay disabled while verify runs
 
 /* ---------- Helpers ---------- */
 function $(id){ return document.getElementById(id); }
@@ -805,7 +888,7 @@ function goPage(id){
   const target = $(id);
   if (target) target.classList.add('active');
   const mainTabs = ['pg-home', 'pg-sell', 'pg-chat', 'pg-buy', 'pg-wallet'];
-  const activeTab = mainTabs.indexOf(id) >= 0 ? id : 'pg-wallet';
+  const activeTab = mainTabs.indexOf(id) >= 0 ? id : (id === 'pg-preview' ? 'pg-buy' : 'pg-wallet');
   document.querySelectorAll('.tab').forEach(function(t){
     t.classList.toggle('active', t.getAttribute('data-tab') === activeTab);
   });
@@ -859,6 +942,7 @@ async function loadProducts(){
   } catch (e) { state.products = []; }
   renderProductGrid('home-grid', 'home-empty', state.products.slice(0, 4));
   renderProductGrid('buy-grid', 'buy-empty', state.products);
+  applyBuyFilter();
 }
 function renderProductGrid(gridId, emptyId, list){
   const grid = $(gridId), empty = $(emptyId);
@@ -867,6 +951,7 @@ function renderProductGrid(gridId, emptyId, list){
   empty.style.display = 'none';
   list.forEach(function(p){
     const card = el('div', 'pcard');
+    card.addEventListener('click', function(){ openProductPreview(p); });
     if (typeof p.image_url === 'string' && p.image_url.indexOf('https://') === 0) {
       const img = document.createElement('img');
       img.className = 'pimg';
@@ -877,10 +962,12 @@ function renderProductGrid(gridId, emptyId, list){
     }
     card.appendChild(el('div', 'ptitle', p.name || p.title || 'Untitled'));
     card.appendChild(el('div', 'pprice', nairaFmt(p.buyer_pays_kobo)));
-    const btn = el('button', 'btn sm', 'Buy');
-    btn.type = 'button';
-    btn.addEventListener('click', function(){ openChat(p); });
-    card.appendChild(btn);
+    if (!isOwnProduct(p)) {
+      const btn = el('button', 'btn sm', 'Buy');
+      btn.type = 'button';
+      btn.addEventListener('click', function(ev){ ev.stopPropagation(); enterChatRoom(); openChat(p); });
+      card.appendChild(btn);
+    }
     grid.appendChild(card);
   });
 }
@@ -1069,6 +1156,9 @@ function renderEscrowList(list){
     const amount = isBuyer ? o.buyer_pays_kobo : o.seller_gets_kobo;
     card.appendChild(el('div', 'small muted', (isBuyer ? 'Buying · ' : 'Selling · ') + nairaFmt(amount)));
     if (o.release_at && status === 'held') card.appendChild(el('div', 'small muted', 'Auto-release: ' + fmtDate(o.release_at)));
+    if (status === 'held') {
+      card.appendChild(el('span', 'badge b-held', 'Held • Auto-release in ' + escrowHoursLeft(o) + 'h'));
+    }
     const actions = el('div', 'esc-actions');
     if (status === 'held' && isBuyer) {
       const cb = el('button', 'btn sm', 'Confirm Delivery');
@@ -1333,11 +1423,12 @@ function goFundStep(n){
 }
 async function payNow(){
   const btn = $('pay-btn');
+  if (btn.disabled) return;
   const amount_kobo = Math.round(state.fund.amount * 100);
   btn.disabled = true;
   const origText = btn.textContent;
   btn.textContent = 'Processing...';
-  const reenable = function(){ btn.disabled = false; btn.textContent = origText; };
+  const reenable = function(){ if (fundVerifying) return; btn.disabled = false; btn.textContent = origText; };
   try {
     // FIX 2: payload is ONLY {amount_kobo, email}. No card_id / save_card.
     const r = await api('/api/wallet/fund/initialize', {
@@ -1354,7 +1445,11 @@ async function payNow(){
       currency: 'NGN',
       ref: d.reference,
       callback: function(resp){
-        verifyTransaction((resp && resp.reference) || d.reference);
+        fundVerifying = true;
+        Promise.resolve(verifyTransaction((resp && resp.reference) || d.reference)).then(function(){
+          fundVerifying = false;
+          reenable();
+        });
       },
       onClose: function(){ reenable(); }
     });
@@ -1365,6 +1460,8 @@ async function payNow(){
   }
 }
 async function verifyTransaction(reference){
+  if (verifiedRefs.has(reference)) return;
+  verifiedRefs.add(reference);
   try {
     const r = await api('/api/wallet/verify-transaction', {
       method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ reference: reference })
@@ -1769,6 +1866,14 @@ function openChat(product){
   // product == null: no message pushed, no state reset, just render + navigate
   if(!product){ renderChatMessages(); goPage('pg-chat'); return; }
 
+  // seller never enters chat: send to product preview instead
+  const sellerId0 = (product.seller_id !== undefined && product.seller_id !== null) ? product.seller_id : product.owner_id;
+  if(sellerId0 !== undefined && sellerId0 !== null && state.telegram_id !== undefined && state.telegram_id !== null
+     && String(sellerId0) === String(state.telegram_id)){
+    openProductPreview(product);
+    return;
+  }
+
   // same product with messages already in memory: do not reset
   if(chatState.product && String(chatState.product.id)===String(product.id) && chatState.messages.length>0){
     renderChatMessages(); goPage('pg-chat'); return;
@@ -1804,17 +1909,7 @@ function openChat(product){
   chatState.orderId = null;
   chatState.busy = false;
 
-  // 4.6: seller of this product?
-  const sid = (product.seller_id !== undefined && product.seller_id !== null) ? product.seller_id : product.owner_id;
-  const isSeller = (sid !== undefined && sid !== null && state.telegram_id !== undefined && state.telegram_id !== null)
-                   && String(sid) === String(state.telegram_id);
-
-  if(isSeller){
-    chatState.stage = 'seller';
-    chatPush('paylock', "A buyer is interested in your product.");
-  } else {
-    chatPush('paylock', "Do you want to continue the purchase of this product? Reply with 'yes' to continue.");
-  }
+  chatPush('paylock', "Do you want to continue the purchase of this product? Reply with 'yes' to continue.");
   renderChatMessages();
   goPage('pg-chat');
 }
@@ -2191,6 +2286,258 @@ async function sendChatMessage(){
   });
 })();
 
+/* ===================== MINOR FIXES 1-9 + BATCH 4 (additive) ===================== */
+let chatMode = 'list';        // 'list' = Chat List, 'room' = open chat room
+let previewPrev = 'pg-buy';   // page to return to from product preview
+const mk = { q: '', cat: 'All', sort: 'new', open: false };
+
+function isOwnProduct(p){
+  if (!p) return false;
+  const sid = (p.seller_id !== undefined && p.seller_id !== null) ? p.seller_id : p.owner_id;
+  return (sid !== undefined && sid !== null && state.telegram_id !== undefined && state.telegram_id !== null)
+         && String(sid) === String(state.telegram_id);
+}
+
+/* B4-2: hours left before auto-release (display only) */
+function escrowHoursLeft(o){
+  if (!o || !o.release_at) return 48;
+  const t = new Date(o.release_at).getTime();
+  if (isNaN(t)) return 48;
+  return Math.max(0, Math.ceil((t - Date.now()) / 3600000));
+}
+
+/* B4-5: print receipt */
+function printReceipt(){
+  try { window.print(); } catch (e) { showToast('Print is not available on this device'); }
+}
+
+/* ----- Fix 2 + B4-3: product preview ----- */
+function pvRow(k, v){
+  const r = el('div', 'kv');
+  r.appendChild(el('span', 'k', k));
+  r.appendChild(el('span', 'v', v));
+  return r;
+}
+function openProductPreview(p){
+  if (!p) return;
+  const cur = document.querySelector('.page.active');
+  if (cur && cur.id !== 'pg-preview') previewPrev = cur.id;
+  const body = $('pv-body');
+  clearNode(body);
+  if (typeof p.image_url === 'string' && p.image_url.indexOf('https://') === 0) {
+    const img = document.createElement('img');
+    img.className = 'pv-img';
+    img.alt = '';
+    img.src = p.image_url;
+    body.appendChild(img);
+  }
+  body.appendChild(el('h2', 'page-title', p.name || p.title || 'Untitled'));
+  body.appendChild(el('div', 'pv-price', nairaFmt(p.buyer_pays_kobo || p.price_kobo || 0)));
+  body.appendChild(el('p', 'pv-desc', p.description || 'No description provided.'));
+
+  const info = el('div', 'card');
+  info.appendChild(pvRow('Seller', p.seller_name || p.seller_username || p.seller_first_name || 'PayLock seller'));
+  info.appendChild(pvRow('Category', p.category || 'Digital Product'));
+  body.appendChild(info);
+
+  if (isOwnProduct(p)) {
+    const stats = el('div', 'card');
+    stats.appendChild(el('div', 'card-title', 'Your product stats'));
+    const sales = (p.sales_count !== undefined && p.sales_count !== null) ? p.sales_count : (p.sales || p.sold_count || 0);
+    const views = (p.views !== undefined && p.views !== null) ? p.views : (p.view_count || p.click_count || p.clicks || 0);
+    stats.appendChild(pvRow('Sales', String(sales)));
+    stats.appendChild(pvRow('Views / Clicks', String(views)));
+    body.appendChild(stats);
+    const soon = el('div', 'card');
+    soon.appendChild(el('div', 'small muted', 'Sales Analytics coming soon'));
+    body.appendChild(soon);
+  } else {
+    const bb = el('button', 'btn', 'Buy');
+    bb.type = 'button';
+    bb.addEventListener('click', function(){ enterChatRoom(); openChat(p); });
+    body.appendChild(bb);
+
+    const rv = el('div', 'card');
+    rv.appendChild(el('div', 'card-title', 'Reviews'));
+    const all = Array.isArray(p.reviews) ? p.reviews : (Array.isArray(p.ratings) ? p.ratings : []);
+    const valid = all.filter(function(r){ return r && Number(r.stars) >= 1; });
+    if (!valid.length) {
+      rv.appendChild(el('div', 'small muted', 'No reviews yet'));
+    } else {
+      valid.slice(0, 20).forEach(function(r){
+        const n = Math.max(1, Math.min(5, Math.round(Number(r.stars))));
+        const row = el('div', 'pv-review');
+        row.appendChild(el('div', 'pv-stars', '\u2605'.repeat(n) + '\u2606'.repeat(5 - n)));
+        const txt = r.review || r.text || r.comment || r.complaint_text;
+        if (txt) row.appendChild(el('div', 'small', String(txt)));
+        rv.appendChild(row);
+      });
+    }
+    body.appendChild(rv);
+  }
+  goPage('pg-preview');
+}
+function previewBack(){ goPage(previewPrev || 'pg-buy'); }
+
+/* ----- Fix 4: chat list ----- */
+function getChatMeta(id){
+  try { const r = localStorage.getItem('paylock_cmeta_' + id); if (r) return JSON.parse(r); } catch (e) {}
+  return null;
+}
+function setChatMeta(id, m){
+  try { localStorage.setItem('paylock_cmeta_' + id, JSON.stringify(m)); } catch (e) {}
+}
+function chatTime(ts){
+  const d = new Date(ts), now = new Date();
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
+}
+function chatMetaSync(){
+  const p = chatState.product;
+  if (!p) return;
+  const id = String(p.id);
+  const len = chatState.messages.length;
+  let m = getChatMeta(id) || { len: len, seen: 0, ts: Date.now() };
+  if (m.len !== len) { m.len = len; m.ts = Date.now(); }
+  if (chatMode === 'room') m.seen = len;
+  setChatMeta(id, m);
+  if (chatMode === 'list') renderChatList();
+}
+function renderChatList(){
+  const box = $('chat-list');
+  if (!box) return;
+  clearNode(box);
+  const keys = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf('paylock_chat_') === 0) keys.push(k);
+    }
+  } catch (e) {}
+  const rows = [];
+  keys.forEach(function(k){
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(k)); } catch (e) { s = null; }
+    if (!s || !s.product || !Array.isArray(s.messages) || !s.messages.length) return;
+    const p = s.product;
+    if (isOwnProduct(p)) return;
+    const id = String(p.id);
+    const n = s.messages.length;
+    let m = getChatMeta(id);
+    if (!m) { m = { len: n, seen: n, ts: Date.now() }; setChatMeta(id, m); }
+    else if (m.len !== n) { m.len = n; m.ts = Date.now(); setChatMeta(id, m); }
+    let unread = 0;
+    for (let j = Math.min(m.seen, n); j < n; j++) {
+      if (s.messages[j] && s.messages[j].role !== 'user') unread++;
+    }
+    rows.push({ p: p, msgs: s.messages, ts: m.ts, unread: unread });
+  });
+  rows.sort(function(a, b){ return b.ts - a.ts; });
+  if (!rows.length) {
+    const e = el('div', 'empty');
+    e.appendChild(el('div', 'big', 'No conversations yet'));
+    box.appendChild(e);
+    return;
+  }
+  rows.forEach(function(r){
+    const row = el('div', 'chat-row');
+    if (typeof r.p.image_url === 'string' && r.p.image_url.indexOf('https://') === 0) {
+      const img = document.createElement('img');
+      img.className = 'chat-thumb';
+      img.alt = '';
+      img.loading = 'lazy';
+      img.src = r.p.image_url;
+      row.appendChild(img);
+    } else {
+      const ph = el('div', 'chat-thumb');
+      ph.appendChild(svgIcon(['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'], 20));
+      row.appendChild(ph);
+    }
+    const mid = el('div', 'mid');
+    mid.appendChild(el('div', 't', r.p.title || r.p.name || r.p.product_name || 'Product'));
+    const last = r.msgs[r.msgs.length - 1];
+    mid.appendChild(el('div', 's', last && last.text ? last.text : ''));
+    row.appendChild(mid);
+    const meta = el('div', 'chat-meta');
+    meta.appendChild(el('div', 'chat-time', chatTime(r.ts)));
+    if (r.unread > 0) meta.appendChild(el('div', 'chat-badge', String(r.unread > 99 ? '99+' : r.unread)));
+    row.appendChild(meta);
+    row.addEventListener('click', function(){ enterChatRoom(); openChat(r.p); });
+    box.appendChild(row);
+  });
+}
+function applyChatMode(){
+  const pg = $('pg-chat');
+  if (pg) pg.classList.toggle('chat-list-mode', chatMode === 'list');
+  if (chatMode === 'list') renderChatList();
+}
+function enterChatRoom(){ chatMode = 'room'; applyChatMode(); }
+
+/* ----- Fix 5: marketplace search + filter (in-memory) ----- */
+function renderMkChips(){
+  const cats = ['All'];
+  state.products.forEach(function(p){ if (p.category && cats.indexOf(p.category) < 0) cats.push(p.category); });
+  const cbox = $('mk-cats'), sbox = $('mk-sort');
+  if (!cbox || !sbox) return;
+  clearNode(cbox);
+  clearNode(sbox);
+  cats.forEach(function(c){
+    const b = el('button', 'chip' + (mk.cat === c ? ' active' : ''), c);
+    b.type = 'button';
+    b.addEventListener('click', function(){ mk.cat = c; applyBuyFilter(); });
+    cbox.appendChild(b);
+  });
+  [['new', 'Newest'], ['low', 'Price: Low to High'], ['high', 'Price: High to Low']].forEach(function(s){
+    const b = el('button', 'chip' + (mk.sort === s[0] ? ' active' : ''), s[1]);
+    b.type = 'button';
+    b.addEventListener('click', function(){ mk.sort = s[0]; applyBuyFilter(); });
+    sbox.appendChild(b);
+  });
+}
+function applyBuyFilter(){
+  renderMkChips();
+  let list = state.products.slice();
+  const q = mk.q.trim().toLowerCase();
+  if (mk.cat !== 'All') list = list.filter(function(p){ return p.category === mk.cat; });
+  if (q) list = list.filter(function(p){
+    return [p.name, p.title, p.description, p.category].join(' ').toLowerCase().indexOf(q) >= 0;
+  });
+  if (mk.sort === 'low') list.sort(function(a, b){ return (a.buyer_pays_kobo || 0) - (b.buyer_pays_kobo || 0); });
+  else if (mk.sort === 'high') list.sort(function(a, b){ return (b.buyer_pays_kobo || 0) - (a.buyer_pays_kobo || 0); });
+  else list.sort(function(a, b){ return (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0); });
+  renderProductGrid('buy-grid', 'buy-empty', list);
+}
+
+(function wireMinorFixes(){
+  const pg = $('pg-chat');
+  if (pg) pg.classList.add('chat-list-mode');
+  // Chat tab always opens the Chat List
+  document.addEventListener('click', function(ev){
+    const t = ev.target && ev.target.closest ? ev.target.closest('.tab[data-tab="pg-chat"]') : null;
+    if (t) { chatMode = 'list'; applyChatMode(); }
+  }, true);
+  const back = $('chat-back');
+  if (back) back.addEventListener('click', function(){ chatMode = 'list'; applyChatMode(); });
+  const msgs = $('chat-messages');
+  if (msgs && window.MutationObserver) new MutationObserver(chatMetaSync).observe(msgs, { childList: true });
+
+  const tgl = $('mk-toggle');
+  if (tgl) {
+    tgl.textContent = '';
+    tgl.appendChild(svgIcon(['M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16z', 'M21 21l-4.3-4.3'], 18));
+    tgl.addEventListener('click', function(){
+      mk.open = !mk.open;
+      tgl.classList.toggle('active', mk.open);
+      $('mk-search').style.display = mk.open ? '' : 'none';
+      if (mk.open) { $('mk-input').focus(); }
+      else { mk.q = ''; $('mk-input').value = ''; applyBuyFilter(); }
+    });
+  }
+  const mi = $('mk-input');
+  if (mi) mi.addEventListener('input', function(){ mk.q = mi.value; applyBuyFilter(); });
+  renderMkChips();
+})();
+
 function init(){
   applyTheme();
   if (tg) {
@@ -2227,7 +2574,8 @@ return {
   onAmountInput: onAmountInput, toggleSaveCard: toggleSaveCard, goFundStep: goFundStep,
   payNow: payNow, downloadReceipt: downloadReceipt,
   openDeleteSheet: openDeleteSheet, closeDeleteSheet: closeDeleteSheet, onDeleteInput: onDeleteInput,
-  startDeleteFlow: startDeleteFlow, closePinModal: closePinModal, pinAction: pinAction
+  startDeleteFlow: startDeleteFlow, closePinModal: closePinModal, pinAction: pinAction,
+  openProductPreview: openProductPreview, previewBack: previewBack, printReceipt: printReceipt
 };
 })();
 </script>
