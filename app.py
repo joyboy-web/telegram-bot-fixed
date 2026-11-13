@@ -16,6 +16,16 @@
 #   products.owner_id (NOT NULL) — must be populated alongside seller_id
 #   products.title (NOT NULL) — must be populated alongside name
 #   products.price (NOT NULL) — must be populated alongside price_kobo
+#
+# Optional env vars (additive): ADMIN_ID (Telegram id of the admin; empty = every
+#   /api/admin/* route returns 403), BOT_USERNAME (default PayLockOfficialBot).
+#
+# Additive schema this file expects (every use is guarded: a missing table or
+# column makes that one feature answer 501 NOT_READY / fall back, never crash):
+#   products.code, sales_count, avg_rating, is_boosted, boosted_until, visible
+#   users.banned, banned_permanent, referred_by
+#   tables: ratings (unique order_id), disputes, product_reports, appeals,
+#           referrals, webhook_logs
 # =============================================================================
 
 import os
@@ -25,6 +35,7 @@ import json
 import time
 import math
 import uuid
+import secrets
 import hmac
 import hashlib
 import logging
@@ -34,7 +45,7 @@ from urllib.parse import parse_qsl
 
 import requests
 import bcrypt
-from flask import Flask, request, jsonify, send_from_directory, abort
+from flask import Flask, request, jsonify, send_from_directory, abort, Response
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -124,6 +135,19 @@ COVER_BUCKET = "product-covers"
 PRODUCT_FILE_BUCKET = "product-files"
 
 INIT_DATA_MAX_AGE_SECONDS = 7 * 24 * 60 * 60  # 7 days — soft/warn-only check
+
+# --- CONFIG (additive) --------------------------------------------------------
+BOT_USERNAME = os.environ.get("BOT_USERNAME", "PayLockOfficialBot")
+# Leave empty until you fill it in (here or via the ADMIN_ID env var).
+# While empty, EVERY /api/admin/* route returns 403.
+ADMIN_ID = str(os.environ.get("ADMIN_ID", "") or "").strip()
+
+BAN_THRESHOLD = 5                  # CONFIRMED reports/disputes before auto-ban
+BOOST_FEE_KOBO = 50000             # NGN 500 per boost
+BOOST_HOURS = 24
+DAILY_LISTING_LIMIT = 10
+PRODUCT_CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+REPORT_REASONS = {"scam": "Scam", "fake": "Fake", "wrong file": "Wrong file", "spam": "Spam"}
 
 # -----------------------------------------------------------------------------
 # Fee model (LOCKED — do not alter)
@@ -468,6 +492,637 @@ def _credit_wallet_funding(tx, paid_kobo):
 
 
 # =============================================================================
+# Helpers — additions (admin, ban, products, escrow, logs, PDF)
+# =============================================================================
+
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_ts(value):
+    """Parses a Supabase/ISO timestamp to an aware datetime, or None."""
+    if not value:
+        return None
+    s = str(value).replace("Z", "+00:00")
+    # Python < 3.11 only accepts 3 or 6 fractional digits; normalise to 6.
+    s = re.sub(r"\.(\d+)", lambda m: "." + (m.group(1) + "000000")[:6], s, count=1)
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _is_schema_missing(exc):
+    s = str(exc).lower()
+    return any(m in s for m in (
+        "does not exist", "schema cache", "pgrst205", "pgrst204", "42p01", "42703",
+    ))
+
+
+def _missing_column_in(exc, col):
+    s = str(exc).lower()
+    return (f"'{col}' column" in s) or (f'column "{col}"' in s) or (f"products.{col}" in s)
+
+
+def _not_ready():
+    return jsonify({"error": "This feature is not available yet", "code": "NOT_READY"}), 501
+
+
+def _db_error(exc, log_msg):
+    """501 NOT_READY when a table/column is missing, otherwise a logged 500."""
+    if _is_schema_missing(exc):
+        logging.warning("%s: schema not ready (%s)", log_msg, exc)
+        return _not_ready()
+    logging.exception(log_msg)
+    return jsonify({"error": "Something went wrong"}), 500
+
+
+def _is_admin(user):
+    return bool(ADMIN_ID) and str(user.get("telegram_id")) == ADMIN_ID
+
+
+def admin_only(f):
+    """Use BELOW @require_auth. Empty ADMIN_ID means nobody is admin (403)."""
+    @wraps(f)
+    def wrapper(user, *args, **kwargs):
+        if not _is_admin(user):
+            return jsonify({"error": "Forbidden", "code": "ADMIN_ONLY"}), 403
+        return f(user, *args, **kwargs)
+    return wrapper
+
+
+def _auth_user_or_none():
+    """Same checks as require_auth, for routes that are public unless asked."""
+    init_data = extract_init_data()
+    if not init_data:
+        return None
+    tg_user = verify_init_data(init_data)
+    if not tg_user:
+        return None
+    user = get_or_create_user(tg_user)
+    if not user or user.get("deleted_at"):
+        return None
+    return user
+
+
+def _banned_response(user):
+    if user.get("banned"):
+        return jsonify({"error": "Account temporarily banned", "code": "ACCOUNT_BANNED"}), 403
+    return None
+
+
+def _redact_payload(obj, depth=0):
+    """Strips card/customer data before anything is written to webhook_logs."""
+    sensitive = {"authorization", "authorization_code", "customer", "card", "bin"}
+    if depth > 6:
+        return None
+    if isinstance(obj, dict):
+        return {k: _redact_payload(v, depth + 1) for k, v in obj.items() if k not in sensitive}
+    if isinstance(obj, list):
+        return [_redact_payload(v, depth + 1) for v in obj[:50]]
+    return obj
+
+
+def _log_webhook(reference, event, payload, status):
+    try:
+        supabase.table("webhook_logs").insert({
+            "reference": reference or None,
+            "event": event,
+            "payload": _redact_payload(payload),
+            "status": status,
+            "created_at": _now_iso(),
+        }).execute()
+    except Exception as exc:
+        logging.warning("_log_webhook: insert failed (%s)", exc)
+
+
+def _fetch_all(build, page=1000, max_pages=20):
+    """build(start, end) -> query; pages past Supabase's 1000-row default cap."""
+    rows = []
+    for i in range(max_pages):
+        chunk = build(i * page, i * page + page - 1).execute().data or []
+        rows.extend(chunk)
+        if len(chunk) < page:
+            break
+    return rows
+
+
+# ---- products ----------------------------------------------------------------
+
+PRODUCT_EXTRA_COLUMNS = "code,sales_count,avg_rating,is_boosted,boosted_until"
+
+
+def _new_product_code():
+    """6 chars A-Z0-9, unique when the code column exists."""
+    code = ""
+    for _ in range(10):
+        code = "".join(secrets.choice(PRODUCT_CODE_ALPHABET) for _ in range(6))
+        try:
+            res = supabase.table("products").select("id").eq("code", code).limit(1).execute()
+            if not res.data:
+                return code
+        except Exception:
+            return code  # column missing: cannot check; insert fallback handles it
+    return code
+
+
+def _ensure_code(row):
+    """Backfills a missing code on an old product. No-op if the column is absent."""
+    if "code" not in row or row.get("code") or row.get("id") is None:
+        return
+    try:
+        code = _new_product_code()
+        supabase.table("products").update({"code": code}).eq("id", row["id"]).execute()
+        row["code"] = code
+    except Exception:
+        logging.exception("_ensure_code: backfill failed for product %s", row.get("id"))
+
+
+def _products_select(apply, with_fees=False):
+    """
+    apply(columns) -> executed query. Tries the extended column list first and
+    falls back to the original columns if the new product columns are not
+    migrated yet, so the marketplace never goes blank.
+    """
+    tail = ",platform_fee_kobo,paystack_fee_kobo" if with_fees else ""
+    base = PRODUCT_PUBLIC_COLUMNS + ",is_hidden" + tail
+    try:
+        return apply(base + "," + PRODUCT_EXTRA_COLUMNS).data or []
+    except Exception:
+        logging.warning("_products_select: extended columns unavailable, using base columns")
+    return apply(base).data or []
+
+
+def _boost_active(row):
+    until = _parse_ts(row.get("boosted_until"))
+    if until:
+        return until > datetime.now(timezone.utc)
+    return bool(row.get("is_boosted"))
+
+
+def _normalize_product(row):
+    row["visible"] = not bool(row.pop("is_hidden", False))
+    try:
+        row["sales_count"] = int(row.get("sales_count") or 0)
+    except (TypeError, ValueError):
+        row["sales_count"] = 0
+    try:
+        row["avg_rating"] = round(float(row.get("avg_rating") or 0), 2)
+    except (TypeError, ValueError):
+        row["avg_rating"] = 0
+    row["is_boosted"] = _boost_active(row)
+    row.setdefault("code", None)
+    if row.get("code"):
+        row["share_link"] = f"https://t.me/{BOT_USERNAME}?start=prod_{row['code']}"
+    return row
+
+
+def _find_product(key, mode="any", include_hidden=False):
+    """
+    Finds one PUBLIC product by code or id (hidden products return None unless
+    include_hidden=True, in which case the row comes back with visible=False).
+    mode='code' looks at the code column only (GET /api/products?code=).
+    """
+    key = str(key or "").strip()
+    if not key:
+        return None
+    code = (key[5:] if key.lower().startswith("prod_") else key).upper()
+    code_ok = bool(re.fullmatch(r"[A-Z0-9]{6}", code))
+
+    if mode == "code" or key.lower().startswith("prod_"):
+        order = [("code", code)] if code_ok else []
+    elif key.isdigit():
+        order = [("id", key)] + ([("code", code)] if code_ok else [])
+    else:
+        order = ([("code", code)] if code_ok else []) + [("id", key)]
+
+    for col, val in order:
+        try:
+            rows = _products_select(
+                lambda cols: supabase.table("products").select(cols).eq(col, val).limit(1).execute(),
+                with_fees=True,
+            )
+        except Exception:
+            continue  # bad id format for the column type, or column missing
+        if not rows:
+            continue
+        row = rows[0]
+        if row.get("is_hidden") and not include_hidden:
+            return None
+        _ensure_code(row)
+        return _normalize_product(row)
+    return None
+
+
+MAX_EXTRA_IMAGES = 3
+
+
+def _save_extra_images(tid, product_id):
+    """
+    Reads extra_images (repeatable), extra_image_1..3 from the current multipart
+    request; keeps at most 3 valid JPG/PNG/WEBP files of <= 5MB; uploads them to
+    COVER_BUCKET and records them in extra_images. Invalid files are skipped and
+    a missing extra_images table is skipped silently. Returns the saved count.
+    """
+    candidates = list(request.files.getlist("extra_images"))
+    for key in ("extra_image_1", "extra_image_2", "extra_image_3"):
+        candidates.extend(request.files.getlist(key))
+
+    saved = 0
+    for f in candidates:
+        if saved >= MAX_EXTRA_IMAGES:
+            break
+        try:
+            if not f or not f.filename or not _allowed_file(f.filename, ALLOWED_COVER_EXT):
+                continue
+            blob = f.read()
+            if not blob or len(blob) > MAX_COVER_BYTES:
+                continue
+            position = saved + 1
+            path = f"{tid}/{uuid.uuid4().hex}_extra_{position}_{secure_name(f.filename)}"
+            supabase.storage.from_(COVER_BUCKET).upload(
+                path=path,
+                file=blob,
+                file_options={"content-type": f.mimetype or "image/jpeg"},
+            )
+            url = supabase.storage.from_(COVER_BUCKET).get_public_url(path)
+            try:
+                supabase.table("extra_images").insert({
+                    "product_id": product_id,
+                    "image_url": url,
+                    "position": position,
+                    "created_at": _now_iso(),
+                }).execute()
+            except Exception as exc:
+                if _is_schema_missing(exc):
+                    return saved  # table not created yet: skip silently
+                logging.warning("_save_extra_images: insert failed for product %s", product_id, exc_info=True)
+                continue
+            saved += 1
+        except Exception:
+            logging.warning("_save_extra_images: one image skipped for product %s", product_id, exc_info=True)
+    return saved
+
+
+def _refresh_product_sales(product_id):
+    try:
+        res = (
+            supabase.table("escrow_orders")
+            .select("id", count="exact")
+            .eq("product_id", product_id)
+            .eq("status", "released")
+            .execute()
+        )
+        supabase.table("products").update({"sales_count": int(res.count or 0)}).eq("id", product_id).execute()
+    except Exception:
+        logging.warning("_refresh_product_sales: skipped for product %s", product_id, exc_info=True)
+
+
+def _refresh_product_rating(product_id):
+    try:
+        rows = _fetch_all(lambda a, b: (
+            supabase.table("ratings").select("stars").eq("product_id", product_id).order("id").range(a, b)
+        ))
+        stars = [int(r["stars"]) for r in rows if r.get("stars")]
+        avg = round(sum(stars) / len(stars), 2) if stars else 0
+        supabase.table("products").update({"avg_rating": avg}).eq("id", product_id).execute()
+    except Exception:
+        logging.warning("_refresh_product_rating: skipped for product %s", product_id, exc_info=True)
+
+
+# ---- escrow ------------------------------------------------------------------
+
+def _credit_balance(telegram_id, amount_kobo):
+    """Adds money to a wallet with a compare-and-set so concurrent changes are not lost."""
+    for _ in range(5):
+        res = supabase.table("users").select("balance_kobo").eq("telegram_id", telegram_id).limit(1).execute()
+        rows = res.data or []
+        if not rows:
+            raise RuntimeError("user not found")
+        current = int(rows[0].get("balance_kobo") or 0)
+        upd = (
+            supabase.table("users")
+            .update({"balance_kobo": current + int(amount_kobo)})
+            .eq("telegram_id", telegram_id)
+            .eq("balance_kobo", current)
+            .execute()
+        )
+        if upd.data:
+            return current + int(amount_kobo)
+    raise RuntimeError("balance kept changing, credit not applied")
+
+
+def _escrow_get(order_id):
+    try:
+        res = supabase.table("escrow_orders").select("*").eq("id", order_id).limit(1).execute()
+        rows = res.data or []
+        return rows[0] if rows else None
+    except Exception:
+        logging.warning("_escrow_get: lookup failed for %s", order_id, exc_info=True)
+        return None
+
+
+def _mark_referral_rewarded(*user_ids):
+    """Flags (does not pay) the referral reward on a referred user's first release."""
+    for uid in user_ids:
+        try:
+            (
+                supabase.table("referrals")
+                .update({"rewarded": True})
+                .eq("referred_id", int(uid))
+                .eq("rewarded", False)
+                .execute()
+            )
+        except Exception:
+            logging.warning("_mark_referral_rewarded: skipped for %s", uid, exc_info=True)
+
+
+def _release_escrow(order_id, from_statuses=("held",)):
+    """
+    Atomically moves the order to 'released' and pays the seller.
+    Returns the order row, or None if it was not in a releasable state.
+    Raises only if the seller could not be credited (status is put back first).
+    """
+    order = _escrow_get(order_id)
+    if not order or order.get("status") not in from_statuses:
+        return None
+    prior = order["status"]
+    claim = (
+        supabase.table("escrow_orders")
+        .update({"status": "released"})
+        .eq("id", order_id)
+        .eq("status", prior)
+        .execute()
+    )
+    if not claim.data:
+        return None
+
+    seller_id = int(order["seller_id"])
+    amount = int(order.get("seller_gets_kobo") or 0)
+    try:
+        _credit_balance(seller_id, amount)
+    except Exception:
+        logging.exception("_release_escrow: crediting seller failed for order %s", order_id)
+        try:
+            supabase.table("escrow_orders").update({"status": prior}).eq("id", order_id).eq("status", "released").execute()
+        except Exception:
+            logging.exception("_release_escrow: CRITICAL could not restore status for order %s", order_id)
+        raise
+
+    try:
+        supabase.table("wallet_transactions").insert({
+            "user_id": seller_id,
+            "type": "credit",
+            "amount_kobo": amount,
+            "reason": "escrow_release",
+            "reference": f"{order.get('reference') or order_id}-REL",
+        }).execute()
+    except Exception:
+        logging.exception("_release_escrow: seller credited but transaction row failed for order %s", order_id)
+
+    _refresh_product_sales(order.get("product_id"))
+    _mark_referral_rewarded(order.get("buyer_id"), seller_id)
+    order["status"] = "released"
+    return order
+
+
+def _refund_escrow(order_id, from_statuses=("held", "disputed")):
+    """
+    Auto-refund helper: pays buyer_pays_kobo back to the buyer, sets the order to
+    'refunded' and logs an escrow_refund transaction. Returns the order or None.
+    """
+    order = _escrow_get(order_id)
+    if not order or order.get("status") not in from_statuses:
+        return None
+    prior = order["status"]
+    claim = (
+        supabase.table("escrow_orders")
+        .update({"status": "refunded"})
+        .eq("id", order_id)
+        .eq("status", prior)
+        .execute()
+    )
+    if not claim.data:
+        return None
+
+    buyer_id = int(order["buyer_id"])
+    amount = int(order.get("buyer_pays_kobo") or 0)
+    try:
+        _credit_balance(buyer_id, amount)
+    except Exception:
+        logging.exception("_refund_escrow: crediting buyer failed for order %s", order_id)
+        try:
+            supabase.table("escrow_orders").update({"status": prior}).eq("id", order_id).eq("status", "refunded").execute()
+        except Exception:
+            logging.exception("_refund_escrow: CRITICAL could not restore status for order %s", order_id)
+        raise
+
+    try:
+        supabase.table("wallet_transactions").insert({
+            "user_id": buyer_id,
+            "type": "credit",
+            "amount_kobo": amount,
+            "reason": "escrow_refund",
+            "reference": f"{order.get('reference') or order_id}-REF",
+        }).execute()
+    except Exception:
+        logging.exception("_refund_escrow: buyer credited but transaction row failed for order %s", order_id)
+
+    order["status"] = "refunded"
+    return order
+
+
+def _open_dispute(user, order_id, reason, require_reason=False):
+    """Shared by /api/dispute and /api/escrow/dispute. Returns (response, status)."""
+    tid = int(user["telegram_id"])
+    order_id = str(order_id or "").strip()
+    reason = str(reason or "").strip()[:1000]
+    if not order_id:
+        return jsonify({"error": "order_id required"}), 400
+    if require_reason and not reason:
+        return jsonify({"error": "reason is required"}), 400
+
+    order = _escrow_get(order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+    if tid not in (int(order.get("buyer_id") or 0), int(order.get("seller_id") or 0)):
+        return jsonify({"error": "Forbidden"}), 403
+    if order.get("status") != "held":
+        return jsonify({"error": "Only held orders can be disputed", "code": "ORDER_NOT_HELD"}), 400
+
+    # Freeze first: this is what protects the money.
+    claim = (
+        supabase.table("escrow_orders")
+        .update({"status": "disputed"})
+        .eq("id", order_id)
+        .eq("status", "held")
+        .execute()
+    )
+    if not claim.data:
+        return jsonify({"error": "Order changed, please retry"}), 409
+
+    try:
+        supabase.table("disputes").insert({
+            "order_id": order.get("id"),
+            "product_id": order.get("product_id"),
+            "opener_id": tid,
+            "buyer_id": order.get("buyer_id"),
+            "seller_id": order.get("seller_id"),
+            "reason": reason,
+            "status": "open",
+            "created_at": _now_iso(),
+        }).execute()
+    except Exception:
+        logging.exception("_open_dispute: escrow frozen but dispute record failed for order %s", order_id)
+    return jsonify({"ok": True, "status": "success"}), 200
+
+
+# ---- ban / appeal ------------------------------------------------------------
+
+def _update_user_flags(telegram_id, fields):
+    try:
+        supabase.table("users").update(fields).eq("telegram_id", telegram_id).execute()
+    except Exception as exc:
+        if "banned_permanent" in fields and _is_schema_missing(exc):
+            reduced = {k: v for k, v in fields.items() if k != "banned_permanent"}
+            supabase.table("users").update(reduced).eq("telegram_id", telegram_id).execute()
+        else:
+            raise
+
+
+def _ban_user(seller_id, permanent=False):
+    fields = {"banned": True}
+    if permanent:
+        fields["banned_permanent"] = True
+    _update_user_flags(int(seller_id), fields)
+    try:
+        supabase.table("products").update({"is_hidden": True}).eq("seller_id", str(seller_id)).execute()
+    except Exception:
+        logging.exception("_ban_user: hiding products failed for %s", seller_id)
+
+
+def _unban_user(seller_id):
+    _update_user_flags(int(seller_id), {"banned": False, "banned_permanent": False})
+    try:
+        res = supabase.table("users").select("deleted_at").eq("telegram_id", int(seller_id)).limit(1).execute()
+        rows = res.data or []
+        if rows and not rows[0].get("deleted_at"):  # never unhide a deleted account's products
+            supabase.table("products").update({"is_hidden": False}).eq("seller_id", str(seller_id)).execute()
+    except Exception:
+        logging.exception("_unban_user: unhiding products failed for %s", seller_id)
+
+
+def _check_auto_ban(seller_id):
+    """Bans the seller once BAN_THRESHOLD (5) CONFIRMED reports+disputes exist. Never on 3."""
+    try:
+        seller_id = int(seller_id)
+    except (TypeError, ValueError):
+        return False
+    total = 0
+    for table in ("product_reports", "disputes"):
+        try:
+            res = (
+                supabase.table(table)
+                .select("id", count="exact")
+                .eq("seller_id", seller_id)
+                .eq("status", "confirmed")
+                .execute()
+            )
+            total += int(res.count or 0)
+        except Exception:
+            logging.warning("_check_auto_ban: could not count %s", table, exc_info=True)
+    if total < BAN_THRESHOLD:
+        return False
+    try:
+        _ban_user(seller_id)
+        return True
+    except Exception:
+        logging.exception("_check_auto_ban: ban failed for %s", seller_id)
+        return False
+
+
+# ---- referral ----------------------------------------------------------------
+
+def _handle_referral(user, init_data):
+    """ref_<id> / inv_<id> start_param -> users.referred_by + referrals row. prod_* is ignored."""
+    try:
+        sp = dict(parse_qsl(init_data, keep_blank_values=True)).get("start_param") or ""
+        m = re.fullmatch(r"(?:ref|inv)_(\d{1,15})", sp)
+        if not m:
+            return
+        inviter = int(m.group(1))
+        me = int(user["telegram_id"])
+        if inviter == me or user.get("referred_by"):
+            return
+        inv = supabase.table("users").select("telegram_id,deleted_at").eq("telegram_id", inviter).limit(1).execute()
+        rows = inv.data or []
+        if not rows or rows[0].get("deleted_at"):
+            return
+        upd = (
+            supabase.table("users")
+            .update({"referred_by": inviter})
+            .eq("telegram_id", me)
+            .is_("referred_by", "null")
+            .execute()
+        )
+        if not upd.data:
+            return
+        user["referred_by"] = inviter
+        supabase.table("referrals").insert({
+            "referrer_id": inviter,
+            "referred_id": me,
+            "created_at": _now_iso(),
+            "rewarded": False,
+        }).execute()
+    except Exception:
+        logging.warning("_handle_referral: skipped", exc_info=True)
+
+
+# ---- minimal PDF writer (no extra dependency) --------------------------------
+
+def _pdf_text(value, limit=90):
+    s = re.sub(r"[\r\n\t]", " ", str(value if value is not None else "-"))[:limit]
+    s = s.encode("latin-1", "replace").decode("latin-1")
+    return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _build_simple_pdf(title, rows):
+    """One-page A4 text PDF (Helvetica). rows = [(label, value), ...]."""
+    ops = [f"BT /F2 20 Tf 50 790 Td ({_pdf_text(title)}) Tj ET"]
+    y = 750
+    for label, value in rows:
+        ops.append(f"BT /F2 11 Tf 50 {y} Td ({_pdf_text(label, 40)}) Tj ET")
+        ops.append(f"BT /F1 11 Tf 210 {y} Td ({_pdf_text(value)}) Tj ET")
+        y -= 22
+    stream = "\n".join(ops).encode("latin-1", "replace")
+    objs = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+        b"/Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
+    ]
+    out = io.BytesIO()
+    out.write(b"%PDF-1.4\n")
+    offsets = []
+    for i, body in enumerate(objs, start=1):
+        offsets.append(out.tell())
+        out.write(f"{i} 0 obj\n".encode() + body + b"\nendobj\n")
+    xref = out.tell()
+    out.write(f"xref\n0 {len(objs) + 1}\n".encode())
+    out.write(b"0000000000 65535 f \n")
+    for off in offsets:
+        out.write(f"{off:010d} 00000 n \n".encode())
+    out.write(f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+    return out.getvalue()
+
+
+# =============================================================================
 # Health
 # =============================================================================
 
@@ -499,6 +1154,8 @@ def auth_validate():
     if user and user.get("deleted_at"):
         return jsonify(error="Account deleted", code="ACCOUNT_DELETED"), 403
 
+    _handle_referral(user, init_data)
+
     return jsonify({
         "ok": True,
         "user": {
@@ -506,6 +1163,8 @@ def auth_validate():
             "first_name": user.get("first_name"),
             "last_name": user.get("last_name"),
             "username": user.get("username"),
+            "banned": bool(user.get("banned")),
+            "banned_permanent": bool(user.get("banned_permanent")),
         },
     }), 200
 
@@ -525,37 +1184,90 @@ PRODUCT_PUBLIC_COLUMNS = (
 @app.route("/api/products", methods=["GET"])
 def products_list():
     # Explicit columns only. Never select("*"), never reference is_public.
-    # Hidden products (deleted sellers) are excluded via is_hidden.
+    # Hidden products (deleted sellers, owner-hidden, banned) are excluded via is_hidden.
+
+    # ?code=XXXX -> a single product (deep link)
+    code = (request.args.get("code") or "").strip()
+    if code:
+        product = _find_product(code, mode="code")
+        if not product:
+            return jsonify({"error": "Product not found", "code": "PRODUCT_NOT_FOUND"}), 404
+        return jsonify({"product": product}), 200
+
+    # ?mine=1 -> only the signed-in seller's products (hidden ones included)
+    if (request.args.get("mine") or "").strip().lower() in ("1", "true", "yes"):
+        user = _auth_user_or_none()
+        if not user:
+            return jsonify({"error": "Unauthorized"}), 401
+        try:
+            rows = _products_select(lambda cols: (
+                supabase.table("products")
+                .select(cols)
+                .eq("seller_id", str(user["telegram_id"]))
+                .order("created_at", desc=True)
+                .limit(200)
+                .execute()
+            ))
+            return jsonify({"products": [_normalize_product(r) for r in rows]}), 200
+        except Exception:
+            logging.exception("products_list: failed to load own products")
+            return jsonify({"products": []}), 200
+
     try:
-        res = (
+        rows = _products_select(lambda cols: (
             supabase.table("products")
-            .select(PRODUCT_PUBLIC_COLUMNS)
+            .select(cols)
             .eq("is_hidden", False)
             .order("created_at", desc=True)
             .limit(200)
             .execute()
-        )
-        return jsonify({"products": res.data or []}), 200
+        ))
+        backfilled = 0
+        for r in rows:  # old products get a code gradually (25 per request)
+            if "code" in r and not r.get("code") and backfilled < 25:
+                _ensure_code(r)
+                backfilled += 1
+        products = [_normalize_product(r) for r in rows]
+        # boosted first, then most sales; created_at desc is kept for ties (stable sort)
+        products.sort(key=lambda p: (0 if p["is_boosted"] else 1, -p["sales_count"]))
+        return jsonify({"products": products}), 200
     except Exception:
         logging.exception("products_list: failed to load products")
         return jsonify({"products": []}), 200
 
 
+@app.route("/api/products/<product_id>/images", methods=["GET"])
+def products_images(product_id):
+    # Public for visible products; a hidden product's images are only shown to its owner.
+    product = _find_product(product_id, mode="any", include_hidden=True)
+    if not product:
+        return jsonify({"error": "Product not found", "code": "PRODUCT_NOT_FOUND"}), 404
+    if not product.get("visible", True):
+        user = _auth_user_or_none()
+        if not user or str(user["telegram_id"]) not in (str(product.get("seller_id")), str(product.get("owner_id"))):
+            return jsonify({"error": "Product not found", "code": "PRODUCT_NOT_FOUND"}), 404
+    try:
+        rows = (
+            supabase.table("extra_images")
+            .select("image_url,position")
+            .eq("product_id", product["id"])
+            .order("position")
+            .limit(10)
+            .execute()
+        ).data or []
+    except Exception:
+        return jsonify({"images": []}), 200  # table missing or lookup failed
+    return jsonify({"images": [
+        {"image_url": r.get("image_url"), "position": r.get("position")} for r in rows
+    ]}), 200
+
+
 @app.route("/api/products/<product_id>", methods=["GET"])
 def products_get(product_id):
-    res = (
-        supabase.table("products")
-        .select(PRODUCT_PUBLIC_COLUMNS + ",platform_fee_kobo,paystack_fee_kobo,is_hidden")
-        .eq("id", product_id)
-        .limit(1)
-        .execute()
-    )
-    rows = res.data or []
-    if not rows or rows[0].get("is_hidden"):
+    # <product_id> may be a product id OR its 6-char / prod_XXXXXX code.
+    product = _find_product(product_id, mode="any")
+    if not product:
         return jsonify({"error": "Product not found", "code": "PRODUCT_NOT_FOUND"}), 404
-
-    product = rows[0]
-    product.pop("is_hidden", None)
     return jsonify({"product": product}), 200
 
 
@@ -564,6 +1276,10 @@ def products_get(product_id):
 @limiter.limit("10 per minute")
 def products_create(user):
     tid = user["telegram_id"]
+
+    blocked = _banned_response(user)
+    if blocked:
+        return blocked
 
     name = (request.form.get("name") or "").strip()
     description = (request.form.get("description") or "").strip()
@@ -589,6 +1305,26 @@ def products_create(user):
     fees = calc_fees(price_kobo)
     if fees["seller_gets_kobo"] <= 0:
         return jsonify({"error": "Price is too low to cover fees"}), 400
+
+    # Duplicate + daily-limit guards (rolling 24h). A failed lookup never blocks listing.
+    try:
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        recent = (
+            supabase.table("products")
+            .select("id,name,price_kobo")
+            .eq("seller_id", str(tid))
+            .gte("created_at", since)
+            .limit(100)
+            .execute()
+        ).data or []
+    except Exception:
+        logging.exception("products_create: duplicate/daily lookup failed for telegram_id=%s", tid)
+        recent = []
+    for r in recent:
+        if str(r.get("name") or "").strip().lower() == name.lower() and int(r.get("price_kobo") or 0) == price_kobo:
+            return jsonify({"error": "Duplicate product", "code": "DUPLICATE_PRODUCT"}), 409
+    if len(recent) >= DAILY_LISTING_LIMIT:
+        return jsonify({"error": "Daily limit reached (10/day)", "code": "DAILY_LIMIT"}), 429
 
     cover = request.files.get("cover")
     if not cover or not cover.filename:
@@ -658,19 +1394,27 @@ def products_create(user):
         "file_url": file_url,
         "category": category,
     }
+    product_code = _new_product_code()
+    if product_code:
+        insert_payload["code"] = product_code
 
     try:
         res = supabase.table("products").insert(insert_payload).execute()
         rows = res.data or []
     except Exception as exc:
-        # If the products table has no category column, the insert fails on that
-        # key alone. Retry once WITHOUT category so listings keep working.
+        # If the products table has no category (or code) column, the insert fails
+        # on that key alone. Retry once WITHOUT it so listings keep working.
+        drop = set()
         if "category" in str(exc).lower():
+            drop.add("category")
+        if _missing_column_in(exc, "code"):
+            drop.add("code")
+        if drop:
             logging.warning(
-                "products_create: insert failed on category column, retrying without category for telegram_id=%s",
-                tid,
+                "products_create: insert failed on column(s) %s, retrying without them for telegram_id=%s",
+                sorted(drop), tid,
             )
-            fallback_payload = {k: v for k, v in insert_payload.items() if k != "category"}
+            fallback_payload = {k: v for k, v in insert_payload.items() if k not in drop}
             try:
                 res = supabase.table("products").insert(fallback_payload).execute()
                 rows = res.data or []
@@ -681,6 +1425,13 @@ def products_create(user):
         else:
             logging.exception("products_create: insert failed for telegram_id=%s", tid)
             return jsonify({"error": "Could not create product"}), 500
+
+    # Optional extra images (max 3). Runs only AFTER the product exists and can never fail it.
+    try:
+        if rows and rows[0].get("id") is not None:
+            _save_extra_images(tid, rows[0]["id"])
+    except Exception:
+        logging.warning("products_create: extra images skipped for telegram_id=%s", tid, exc_info=True)
 
     return jsonify({"product": rows[0] if rows else insert_payload}), 201
 
@@ -799,9 +1550,14 @@ def wallet_verify_transaction(user):
         ps_body = ps_res.json()
     except (requests.RequestException, ValueError):
         logging.exception("wallet_verify_transaction: Paystack verify failed for %s", reference)
+        _log_webhook(reference, "verify-transaction", {"error": "paystack unreachable"}, "error")
         return jsonify({"error": "Could not reach Paystack"}), 502
 
     pdata = ps_body.get("data") or {}
+    _log_webhook(
+        reference, "verify-transaction", ps_body,
+        "success" if (ps_body.get("status") and pdata.get("status") == "success") else "failed",
+    )
     if not ps_body.get("status") or pdata.get("status") != "success":
         return jsonify({"status": "failed", "error": "Payment was not successful"}), 400
 
@@ -1257,19 +2013,13 @@ def wallet_withdrawals(user):
 def wallet_buy(user, product_id):
     tid = user["telegram_id"]
 
-    prod_res = (
-        supabase.table("products")
-        .select("id,seller_id,price_kobo,buyer_pays_kobo,seller_gets_kobo,platform_fee_kobo,is_hidden")
-        .eq("id", product_id)
-        .limit(1)
-        .execute()
-    )
-    prod_rows = prod_res.data or []
-    if not prod_rows:
+    # <product_id> may be a numeric/uuid id, a 6-char code, or prod_<code> (deep link).
+    # Hidden products are included here so they still answer 410 (as before), not 404.
+    product = _find_product(product_id, include_hidden=True)
+    if not product:
         return jsonify({"error": "Product not found", "code": "PRODUCT_NOT_FOUND"}), 404
 
-    product = prod_rows[0]
-    if product.get("is_hidden"):
+    if not product.get("visible", True):  # _find_product turns is_hidden into visible
         return jsonify({"error": "Product is no longer available", "code": "PRODUCT_UNAVAILABLE"}), 410
 
     if str(product.get("seller_id")) == str(tid):
@@ -1279,6 +2029,31 @@ def wallet_buy(user, product_id):
         seller_id_int = int(product.get("seller_id"))
     except (TypeError, ValueError):
         return jsonify({"error": "Product has no valid seller"}), 400
+
+    # A banned or deleted seller cannot be paid: refuse BEFORE the buyer is debited.
+    try:
+        seller_rows = (
+            supabase.table("users")
+            .select("telegram_id,banned,deleted_at")
+            .eq("telegram_id", seller_id_int)
+            .limit(1)
+            .execute()
+        ).data or []
+    except Exception as exc:
+        if not _missing_column_in(exc, "banned") and "banned" not in str(exc).lower():
+            logging.exception("wallet_buy: seller lookup failed for product %s", product.get("id"))
+            return jsonify({"error": "Could not verify the seller. Please try again."}), 500
+        # users.banned not migrated yet: check deletion only
+        try:
+            seller_rows = (
+                supabase.table("users").select("telegram_id,deleted_at")
+                .eq("telegram_id", seller_id_int).limit(1).execute()
+            ).data or []
+        except Exception:
+            logging.exception("wallet_buy: seller lookup failed for product %s", product.get("id"))
+            return jsonify({"error": "Could not verify the seller. Please try again."}), 500
+    if not seller_rows or seller_rows[0].get("banned") or seller_rows[0].get("deleted_at"):
+        return jsonify({"error": "Product is no longer available", "code": "PRODUCT_UNAVAILABLE"}), 410
 
     buyer_pays = int(product.get("buyer_pays_kobo") or 0)
     if buyer_pays <= 0:
@@ -1367,6 +2142,12 @@ def paystack_webhook():
     except (TypeError, ValueError):
         return jsonify({"error": "Invalid payload"}), 400
 
+    # Logged only AFTER the signature check, so unauthenticated callers cannot fill the table.
+    _log_webhook(
+        str((event.get("data") or {}).get("reference") or "").strip(),
+        event.get("event"), event, "received",
+    )
+
     if event.get("event") != "charge.success":
         return jsonify({"status": "received"}), 200
 
@@ -1401,6 +2182,7 @@ def paystack_webhook():
         new_balance = _credit_wallet_funding(tx, paid_kobo)
         if new_balance is None:
             return jsonify({"status": "received"}), 200
+        _log_webhook(reference, "charge.success", {"amount": paid_kobo}, "credited")
 
         authorization = pdata.get("authorization") or {}
         if authorization.get("reusable"):
@@ -1410,6 +2192,7 @@ def paystack_webhook():
                 logging.exception("paystack_webhook: saving card failed for %s", reference)
     except Exception:
         logging.exception("paystack_webhook: processing failed")
+        _log_webhook(str((event.get("data") or {}).get("reference") or ""), event.get("event"), {}, "error")
         return jsonify({"error": "Processing failed"}), 500
 
     return jsonify({"status": "received"}), 200
@@ -1574,19 +2357,23 @@ def rate_seller(user):
     try:
         existing = supabase.table("ratings").select("id,stars").eq("order_id", order_id).limit(1).execute()
         if existing.data:
-            return jsonify({"already_rated": True, "stars": existing.data[0].get("stars")}), 200
+            return jsonify({
+                "error": "already_rated", "already_rated": True,
+                "stars": existing.data[0].get("stars"),
+            }), 409
     except Exception:
         pass
 
-    order_res = supabase.table("escrow_orders").select("id,product_id,buyer_id,seller_id,status").eq("id", order_id).limit(1).execute()
-    orders = order_res.data or []
-    if not orders:
+    order = _escrow_get(order_id)
+    if not order:
         return jsonify({"error": "Order not found"}), 404
-    order = orders[0]
+    # buyer_id / seller_id / product_id from the request body are ignored on purpose:
+    # everything is taken from the order itself.
     if int(order.get("buyer_id")) != int(tid):
         return jsonify({"error": "Forbidden - only buyer can rate"}), 403
-    if order.get("status") != "released":
-        return jsonify({"error": "Can only rate after released"}), 400
+    order_status = order.get("status")
+    if order_status not in ("held", "released"):
+        return jsonify({"error": "Can only rate a held or released order"}), 400
 
     seller_id = int(order.get("seller_id"))
     real_product_id = str(order.get("product_id"))
@@ -1600,10 +2387,682 @@ def rate_seller(user):
             "stars": stars,
             "complaint_text": complaint_text,
         }).execute()
-        return jsonify({"status": "success", "rating": res.data[0] if res.data else {}}), 201
-    except Exception:
+    except Exception as exc:
+        # A unique(order_id) constraint turns a double-submit race into a 409.
+        if "duplicate" in str(exc).lower() or "23505" in str(exc):
+            return jsonify({"error": "already_rated", "already_rated": True}), 409
         logging.exception("rate_seller failed order_id=%s", order_id)
         return jsonify({"error": "Could not save rating"}), 500
+
+    _refresh_product_rating(order.get("product_id"))
+
+    # 3+ stars on a still-held order: release to the seller (same logic as /api/escrow/confirm).
+    # 1-2 stars: complaint saved, escrow stays held; the buyer then chooses refund or release.
+    released = False
+    if stars >= 3 and order_status == "held":
+        try:
+            released = _release_escrow(order_id) is not None
+        except Exception:
+            logging.exception("rate_seller: auto-release failed for order %s", order_id)
+
+    return jsonify({
+        "ok": True,
+        "status": "success",
+        "released": released,
+        "rating": res.data[0] if res.data else {},
+    }), 201
+# =============================================================================
+# Escrow — list / confirm / dispute / refund
+# (these three routes were missing from the supplied file; the frontend calls them)
+# =============================================================================
+
+@app.route("/api/escrow/list", methods=["GET"])
+@require_auth
+def escrow_list(user):
+    tid = user["telegram_id"]
+    try:
+        def mine():  # fresh builder each time (builders are mutable)
+            return supabase.table("escrow_orders").select("*").or_(f"buyer_id.eq.{tid},seller_id.eq.{tid}")
+        try:
+            orders = mine().order("created_at", desc=True).limit(100).execute().data or []
+        except Exception:
+            orders = mine().limit(100).execute().data or []
+    except Exception:
+        logging.exception("escrow_list: lookup failed for telegram_id=%s", tid)
+        return jsonify({"orders": []}), 200
+
+    # Hold period over and not disputed: release to the seller (there is no background job).
+    now = datetime.now(timezone.utc)
+    for o in orders:
+        due = _parse_ts(o.get("release_at"))
+        if o.get("status") == "held" and due and due <= now:
+            try:
+                if _release_escrow(o["id"]):
+                    o["status"] = "released"
+            except Exception:
+                logging.exception("escrow_list: auto-release failed for order %s", o.get("id"))
+
+    ids = list({o.get("product_id") for o in orders if o.get("product_id") is not None})
+    names = {}
+    if ids:
+        try:
+            pr = supabase.table("products").select("id,name,title").in_("id", ids).execute()
+            for p in pr.data or []:
+                names[str(p["id"])] = p.get("name") or p.get("title")
+        except Exception:
+            logging.warning("escrow_list: product names unavailable", exc_info=True)
+    for o in orders:
+        o["product_name"] = names.get(str(o.get("product_id")))
+    return jsonify({"orders": orders}), 200
+
+
+@app.route("/api/escrow/confirm", methods=["POST"])
+@require_auth
+@limiter.limit("20 per minute")
+def escrow_confirm(user):
+    tid = int(user["telegram_id"])
+    data = request.get_json(silent=True) or {}
+    order_id = str(data.get("order_id") or "").strip()
+    if not order_id:
+        return jsonify({"error": "order_id required"}), 400
+
+    order = _escrow_get(order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+    if int(order.get("buyer_id") or 0) != tid:
+        return jsonify({"error": "Only the buyer can confirm delivery"}), 403
+    if order.get("status") == "released":  # e.g. a 3+ star rating already released it
+        return jsonify({"ok": True, "status": "success", "already_released": True}), 200
+    if order.get("status") != "held":
+        return jsonify({"error": "Order is not held", "code": "ORDER_NOT_HELD"}), 400
+
+    try:
+        released = _release_escrow(order_id)
+    except Exception:
+        return jsonify({"error": "Could not release funds. Please try again."}), 500
+    if not released:
+        return jsonify({"error": "Order changed, please retry"}), 409
+    return jsonify({"ok": True, "status": "success"}), 200
+
+
+@app.route("/api/escrow/dispute", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def escrow_dispute(user):
+    data = request.get_json(silent=True) or {}
+    return _open_dispute(user, data.get("order_id"), data.get("reason"), require_reason=False)
+
+
+@app.route("/api/dispute", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def dispute_create(user):
+    data = request.get_json(silent=True) or {}
+    return _open_dispute(user, data.get("order_id"), data.get("reason"), require_reason=True)
+
+
+@app.route("/api/escrow/refund", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def escrow_refund(user):
+    """Buyer's 'Yes, Refund Me' after a 1-2 star rating. Only valid for a held order the buyer rated low."""
+    tid = int(user["telegram_id"])
+    data = request.get_json(silent=True) or {}
+    order_id = str(data.get("order_id") or "").strip()
+    if not order_id:
+        return jsonify({"error": "order_id required"}), 400
+
+    order = _escrow_get(order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+    if int(order.get("buyer_id") or 0) != tid:
+        return jsonify({"error": "Only the buyer can request this refund"}), 403
+    if order.get("status") != "held":
+        return jsonify({"error": "Order is not held", "code": "ORDER_NOT_HELD"}), 400
+
+    try:
+        rated = supabase.table("ratings").select("stars").eq("order_id", order_id).limit(1).execute().data or []
+    except Exception as exc:
+        return _db_error(exc, "escrow_refund: rating lookup failed")
+    if not rated or int(rated[0].get("stars") or 0) > 2:
+        return jsonify({"error": "A rating of 1-2 stars is required for an instant refund", "code": "RATING_REQUIRED"}), 400
+
+    try:
+        refunded = _refund_escrow(order_id, from_statuses=("held",))
+    except Exception:
+        return jsonify({"error": "Could not refund. Please try again."}), 500
+    if not refunded:
+        return jsonify({"error": "Order changed, please retry"}), 409
+    return jsonify({"ok": True, "status": "success"}), 200
+
+
+# =============================================================================
+# Receipt PDF
+# =============================================================================
+
+def _user_label(telegram_id):
+    try:
+        res = supabase.table("users").select("first_name,username").eq("telegram_id", int(telegram_id)).limit(1).execute()
+        rows = res.data or []
+        if rows:
+            name = rows[0].get("first_name") or "User"
+            return f"{name} (@{rows[0]['username']})" if rows[0].get("username") else name
+    except Exception:
+        logging.warning("_user_label: lookup failed for %s", telegram_id, exc_info=True)
+    return f"User {telegram_id}"
+
+
+@app.route("/api/receipt/<order_id>", methods=["GET"])
+@require_auth
+def receipt_pdf(user, order_id):
+    tid = int(user["telegram_id"])
+    order = _escrow_get(str(order_id))
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+    try:
+        buyer_id, seller_id = int(order.get("buyer_id")), int(order.get("seller_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Order not found"}), 404
+    if tid not in (buyer_id, seller_id):
+        return jsonify({"error": "Forbidden"}), 403
+
+    product_name = "-"
+    try:
+        pr = supabase.table("products").select("name,title").eq("id", order.get("product_id")).limit(1).execute().data or []
+        if pr:
+            product_name = pr[0].get("name") or pr[0].get("title") or "-"
+    except Exception:
+        logging.warning("receipt_pdf: product lookup failed", exc_info=True)
+
+    def naira(kobo):
+        return "NGN " + format(int(kobo or 0) / 100, ",.2f")
+
+    price = int(order.get("price_kobo") or 0)
+    buyer_pays = int(order.get("buyer_pays_kobo") or 0)
+    seller_gets = int(order.get("seller_gets_kobo") or 0)
+    when = _parse_ts(order.get("created_at"))
+    reference = str(order.get("reference") or order.get("id"))
+
+    rows = [
+        ("Reference", reference),
+        ("Product", product_name),
+        ("Product price", naira(price)),
+        ("Buyer fee share", naira(buyer_pays - price)),
+        ("Seller fee share", naira(price - seller_gets)),
+        ("Platform fee (in fees)", naira(order.get("platform_fee_kobo") or PLATFORM_FEE_KOBO)),
+        ("Buyer paid", naira(buyer_pays)),
+        ("Seller received", naira(seller_gets)),
+        ("Buyer", _user_label(buyer_id)),
+        ("Seller", _user_label(seller_id)),
+        ("Date", when.strftime("%Y-%m-%d %H:%M UTC") if when else "-"),
+        ("Status", str(order.get("status") or "-").capitalize()),
+    ]
+    pdf = _build_simple_pdf("PayLock Receipt", rows)
+    return Response(pdf, mimetype="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="paylock-receipt-{secure_name(reference)}.pdf"',
+        "Cache-Control": "no-store",
+    })
+
+
+# =============================================================================
+# Report + blacklist
+# =============================================================================
+
+@app.route("/api/report", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def report_product(user):
+    tid = int(user["telegram_id"])
+    data = request.get_json(silent=True) or {}
+    product_id = str(data.get("product_id") or "").strip()
+    reason = REPORT_REASONS.get(str(data.get("reason") or "").strip().lower())
+    if not product_id:
+        return jsonify({"error": "product_id required"}), 400
+    if not reason:
+        return jsonify({"error": "reason must be one of: Scam, Fake, Wrong file, Spam"}), 400
+
+    try:
+        prod = supabase.table("products").select("id,seller_id,owner_id").eq("id", product_id).limit(1).execute().data or []
+    except Exception:
+        prod = []
+    if not prod:
+        return jsonify({"error": "Product not found", "code": "PRODUCT_NOT_FOUND"}), 404
+    prod = prod[0]
+    try:
+        seller_id = int(prod.get("seller_id") or prod.get("owner_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Product has no valid seller"}), 400
+    if seller_id == tid:
+        return jsonify({"error": "You cannot report your own product"}), 400
+
+    try:
+        dup = (
+            supabase.table("product_reports").select("id")
+            .eq("product_id", prod["id"]).eq("reporter_id", tid).limit(1).execute()
+        ).data
+        if dup:
+            return jsonify({"error": "You already reported this product", "code": "ALREADY_REPORTED"}), 409
+        supabase.table("product_reports").insert({
+            "product_id": prod["id"],
+            "seller_id": seller_id,
+            "reporter_id": tid,
+            "reason": reason,
+            "status": "pending",
+            "created_at": _now_iso(),
+        }).execute()
+    except Exception as exc:
+        return _db_error(exc, "report_product: save failed")
+    return jsonify({"ok": True}), 201
+
+
+# =============================================================================
+# Visibility, analytics, boost
+# =============================================================================
+
+def _owns_product(prod, tid):
+    return str(prod.get("seller_id")) == str(tid) or str(prod.get("owner_id")) == str(tid)
+
+
+@app.route("/api/toggle-visibility", methods=["POST"])
+@require_auth
+@limiter.limit("30 per minute")
+def toggle_visibility(user):
+    tid = user["telegram_id"]
+    blocked = _banned_response(user)
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    product_id = str(data.get("product_id") or "").strip()
+    visible = data.get("visible")
+    if isinstance(visible, str) and visible.strip().lower() in ("true", "false"):
+        visible = visible.strip().lower() == "true"
+    if not product_id or not isinstance(visible, bool):
+        return jsonify({"error": "product_id and visible (true/false) are required"}), 400
+
+    try:
+        rows = supabase.table("products").select("id,seller_id,owner_id").eq("id", product_id).limit(1).execute().data or []
+    except Exception:
+        rows = []
+    if not rows:
+        return jsonify({"error": "Product not found", "code": "PRODUCT_NOT_FOUND"}), 404
+    if not _owns_product(rows[0], tid):
+        return jsonify({"error": "Forbidden"}), 403
+
+    try:
+        # is_hidden is what the marketplace and the buy route enforce; `visible` is kept in step when it exists.
+        try:
+            supabase.table("products").update({"is_hidden": not visible, "visible": visible}).eq("id", rows[0]["id"]).execute()
+        except Exception as exc:
+            if not _is_schema_missing(exc):
+                raise
+            supabase.table("products").update({"is_hidden": not visible}).eq("id", rows[0]["id"]).execute()
+    except Exception:
+        logging.exception("toggle_visibility: update failed for product %s", product_id)
+        return jsonify({"error": "Could not update visibility"}), 500
+    return jsonify({"ok": True, "visible": visible}), 200
+
+
+@app.route("/api/analytics", methods=["GET"])
+@require_auth
+def analytics(user):
+    tid = int(user["telegram_id"])
+    total_sales, revenue_kobo, avg_rating = 0, 0, 0
+    try:
+        rows = _fetch_all(lambda a, b: (
+            supabase.table("escrow_orders").select("id,seller_gets_kobo")
+            .eq("seller_id", tid).eq("status", "released").order("id").range(a, b)
+        ))
+        total_sales = len(rows)
+        revenue_kobo = sum(int(r.get("seller_gets_kobo") or 0) for r in rows)
+    except Exception:
+        logging.warning("analytics: orders unavailable", exc_info=True)
+    try:
+        rows = _fetch_all(lambda a, b: (
+            supabase.table("ratings").select("stars").eq("seller_id", tid).order("id").range(a, b)
+        ))
+        stars = [int(r["stars"]) for r in rows if r.get("stars")]
+        avg_rating = round(sum(stars) / len(stars), 2) if stars else 0
+    except Exception:
+        logging.warning("analytics: ratings unavailable", exc_info=True)
+    return jsonify({"analytics": {
+        "total_sales": total_sales,
+        "total_revenue_kobo": revenue_kobo,
+        "avg_rating": avg_rating,
+    }}), 200
+
+
+@app.route("/api/boost", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def boost_product(user):
+    tid = user["telegram_id"]
+    blocked = _banned_response(user)
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    product_id = str(data.get("product_id") or "").strip()
+    if not product_id:
+        return jsonify({"error": "product_id required"}), 400
+
+    try:
+        rows = (
+            supabase.table("products")
+            .select("id,seller_id,owner_id,is_hidden,is_boosted,boosted_until")
+            .eq("id", product_id).limit(1).execute()
+        ).data or []
+    except Exception as exc:
+        return _db_error(exc, "boost_product: product lookup failed")
+    if not rows:
+        return jsonify({"error": "Product not found", "code": "PRODUCT_NOT_FOUND"}), 404
+    prod = rows[0]
+    if not _owns_product(prod, tid):
+        return jsonify({"error": "Forbidden"}), 403
+    if prod.get("is_hidden"):
+        return jsonify({"error": "Make the product visible before boosting it"}), 400
+    if _boost_active(prod):
+        return jsonify({"error": "This product is already boosted", "code": "ALREADY_BOOSTED"}), 409
+
+    balance = int(user.get("balance_kobo") or 0)
+    if balance < BOOST_FEE_KOBO:
+        return jsonify({"error": "Insufficient balance for the ₦500 boost fee", "code": "INSUFFICIENT_BALANCE"}), 400
+
+    debit = (
+        supabase.table("users")
+        .update({"balance_kobo": balance - BOOST_FEE_KOBO})
+        .eq("telegram_id", tid)
+        .eq("balance_kobo", balance)
+        .execute()
+    )
+    if not debit.data:
+        return jsonify({"error": "Balance changed, please retry"}), 409
+
+    reference = "BST-" + uuid.uuid4().hex[:20]
+    until = (datetime.now(timezone.utc) + timedelta(hours=BOOST_HOURS)).isoformat()
+    try:
+        supabase.table("wallet_transactions").insert({
+            "user_id": tid,
+            "type": "debit",
+            "amount_kobo": BOOST_FEE_KOBO,
+            "reason": "boost_fee",
+            "reference": reference,
+        }).execute()
+        supabase.table("products").update({"is_boosted": True, "boosted_until": until}).eq("id", prod["id"]).execute()
+    except Exception as exc:
+        try:
+            _credit_balance(tid, BOOST_FEE_KOBO)
+        except Exception:
+            logging.exception("boost_product: CRITICAL balance revert failed for telegram_id=%s", tid)
+        try:
+            supabase.table("wallet_transactions").delete().eq("reference", reference).execute()
+        except Exception:
+            logging.exception("boost_product: could not remove orphan transaction %s", reference)
+        return _db_error(exc, "boost_product: failed after debit, fee refunded")
+    return jsonify({"ok": True, "boosted_until": until, "fee_kobo": BOOST_FEE_KOBO}), 200
+
+
+# =============================================================================
+# Appeals + admin
+# =============================================================================
+
+@app.route("/api/appeal", methods=["POST"])
+@require_auth
+@limiter.limit("5 per hour")
+def appeal_submit(user):
+    tid = int(user["telegram_id"])
+    data = request.get_json(silent=True) or {}
+    message = str(data.get("message") or "").strip()[:1000]
+    if not message:
+        return jsonify({"error": "message is required"}), 400
+    if not user.get("banned"):
+        return jsonify({"error": "Your account is not banned", "code": "NOT_BANNED"}), 400
+    if user.get("banned_permanent"):
+        return jsonify({"error": "This ban is permanent", "code": "BAN_PERMANENT"}), 403
+    try:
+        pending = (
+            supabase.table("appeals").select("id")
+            .eq("user_id", tid).eq("status", "pending").limit(1).execute()
+        ).data
+        if pending:
+            return jsonify({"error": "You already have a pending appeal", "code": "APPEAL_PENDING"}), 409
+        supabase.table("appeals").insert({
+            "user_id": tid,
+            "message": message,
+            "status": "pending",
+            "created_at": _now_iso(),
+        }).execute()
+    except Exception as exc:
+        return _db_error(exc, "appeal_submit: save failed")
+    return jsonify({"ok": True}), 201
+
+
+def _admin_list(table, key, default_status="pending"):
+    status = (request.args.get("status") or default_status).strip().lower()
+    def build():  # fresh builder each time (builders are mutable)
+        q = supabase.table(table).select("*")
+        return q if status == "all" else q.eq("status", status)
+
+    try:
+        try:
+            rows = build().order("created_at", desc=True).limit(100).execute().data or []
+        except Exception:
+            rows = build().limit(100).execute().data or []
+    except Exception as exc:
+        if _is_schema_missing(exc):
+            return jsonify({key: []}), 200
+        logging.exception("_admin_list: %s lookup failed", table)
+        return jsonify({key: []}), 200
+    return jsonify({key: rows}), 200
+
+
+@app.route("/api/admin/appeals", methods=["GET"])
+@require_auth
+@admin_only
+def admin_appeals(user):
+    return _admin_list("appeals", "appeals")
+
+
+@app.route("/api/admin/appeals/action", methods=["POST"])
+@require_auth
+@admin_only
+@limiter.limit("30 per minute")
+def admin_appeal_action(user):
+    data = request.get_json(silent=True) or {}
+    appeal_id = str(data.get("appeal_id") or "").strip()
+    action = str(data.get("action") or "").strip().lower()
+    if not appeal_id or action not in ("unban", "permanent"):
+        return jsonify({"error": "appeal_id and action (unban/permanent) are required"}), 400
+    try:
+        rows = supabase.table("appeals").select("*").eq("id", appeal_id).limit(1).execute().data or []
+    except Exception as exc:
+        return _db_error(exc, "admin_appeal_action: lookup failed")
+    if not rows:
+        return jsonify({"error": "Appeal not found"}), 404
+    appeal = rows[0]
+    if appeal.get("status") != "pending":
+        return jsonify({"error": "Appeal already handled", "code": "ALREADY_HANDLED"}), 409
+    try:
+        if action == "unban":
+            _unban_user(appeal["user_id"])
+            new_status = "approved"
+        else:
+            _ban_user(appeal["user_id"], permanent=True)
+            new_status = "rejected"
+        supabase.table("appeals").update({"status": new_status}).eq("id", appeal_id).execute()
+    except Exception as exc:
+        return _db_error(exc, "admin_appeal_action: update failed")
+    return jsonify({"ok": True, "status": new_status}), 200
+
+
+@app.route("/api/admin/reports", methods=["GET"])
+@require_auth
+@admin_only
+def admin_reports(user):
+    return _admin_list("product_reports", "reports")
+
+
+@app.route("/api/admin/reports/action", methods=["POST"])
+@require_auth
+@admin_only
+@limiter.limit("60 per minute")
+def admin_report_action(user):
+    data = request.get_json(silent=True) or {}
+    report_id = str(data.get("report_id") or "").strip()
+    action = str(data.get("action") or "").strip().lower()
+    if not report_id or action not in ("confirm", "dismiss"):
+        return jsonify({"error": "report_id and action (confirm/dismiss) are required"}), 400
+    try:
+        rows = supabase.table("product_reports").select("*").eq("id", report_id).limit(1).execute().data or []
+        if not rows:
+            return jsonify({"error": "Report not found"}), 404
+        if rows[0].get("status") != "pending":
+            return jsonify({"error": "Report already handled", "code": "ALREADY_HANDLED"}), 409
+        new_status = "confirmed" if action == "confirm" else "dismissed"
+        supabase.table("product_reports").update({"status": new_status}).eq("id", report_id).execute()
+    except Exception as exc:
+        return _db_error(exc, "admin_report_action: failed")
+    banned = _check_auto_ban(rows[0].get("seller_id")) if action == "confirm" else False
+    return jsonify({"ok": True, "status": new_status, "banned": banned}), 200
+
+
+@app.route("/api/admin/disputes", methods=["GET"])
+@require_auth
+@admin_only
+def admin_disputes(user):
+    return _admin_list("disputes", "disputes", default_status="open")
+
+
+@app.route("/api/admin/disputes/resolve", methods=["POST"])
+@require_auth
+@admin_only
+@limiter.limit("60 per minute")
+def admin_dispute_resolve(user):
+    """outcome=buyer -> refund buyer + counts as a CONFIRMED dispute against the seller; outcome=seller -> release."""
+    data = request.get_json(silent=True) or {}
+    dispute_id = str(data.get("dispute_id") or "").strip()
+    outcome = str(data.get("outcome") or "").strip().lower()
+    if not dispute_id or outcome not in ("buyer", "seller"):
+        return jsonify({"error": "dispute_id and outcome (buyer/seller) are required"}), 400
+    try:
+        rows = supabase.table("disputes").select("*").eq("id", dispute_id).limit(1).execute().data or []
+    except Exception as exc:
+        return _db_error(exc, "admin_dispute_resolve: lookup failed")
+    if not rows:
+        return jsonify({"error": "Dispute not found"}), 404
+    dispute = rows[0]
+    if dispute.get("status") != "open":
+        return jsonify({"error": "Dispute already resolved", "code": "ALREADY_HANDLED"}), 409
+
+    try:
+        if outcome == "buyer":
+            moved = _refund_escrow(dispute["order_id"], from_statuses=("disputed",))
+        else:
+            moved = _release_escrow(dispute["order_id"], from_statuses=("disputed",))
+    except Exception:
+        return jsonify({"error": "Could not move the funds. Please try again."}), 500
+    if not moved:
+        return jsonify({"error": "Order is no longer disputed", "code": "ORDER_NOT_DISPUTED"}), 409
+
+    new_status = "confirmed" if outcome == "buyer" else "dismissed"
+    try:
+        supabase.table("disputes").update({"status": new_status}).eq("id", dispute_id).execute()
+    except Exception:
+        logging.exception("admin_dispute_resolve: funds moved but dispute status update failed for %s", dispute_id)
+    banned = _check_auto_ban(dispute.get("seller_id")) if outcome == "buyer" else False
+    return jsonify({"ok": True, "status": new_status, "banned": banned}), 200
+
+
+ADMIN_USER_COLUMNS = "telegram_id,first_name,last_name,username,balance_kobo,banned,banned_permanent,deleted_at,created_at"
+
+
+@app.route("/api/admin/users", methods=["GET"])
+@require_auth
+@admin_only
+def admin_users(user):
+    status = (request.args.get("status") or "all").strip().lower()
+    # Strip everything that could alter the PostgREST filter string (commas, parentheses, wildcards...).
+    term = re.sub(r"[^\w .-]", "", (request.args.get("search") or "").strip().lstrip("@"))[:50].strip()
+
+    # (columns, order column): degrade gracefully if banned / created_at are not migrated.
+    variants = [
+        (ADMIN_USER_COLUMNS, "created_at"),
+        (ADMIN_USER_COLUMNS.replace(",created_at", ""), "telegram_id"),
+        ("telegram_id,first_name,last_name,username,balance_kobo,deleted_at", "telegram_id"),
+    ]
+    # "active" is filtered in Python (banned may be NULL on old rows), so fetch a wider window.
+    window = 300 if status == "active" else 100
+
+    rows, ok_query = [], False
+    for cols, order_col in variants:
+        try:
+            q = supabase.table("users").select(cols)
+            if status == "banned":
+                q = q.eq("banned", True)
+            if term:
+                parts = [f"first_name.ilike.*{term}*", f"username.ilike.*{term}*"]
+                if term.isdigit():
+                    parts.append(f"telegram_id.eq.{term}")
+                q = q.or_(",".join(parts))
+            rows = q.order(order_col, desc=True).limit(window).execute().data or []
+            ok_query = True
+            break
+        except Exception:
+            logging.warning("admin_users: query variant failed (%s)", cols, exc_info=True)
+    if not ok_query:
+        return jsonify({"users": []}), 200
+
+    if status == "active":
+        rows = [r for r in rows if not r.get("banned") and not r.get("deleted_at")]
+    return jsonify({"users": rows[:100]}), 200
+
+
+@app.route("/api/admin/orders", methods=["GET"])
+@require_auth
+@admin_only
+def admin_orders(user):
+    status = (request.args.get("status") or "all").strip().lower()
+    allowed = {"held", "released", "disputed", "refunded"}
+
+    def build():  # fresh builder each time (builders are mutable)
+        q = supabase.table("escrow_orders").select("*")
+        return q.eq("status", status) if status in allowed else q
+
+    try:
+        try:
+            orders = build().order("created_at", desc=True).limit(100).execute().data or []
+        except Exception:
+            orders = build().limit(100).execute().data or []
+    except Exception:
+        logging.exception("admin_orders: lookup failed")
+        return jsonify({"orders": []}), 200
+
+    ids = list({o.get("product_id") for o in orders if o.get("product_id") is not None})
+    names = {}
+    if ids:
+        try:
+            pr = supabase.table("products").select("id,name,title").in_("id", ids).execute()
+            for p in pr.data or []:
+                names[str(p["id"])] = p.get("name") or p.get("title")
+        except Exception:
+            logging.warning("admin_orders: product names unavailable", exc_info=True)
+    for o in orders:
+        o["product_name"] = names.get(str(o.get("product_id")))
+    return jsonify({"orders": orders}), 200
+
+
+@app.route("/api/admin/webhook-logs", methods=["GET"])
+@require_auth
+@admin_only
+def admin_webhook_logs(user):
+    try:
+        rows = supabase.table("webhook_logs").select("*").order("created_at", desc=True).limit(50).execute().data or []
+    except Exception as exc:
+        if _is_schema_missing(exc):
+            return jsonify({"logs": []}), 200
+        logging.exception("admin_webhook_logs: lookup failed")
+        return jsonify({"logs": []}), 200
+    return jsonify({"logs": rows}), 200
+
+
 # =============================================================================
 # Frontend (serves ONLY index.html)
 # =============================================================================
