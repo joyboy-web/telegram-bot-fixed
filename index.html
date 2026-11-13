@@ -254,9 +254,49 @@ html,body{ overflow-x:hidden; }
   .tabbar,.btn,.btn-row,.back-btn,.toast,.overlay{display:none!important}
   .app-shell{padding:0;max-width:none}
 }
+
+/* ===== PAYLOCK ADDITIONS (additive) ===== */
+.chat-msg-paylock{background:#1f1f1f;color:#fff;border-bottom-left-radius:4px}
+.chat-msg-label{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#9CA3AF;margin-bottom:3px}
+.chat-tick{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#1D9BF0;color:#fff;font-size:9px;line-height:1}
+#offline-banner{display:none;position:fixed;top:0;left:0;right:0;z-index:2500;align-items:center;justify-content:center;gap:10px;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top));background:var(--red);color:#fff;font-size:13.5px;font-weight:600}
+#offline-banner.show{display:flex}
+#offline-banner button{background:#fff;color:#000;border:0;border-radius:8px;padding:5px 12px;font-weight:700;font-size:13px}
+.ban-banner{display:none;align-items:center;justify-content:space-between;gap:10px;background:var(--red);color:#fff;border-radius:14px;padding:10px 12px;margin-bottom:12px;font-size:13px;font-weight:600}
+.ban-banner .btn{background:#fff;color:#000;border-color:#fff;flex:none}
+.skel{pointer-events:none}
+.sk{background:var(--chip);border-radius:8px;animation:skpulse 1.2s ease-in-out infinite}
+.sk-img{width:100%;aspect-ratio:1/1;border-radius:12px}
+.sk-line{height:12px;width:80%}
+.sk-line.short{width:45%}
+@keyframes skpulse{0%,100%{opacity:1}50%{opacity:.45}}
+.pc-meta{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.pc-row .pprice{min-width:0;flex:1}
+.pc-icons{display:flex;gap:4px;flex:none}
+.ic-btn{background:var(--chip);border:0;border-radius:8px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--muted);padding:0}
+.pv-thumbs{display:flex;gap:8px;margin:-6px 0 14px}
+.pv-thumb{width:64px;height:64px;border-radius:10px;object-fit:cover;background:var(--chip);cursor:pointer;border:1px solid var(--line)}
+.stat-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 6px;text-align:center;min-width:0}
+.stat-card .sv{font-weight:800;font-size:15px;word-break:break-all}
+.stat-card .sl{font-size:11px;color:var(--muted);margin-top:2px}
+.mp-row{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:var(--card)}
+.mp-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mp-title{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mp-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.mp-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+.mp-vis{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.b-hidden{background:rgba(107,114,128,.2);color:var(--muted)}
+.b-boost{background:rgba(29,155,240,.15);color:#1D9BF0}
+.b-banned{background:rgba(220,38,38,.15);color:var(--red)}
+.app-footer{text-align:center;font-size:11.5px;color:var(--muted);margin:18px 0 4px}
+.empty .empty-ic{display:flex;justify-content:center;margin-bottom:8px;color:var(--muted)}
+.empty .btn{margin-top:10px}
 </style>
 </head>
 <body>
+
+<div id="offline-banner" role="alert"><span>No connection.</span><button type="button" id="offline-retry">Retry</button></div>
 
 <!-- ============ GATE SCREENS ============ -->
 <div class="gate show" id="gate-loading"><div class="spinner"></div><p>Loading PayLock...</p></div>
@@ -286,6 +326,7 @@ html,body{ overflow-x:hidden; }
 
   <!-- ============ HOME ============ -->
   <section class="page active" id="pg-home">
+    <div class="ban-banner" id="banned-banner"><span>Account temporarily banned (5 reports).</span><button class="btn sm" type="button" id="appeal-btn">Appeal</button></div>
     <div class="welcome">Welcome back</div>
     <div class="hello">
       <h1 id="home-greeting">Hi there</h1>
@@ -309,11 +350,13 @@ html,body{ overflow-x:hidden; }
     <div class="section-title">Featured products</div>
     <div class="grid" id="home-grid"></div>
     <div class="empty" id="home-empty" style="display:none"><div class="big">No products yet</div>Be the first to list a product.</div>
+    <div class="app-footer">PayLock v1.0.0 • Built for safe digital sales</div>
   </section>
 
   <!-- ============ SELL ============ -->
   <section class="page" id="pg-sell">
     <h2 class="page-title">Sell a product</h2>
+    <button class="btn secondary" type="button" style="margin-bottom:14px" onclick="PayLock.goPage('pg-myproducts')">My Products</button>
     <form id="sell-form" onsubmit="PayLock.submitSellForm(event)" novalidate>
       <label class="upload-box" id="cover-box"></label>
       <label class="upload-box" id="file-box"></label>
@@ -429,10 +472,10 @@ html,body{ overflow-x:hidden; }
     <h2 class="page-title">Chat</h2>
     <div id="chat-list"></div>
     <div class="empty" id="chat-empty"><div class="big">No conversations yet</div></div>
-    <div id="chat-root" style="display:none">
+    <div id="chat-room" style="display:contents"><div id="chat-root" style="display:none">
       <div class="chat-head" id="chat-head">
         <button class="back-btn" type="button" id="chat-back" aria-label="Back to chats">‹</button>
-        <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><defs><clipPath id="pl-av-clip"><circle cx="20" cy="20" r="20"/></clipPath></defs><circle cx="20" cy="20" r="20" fill="#D1D5DB"/><g clip-path="url(#pl-av-clip)"><circle cx="20" cy="15" r="6.5" fill="#6B7280"/><ellipse cx="20" cy="37" rx="13" ry="10" fill="#6B7280"/></g></svg>
+        <svg class="chat-head-logo" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
         <div class="chat-head-txt">
           <div class="chat-head-name">PayLock <svg width="16" height="16" viewBox="0 0 24 24" aria-label="Verified"><circle cx="12" cy="12" r="12" fill="#1D9BF0"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="chat-head-sub">Escrow protected • Online</div>
@@ -442,7 +485,7 @@ html,body{ overflow-x:hidden; }
       <div id="chat-messages"></div>
       <div id="ratingBox" class="rate-box" style="display:none">
         <div id="rating-label">Rate this seller:</div>
-        <div id="rating-stars">
+        <div id="rate-stars">
           <button type="button" class="rate-star" id="star-1">&#9734;</button>
           <button type="button" class="rate-star" id="star-2">&#9734;</button>
           <button type="button" class="rate-star" id="star-3">&#9734;</button>
@@ -450,16 +493,25 @@ html,body{ overflow-x:hidden; }
           <button type="button" class="rate-star" id="star-5">&#9734;</button>
         </div>
       </div>
+      <div class="chat-actions" id="chat-refund-row" style="display:none">
+        <button class="btn secondary" type="button" id="chat-refund-yes">Yes, Refund Me</button>
+        <button class="btn" type="button" id="chat-refund-no">No, Release Payment</button>
+      </div>
       <div class="chat-actions">
-        <button class="btn" type="button" id="chat-buy-btn">Buy now</button>
+        <button class="btn" type="button" id="pay-in-chat" data-haptic="1">Pay Now</button>
         <button class="btn" type="button" id="chat-confirm-btn" style="display:none">Confirm Delivery</button>
         <button class="btn secondary" type="button" id="chat-dispute-btn" style="display:none">Dispute</button>
+      </div>
+      <div class="chat-actions" id="chat-extra-actions">
+        <button class="btn secondary sm" type="button" id="chat-preview-btn">Preview</button>
+        <button class="btn secondary sm" type="button" id="download-in-chat" style="display:none">Download</button>
+        <button class="btn secondary sm" type="button" id="chat-keep-btn" style="display:none">Keep / Save</button>
       </div>
       <div class="chat-inputbar">
         <input class="input" id="chat-input" type="text" maxlength="500" autocomplete="off" placeholder="Type a message">
         <button class="btn sm" type="button" id="chat-send">Send</button>
       </div>
-    </div>
+    </div></div>
   </section>
 
   <!-- ============ BUY ============ -->
@@ -505,10 +557,16 @@ html,body{ overflow-x:hidden; }
       <div class="empty" id="esc-empty" style="display:none;padding:18px 0">No escrow orders yet</div>
     </div>
 
+    <div class="card" id="account-links">
+      <div class="card-title">Account</div>
+      <button class="row-link" type="button" onclick="PayLock.goPage('pg-myproducts')"><span>My Products</span><span class="muted">›</span></button>
+      <button class="row-link" type="button" id="support-btn"><span>Support Chat</span><span class="muted">›</span></button>
+    </div>
+
     <div class="danger-zone">
       <div class="card-title">Danger zone</div>
       <p class="muted small" style="margin-bottom:10px">Deleting your account is permanent and cannot be undone.</p>
-      <button class="btn danger" type="button" onclick="PayLock.openDeleteSheet()">Delete Account</button>
+      <button class="btn danger" type="button" id="delete-account-btn" onclick="PayLock.openDeleteSheet()">Delete Account</button>
     </div>
 
     <div class="footer-links">
@@ -516,6 +574,20 @@ html,body{ overflow-x:hidden; }
       <button type="button" onclick="PayLock.goPage('pg-terms')">Terms</button>
       <span>v1.0.0-prod</span>
     </div>
+    <div class="app-footer">PayLock v1.0.0 • Built for safe digital sales</div>
+  </section>
+
+  <!-- ============ MY PRODUCTS (seller dashboard) ============ -->
+  <section class="page" id="pg-myproducts">
+    <button class="back-btn" type="button" onclick="PayLock.goPage('pg-sell')">‹ Back</button>
+    <h2 class="page-title">My Products</h2>
+    <div class="grid" id="analytics-cards" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:14px">
+      <div class="stat-card"><div class="sv" id="an-sales">0</div><div class="sl">Total Sales</div></div>
+      <div class="stat-card"><div class="sv" id="an-revenue">₦0.00</div><div class="sl">Total Revenue</div></div>
+      <div class="stat-card"><div class="sv" id="an-rating">0.0</div><div class="sl">Avg Rating</div></div>
+    </div>
+    <div id="mp-list"></div>
+    <div class="empty" id="mp-empty" style="display:none"><div class="big">No products yet</div></div>
   </section>
 
   <!-- ============ TRANSACTIONS ============ -->
@@ -527,6 +599,9 @@ html,body{ overflow-x:hidden; }
       <button class="chip" type="button" data-filter="credits" onclick="PayLock.setTxFilter('credits')">Credits</button>
       <button class="chip" type="button" data-filter="debits" onclick="PayLock.setTxFilter('debits')">Debits</button>
       <button class="chip" type="button" data-filter="withdrawals" onclick="PayLock.setTxFilter('withdrawals')">Withdrawals</button>
+      <button class="chip" type="button" data-filter="funding" onclick="PayLock.setTxFilter('funding')">Funding</button>
+      <button class="chip" type="button" data-filter="purchase" onclick="PayLock.setTxFilter('purchase')">Purchase</button>
+      <button class="chip" type="button" data-filter="sale" onclick="PayLock.setTxFilter('sale')">Sale</button>
     </div>
     <div class="card" style="padding:4px 16px">
       <div id="tx-list"></div>
@@ -701,6 +776,20 @@ html,body{ overflow-x:hidden; }
   </div>
 </div>
 
+<!-- ============ GENERIC SHEET + APPEAL ============ -->
+<div class="overlay" id="xs-overlay"><div class="sheet" id="xs-body"></div></div>
+<div class="overlay" id="appeal-modal">
+  <div class="sheet">
+    <h3>Appeal ban</h3>
+    <p class="sub">Tell us why your account should be unbanned.</p>
+    <div class="field"><label for="appeal-text">Your message</label><textarea class="textarea" id="appeal-text" maxlength="1000" placeholder="Explain what happened"></textarea></div>
+    <div class="btn-row">
+      <button class="btn secondary" type="button" id="appeal-cancel">Cancel</button>
+      <button class="btn" type="button" id="appeal-submit">Submit Appeal</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const PayLock = (function(){
 'use strict';
@@ -852,15 +941,19 @@ function jsonHeaders(){
 }
 async function api(path, opts){
   let res;
+  lastApi = { path: path, opts: opts };
   try {
     res = await fetch(path, opts || {});
   } catch (err) {
     if (!navigator.onLine) showGate('offline');
+    showOfflineBanner();
     throw err;
   }
+  hideOfflineBanner();
   let data = {};
   try { data = await res.json(); } catch (e) { data = {}; }
   if (res.status === 403 && data && data.code === 'ACCOUNT_DELETED') showDeletedGate();
+  if (data && data.code === 'ACCOUNT_BANNED') { state.banned = true; renderBanBanner(); }
   return { res: res, data: data || {} };
 }
 
@@ -880,6 +973,17 @@ function closeApp(){ if (tg && tg.close) tg.close(); }
 function applyTheme(){
   const dark = tg && tg.colorScheme === 'dark';
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  try {
+    const st = document.documentElement.style;
+    const tp = (tg && tg.themeParams) || {};
+    const set = function(k, v){ if (v) st.setProperty(k, v); else st.removeProperty(k); };
+    set('--bg', tp.bg_color);
+    set('--ink', tp.text_color);
+    set('--muted', tp.hint_color);
+    set('--card', dark ? tp.secondary_bg_color : tp.bg_color);
+    if (tg && tg.setHeaderColor && tp.bg_color) tg.setHeaderColor(tp.bg_color);
+    if (tg && tg.setBackgroundColor && tp.bg_color) tg.setBackgroundColor(tp.bg_color);
+  } catch (e) {}
 }
 
 /* ---------- Navigation ---------- */
@@ -888,7 +992,7 @@ function goPage(id){
   const target = $(id);
   if (target) target.classList.add('active');
   const mainTabs = ['pg-home', 'pg-sell', 'pg-chat', 'pg-buy', 'pg-wallet'];
-  const activeTab = mainTabs.indexOf(id) >= 0 ? id : (id === 'pg-preview' ? 'pg-buy' : 'pg-wallet');
+  const activeTab = mainTabs.indexOf(id) >= 0 ? id : (id === 'pg-preview' ? 'pg-buy' : (id === 'pg-myproducts' ? 'pg-sell' : 'pg-wallet'));
   document.querySelectorAll('.tab').forEach(function(t){
     t.classList.toggle('active', t.getAttribute('data-tab') === activeTab);
   });
@@ -896,7 +1000,9 @@ function goPage(id){
   if (id === 'pg-wallet') { loadBalance(); loadEscrowOrders(); }
   else if (id === 'pg-tx') { loadTransactions(); }
   else if (id === 'pg-withdraw') { loadBalance(); loadBanks(); loadWithdrawals(); }
-  else if (id === 'pg-buy' || id === 'pg-home') { loadProducts(); }
+  else if (id === 'pg-buy' || id === 'pg-home') { loadProducts(); renderBanBanner(); }
+  else if (id === 'pg-myproducts') { loadMyProducts(); }
+  else if (id === 'pg-admin' && isAdmin()) { loadAppeals(); }
 }
 
 /* ---------- Balance ---------- */
@@ -936,6 +1042,12 @@ async function loadBalance(){
 
 /* ---------- Products ---------- */
 async function loadProducts(){
+  if (!state.products.length) {
+    renderSkeletons('home-grid', 4);
+    renderSkeletons('buy-grid', 6);
+    $('home-empty').style.display = 'none';
+    $('buy-empty').style.display = 'none';
+  }
   try {
     const r = await api('/api/products');
     state.products = (r.res.ok && r.data.products) ? r.data.products : [];
@@ -961,10 +1073,18 @@ function renderProductGrid(gridId, emptyId, list){
       card.appendChild(img);
     }
     card.appendChild(el('div', 'ptitle', p.name || p.title || 'Untitled'));
-    card.appendChild(el('div', 'pprice', nairaFmt(p.buyer_pays_kobo)));
+    card.appendChild(el('div', 'pc-meta', salesLine(p)));
+    const prow = el('div', 'pc-row');
+    prow.appendChild(el('div', 'pprice', nairaFmt(p.buyer_pays_kobo)));
+    const picons = el('div', 'pc-icons');
+    picons.appendChild(iconBtn(ICON_LINK, 'Copy link', function(){ copyLink(p); }));
+    if (!isOwnProduct(p)) picons.appendChild(iconBtn(ICON_FLAG, 'Report', function(){ openReportSheet(p); }));
+    prow.appendChild(picons);
+    card.appendChild(prow);
     if (!isOwnProduct(p)) {
       const btn = el('button', 'btn sm', 'Buy');
       btn.type = 'button';
+      btn.setAttribute('data-haptic', '1');
       btn.addEventListener('click', function(ev){ ev.stopPropagation(); enterChatRoom(); openChat(p); });
       card.appendChild(btn);
     }
@@ -1160,6 +1280,9 @@ function renderEscrowList(list){
       card.appendChild(el('span', 'badge b-held', 'Held • Auto-release in ' + escrowHoursLeft(o) + 'h'));
     }
     const actions = el('div', 'esc-actions');
+    const detailBtn = el('button', 'btn sm secondary', 'Details');
+    detailBtn.type = 'button';
+    detailBtn.addEventListener('click', function(){ openOrderDetail(o); });
     if (status === 'held' && isBuyer) {
       const cb = el('button', 'btn sm', 'Confirm Delivery');
       cb.type = 'button';
@@ -1172,7 +1295,8 @@ function renderEscrowList(list){
       db.addEventListener('click', function(){ disputeEscrow(o.id, db); });
       actions.appendChild(db);
     }
-    if (actions.childNodes.length) card.appendChild(actions);
+    actions.appendChild(detailBtn);
+    card.appendChild(actions);
     box.appendChild(card);
   });
 }
@@ -1235,6 +1359,9 @@ function renderTransactions(){
     if (f === 'credits') return t.type === 'credit';
     if (f === 'debits') return t.type === 'debit';
     if (f === 'withdrawals') return reason.indexOf('withdraw') >= 0;
+    if (f === 'funding') return reason.indexOf('funding') >= 0;
+    if (f === 'purchase') return reason.indexOf('purchase') >= 0 || reason.indexOf('escrow_hold') >= 0;
+    if (f === 'sale') return reason.indexOf('escrow_release') >= 0 && t.type === 'credit';
     return true;
   });
   if (!rows.length) { empty.style.display = 'block'; return; }
@@ -1835,6 +1962,12 @@ async function boot(){
     state.first_name = u.first_name || '';
     $('home-greeting').textContent = 'Hi ' + (state.first_name || 'there');
     $('home-id').textContent = 'ID: ' + u.telegram_id;
+    try {
+      state.banned = !!(u.banned || u.is_banned || u.status === 'banned');
+      setupAdmin();
+      renderBanBanner();
+      await handleDeepLink();
+    } catch (e) { /* never block boot */ }
     hideGates();
     loadBalanceVisibility();
     updateEyeIcon();
@@ -1942,11 +2075,23 @@ function renderChatMessages(){
   chatState.messages.forEach(function(m){
     const d = document.createElement('div');
     d.className = 'chat-msg chat-msg-' + m.role;
-    d.textContent = m.text;
+    if (m.role === 'paylock') {
+      const lb = document.createElement('div');
+      lb.className = 'chat-msg-label';
+      lb.appendChild(document.createTextNode('PayLock '));
+      const tk = document.createElement('span');
+      tk.className = 'chat-tick';
+      tk.textContent = '✓';
+      lb.appendChild(tk);
+      d.appendChild(lb);
+      d.appendChild(document.createTextNode(m.text));
+    } else {
+      d.textContent = m.text;
+    }
     box.appendChild(d);
   });
 
-  document.getElementById('chat-buy-btn').style.display = (chatState.stage === 'ask') ? '' : 'none';
+  document.getElementById('pay-in-chat').style.display = (chatState.stage === 'ask') ? '' : 'none';
   document.getElementById('chat-confirm-btn').style.display = (chatState.stage === 'paid') ? '' : 'none';
   document.getElementById('chat-dispute-btn').style.display = (chatState.stage === 'paid') ? '' : 'none';
 
@@ -1955,6 +2100,7 @@ function renderChatMessages(){
   chatSave();
   chatPoll();
   renderRatingBox();
+  chatExtrasRender();
 }
 
 function chatSave(){
@@ -2015,7 +2161,7 @@ let ratingWired = false;
 
 // private helper: fill stars up to n in #FFC107
 const ratingFill = function(n){
-  const btns = document.querySelectorAll('#rating-stars .rate-star');
+  const btns = document.querySelectorAll('#rate-stars .rate-star');
   btns.forEach(function(b, i){
     b.textContent = (i < n) ? '\u2605' : '\u2606';
     b.style.color = (i < n) ? '#FFC107' : '';
@@ -2026,12 +2172,12 @@ function renderRatingBox(){
   const box = document.getElementById('ratingBox');
   if(!box) return;
   const label = document.getElementById('rating-label');
-  const wrap = document.getElementById('rating-stars');
+  const wrap = document.getElementById('rate-stars');
   const p = chatState.product;
   box.style.display = 'none';
 
-  // only: pg-chat product, an order, stage 'done'
-  if(!p || !chatState.orderId || chatState.stage !== 'done') return;
+  // only: pg-chat product, an order, stage 'paid' (delivered) or 'done'
+  if(!p || !chatState.orderId || (chatState.stage !== 'done' && chatState.stage !== 'paid')) return;
 
   // buyer only (same check as 4.6)
   const sid = (p.seller_id !== undefined && p.seller_id !== null) ? p.seller_id : p.owner_id;
@@ -2041,7 +2187,7 @@ function renderRatingBox(){
 
   // only when the order is 'released' (stage 'done' is also used for disputed)
   const oid = String(chatState.orderId);
-  if(ratingReleased[oid] !== true){
+  if(chatState.stage !== 'paid' && ratingReleased[oid] !== true){
     if(ratingReleased[oid] === undefined && !ratingChecking[oid]){
       ratingChecking[oid] = true;
       chatFetchOrders().then(function(list){
@@ -2100,7 +2246,7 @@ function renderRatingBox(){
     chatState.pendingStars = parseInt(pending, 10) || 1;
   }
   const waiting = !!(chatState.waitingComplaint && String(chatState.waitingOrderId) === oid);
-  wrap.querySelectorAll('.rate-star').forEach(function(b){ b.disabled = waiting || !!chatState.ratingBusy; });
+  wrap.querySelectorAll('.rate-star').forEach(function(b){ b.disabled = waiting || !!chatState.ratingBusy || !!chatState.refundPrompt; });
   ratingFill(waiting ? (chatState.pendingStars || 0) : 0);
 }
 
@@ -2109,6 +2255,7 @@ async function submitRating(stars){
   if(!p || !oid || chatState.ratingBusy) return;
   stars = Math.round(Number(stars));
   if(!(stars >= 1 && stars <= 5)) return;
+  if(chatState.stage === 'paid') return rateInEscrow(stars);
 
   // BAD (1-2): ask for the complaint first, send only after it is typed
   let complaint = null;
@@ -2200,7 +2347,7 @@ function handleComplaintReply(){
 
 /* ---------- Chat: send + button wiring (reuses buyProduct / confirmDelivery / disputeEscrow) ---------- */
 function resetChatButtons(){
-  [['chat-buy-btn', 'Buy now'], ['chat-confirm-btn', 'Confirm Delivery'], ['chat-dispute-btn', 'Dispute']].forEach(function(x){
+  [['pay-in-chat', 'Pay Now'], ['chat-confirm-btn', 'Confirm Delivery'], ['chat-dispute-btn', 'Dispute']].forEach(function(x){
     const b = document.getElementById(x[0]);
     if(b){ b.textContent = x[1]; b.disabled = false; }
   });
@@ -2214,7 +2361,7 @@ async function chatBuyFlow(btn){
     const before = await chatFetchOrders();
     const known = {};
     before.forEach(function(o){ known[String(o.id)] = true; });
-    await buyProduct(p.id, btn || document.getElementById('chat-buy-btn'));
+    await buyProduct(p.id, btn || document.getElementById('pay-in-chat'));
     const after = await chatFetchOrders();
     const fresh = after.filter(function(o){
       return !known[String(o.id)] && String(o.buyer_id) === String(state.telegram_id) && o.status === 'held';
@@ -2224,7 +2371,9 @@ async function chatBuyFlow(btn){
     if(o){
       chatState.orderId = o.id;
       chatState.stage = 'paid';
-      chatPush('system', "Payment received. Your funds are held in escrow until you confirm delivery.");
+      chatPush('paylock', "Your payment is held in escrow");
+      chatPush('paylock', "Here is your file");
+      chatPush('paylock', "How was it? Rate 1-5");
     } else {
       chatPush('system', "Purchase was not completed.");
     }
@@ -2263,12 +2412,12 @@ async function sendChatMessage(){
   input.value = '';
   chatPush('user', text);
   if(chatState.stage === 'ask' && text.toLowerCase() === 'yes'){
-    await chatBuyFlow(document.getElementById('chat-buy-btn'));
+    await chatBuyFlow(document.getElementById('pay-in-chat'));
   }
 }
 
 (function wireChatControls(){
-  const buyBtn = document.getElementById('chat-buy-btn');
+  const buyBtn = document.getElementById('pay-in-chat');
   const confirmBtn = document.getElementById('chat-confirm-btn');
   const disputeBtn = document.getElementById('chat-dispute-btn');
   const sendBtn = document.getElementById('chat-send');
@@ -2324,15 +2473,10 @@ function openProductPreview(p){
   if (cur && cur.id !== 'pg-preview') previewPrev = cur.id;
   const body = $('pv-body');
   clearNode(body);
-  if (typeof p.image_url === 'string' && p.image_url.indexOf('https://') === 0) {
-    const img = document.createElement('img');
-    img.className = 'pv-img';
-    img.alt = '';
-    img.src = p.image_url;
-    body.appendChild(img);
-  }
+  pvGallery(body, p);
   body.appendChild(el('h2', 'page-title', p.name || p.title || 'Untitled'));
   body.appendChild(el('div', 'pv-price', nairaFmt(p.buyer_pays_kobo || p.price_kobo || 0)));
+  pvExtras(body, p);
   body.appendChild(el('p', 'pv-desc', p.description || 'No description provided.'));
 
   const info = el('div', 'card');
@@ -2354,6 +2498,7 @@ function openProductPreview(p){
   } else {
     const bb = el('button', 'btn', 'Buy');
     bb.type = 'button';
+    bb.setAttribute('data-haptic', '1');
     bb.addEventListener('click', function(){ enterChatRoom(); openChat(p); });
     body.appendChild(bb);
 
@@ -2536,6 +2681,663 @@ function applyBuyFilter(){
   const mi = $('mk-input');
   if (mi) mi.addEventListener('input', function(){ mk.q = mi.value; applyBuyFilter(); });
   renderMkChips();
+})();
+
+/* ===================== PAYLOCK ADDITIONS (additive) ===================== */
+// CONFIG: set ADMIN_ID to your Telegram user ID to unlock the Admin Panel (empty = nobody).
+const CONFIG = { BOT_USERNAME: 'PayLockOfficialBot', ADMIN_ID: '', BAN_THRESHOLD: 5 };
+state.banned = false;
+state.myProducts = [];
+let lastApi = null;
+const ICON_FLAG = ['M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z', 'M4 22v-7'];
+const ICON_LINK = ['M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71', 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'];
+const ICON_BOX = ['M21 8l-9-5-9 5v8l9 5 9-5z', 'M3 8l9 5 9-5', 'M12 13v8'];
+
+/* ----- haptic (never throws) ----- */
+function haptic(){ try { tg.HapticFeedback.impactOccurred('light'); } catch (e) {} }
+document.addEventListener('click', function(ev){
+  try { if (ev.target.closest && ev.target.closest('.rate-star, .toggle, [data-haptic]')) haptic(); } catch (e) {}
+}, true);
+
+/* ----- offline banner + retry ----- */
+function showOfflineBanner(){ const b = $('offline-banner'); if (b) b.classList.add('show'); }
+function hideOfflineBanner(){ const b = $('offline-banner'); if (b) b.classList.remove('show'); }
+function refreshCurrentPage(){
+  const cur = document.querySelector('.page.active');
+  if (cur) goPage(cur.id);
+}
+async function retryLast(){
+  const b = $('offline-retry');
+  if (b) b.disabled = true;
+  try {
+    // Only GET-style calls are re-run; mutations are never replayed automatically.
+    if (lastApi && (!lastApi.opts || !lastApi.opts.method || String(lastApi.opts.method).toUpperCase() === 'GET')) {
+      await api(lastApi.path, lastApi.opts);
+    } else {
+      await fetch('/api/products', { method: 'GET' });
+    }
+    hideOfflineBanner();
+    refreshCurrentPage();
+  } catch (e) {
+    showToast('Still no connection');
+  } finally {
+    if (b) b.disabled = false;
+  }
+}
+
+/* ----- generic helpers ----- */
+async function postApi(path, body, silentSoon, method){
+  try {
+    const r = await api(path, { method: method || 'POST', headers: jsonHeaders(), body: JSON.stringify(body || {}) });
+    const s = r.res.status;
+    if (s === 404 || s === 405 || s === 501) {
+      if (!silentSoon) showToast('Coming in backend update');
+      return { ok: false, soon: true, data: r.data };
+    }
+    if (!r.res.ok) { showToast(r.data.error || 'Request failed'); return { ok: false, data: r.data }; }
+    return { ok: true, data: r.data };
+  } catch (e) {
+    showToast('Network error. Try again.');
+    return { ok: false };
+  }
+}
+function openSheet(build){
+  const body = $('xs-body');
+  clearNode(body);
+  build(body);
+  $('xs-overlay').classList.add('open');
+}
+function closeSheet(){ $('xs-overlay').classList.remove('open'); }
+function iconBtn(paths, label, fn){
+  const b = el('button', 'ic-btn');
+  b.type = 'button';
+  b.setAttribute('aria-label', label);
+  b.appendChild(svgIcon(paths, 16));
+  b.addEventListener('click', function(ev){ ev.stopPropagation(); fn(); });
+  return b;
+}
+
+/* ----- sales metrics, links ----- */
+function pSales(p){
+  const v = (p.sales_count !== undefined && p.sales_count !== null) ? p.sales_count : (p.sales || p.sold_count || 0);
+  const n = Number(v);
+  return (isFinite(n) && n > 0) ? n : 0;
+}
+function pRating(p){
+  const v = (p.avg_rating !== undefined && p.avg_rating !== null) ? p.avg_rating : (p.rating || p.rating_avg || 0);
+  const n = Number(v);
+  return (isFinite(n) && n > 0) ? n : 0;
+}
+function salesLine(p){
+  const n = pSales(p);
+  if (!n) return 'New • 0 sales';
+  const r = pRating(p);
+  return n.toLocaleString('en-US') + ' sales • ' + (r ? r.toFixed(1) : '–') + '★';
+}
+function prodCode(p){ return String(p.short_code || p.code || p.link_code || p.id); }
+function productLink(p){ return 'https://t.me/' + CONFIG.BOT_USERNAME + '?start=prod_' + prodCode(p); }
+async function copyLink(p){
+  const link = productLink(p);
+  let ok = false;
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(link); ok = true; } } catch (e) {}
+  if (!ok) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = link; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (e) { ok = false; }
+  }
+  showToast(ok ? 'Link copied' : 'Could not copy link');
+}
+
+/* ----- skeletons + empty states ----- */
+function renderSkeletons(gridId, n){
+  const g = $(gridId);
+  if (!g) return;
+  clearNode(g);
+  for (let i = 0; i < n; i++) {
+    const c = el('div', 'pcard skel');
+    c.appendChild(el('div', 'sk sk-img'));
+    c.appendChild(el('div', 'sk sk-line'));
+    c.appendChild(el('div', 'sk sk-line short'));
+    g.appendChild(c);
+  }
+}
+function buildEmpty(id, text, browseTo){
+  const e = $(id);
+  if (!e) return;
+  clearNode(e);
+  const ic = el('div', 'empty-ic');
+  ic.appendChild(svgIcon(ICON_BOX, 36));
+  e.appendChild(ic);
+  e.appendChild(el('div', 'big', text));
+  const b = el('button', 'btn sm secondary', 'Browse');
+  b.type = 'button';
+  b.addEventListener('click', function(){ goPage(browseTo || 'pg-buy'); });
+  e.appendChild(b);
+}
+
+/* ----- multi-image gallery + preview extras ----- */
+function pvImages(p){
+  let a = [];
+  ['images', 'image_urls', 'gallery'].forEach(function(k){
+    if (!a.length && Array.isArray(p[k])) {
+      a = p[k].map(function(x){ return typeof x === 'string' ? x : (x && x.url); });
+    }
+  });
+  if (!a.length && p.image_url) a = [p.image_url];
+  return a.filter(function(u){ return typeof u === 'string' && u.indexOf('https://') === 0; }).slice(0, 4);
+}
+function pvGallery(body, p){
+  const imgs = pvImages(p);
+  if (!imgs.length) return;
+  let cur = 0;
+  const wrap = el('div');
+  const main = document.createElement('img');
+  main.className = 'pv-img';
+  main.alt = '';
+  wrap.appendChild(main);
+  const row = el('div', 'pv-thumbs');
+  wrap.appendChild(row);
+  function draw(){
+    main.src = imgs[cur];
+    clearNode(row);
+    if (imgs.length < 2) { row.style.display = 'none'; return; }
+    row.style.display = '';
+    imgs.forEach(function(u, i){
+      if (i === cur) return;
+      const t = document.createElement('img');
+      t.className = 'pv-thumb';
+      t.alt = '';
+      t.src = u;
+      t.addEventListener('click', function(){ cur = i; draw(); });
+      row.appendChild(t);
+    });
+  }
+  draw();
+  body.appendChild(wrap);
+}
+function pvExtras(body, p){
+  const m = el('div', 'small muted', salesLine(p));
+  m.style.marginBottom = '10px';
+  body.appendChild(m);
+  const row = el('div', 'btn-row');
+  row.style.marginBottom = '14px';
+  const cl = el('button', 'btn sm secondary', 'Copy Link');
+  cl.type = 'button';
+  cl.id = 'copy-link-btn';
+  cl.style.marginBottom = '0';
+  cl.addEventListener('click', function(){ copyLink(p); });
+  row.appendChild(cl);
+  if (!isOwnProduct(p)) {
+    const rp = el('button', 'btn sm secondary', 'Report');
+    rp.type = 'button';
+    rp.id = 'report-btn';
+    rp.style.marginBottom = '0';
+    rp.addEventListener('click', function(){ openReportSheet(p); });
+    row.appendChild(rp);
+  }
+  body.appendChild(row);
+}
+
+/* ----- report ----- */
+function openReportSheet(p){
+  openSheet(function(b){
+    b.appendChild(el('h3', null, 'Report product'));
+    b.appendChild(el('p', 'sub', 'Why are you reporting this?'));
+    let reason = '';
+    const chips = el('div', 'amount-chips');
+    ['Scam', 'Fake', 'Wrong file', 'Spam'].forEach(function(rs){
+      const c = el('button', 'chip', rs);
+      c.type = 'button';
+      c.addEventListener('click', function(){
+        reason = rs;
+        chips.querySelectorAll('.chip').forEach(function(x){ x.classList.toggle('active', x === c); });
+      });
+      chips.appendChild(c);
+    });
+    b.appendChild(chips);
+    const row = el('div', 'btn-row');
+    const cancel = el('button', 'btn secondary', 'Cancel');
+    cancel.type = 'button';
+    cancel.addEventListener('click', closeSheet);
+    const submit = el('button', 'btn', 'Submit Report');
+    submit.type = 'button';
+    submit.addEventListener('click', async function(){
+      if (!reason) { showToast('Select a reason'); return; }
+      const restore = setBusy(submit, 'Sending...');
+      const r = await postApi('/api/report', { product_id: p.id, reason: reason });
+      restore();
+      if (r.ok) { showToast('Report submitted'); closeSheet(); }
+    });
+    row.appendChild(cancel);
+    row.appendChild(submit);
+    b.appendChild(row);
+  });
+}
+
+/* ----- order detail: receipt + dispute ----- */
+function openOrderDetail(o){
+  const isBuyer = String(o.buyer_id) === String(state.telegram_id);
+  const isSeller = String(o.seller_id) === String(state.telegram_id);
+  const status = String(o.status || '');
+  openSheet(function(b){
+    b.appendChild(el('h3', null, 'Order details'));
+    b.appendChild(el('p', 'sub', o.product_name || ('Order ' + (o.reference || ''))));
+    const info = el('div', 'card');
+    info.appendChild(pvRow('Status', status || '-'));
+    info.appendChild(pvRow('Amount', nairaFmt(isBuyer ? o.buyer_pays_kobo : o.seller_gets_kobo)));
+    info.appendChild(pvRow('Reference', String(o.reference || o.id || '-')));
+    info.appendChild(pvRow('Date', fmtDate(o.created_at)));
+    b.appendChild(info);
+
+    const rc = el('button', 'btn secondary', 'Download Receipt');
+    rc.type = 'button';
+    rc.id = 'receipt-btn';
+    rc.style.marginBottom = '10px';
+    rc.addEventListener('click', function(){ downloadOrderReceipt(o, rc); });
+    b.appendChild(rc);
+
+    if (status === 'held' && (isBuyer || isSeller)) {
+      const form = el('div');
+      form.style.display = 'none';
+      const f = el('div', 'field');
+      f.appendChild(el('label', null, 'What went wrong?'));
+      const ta = el('textarea', 'textarea');
+      ta.id = 'dispute-reason';
+      ta.maxLength = 1000;
+      ta.placeholder = 'What went wrong?';
+      f.appendChild(ta);
+      form.appendChild(f);
+      const sd = el('button', 'btn danger', 'Submit Dispute');
+      sd.type = 'button';
+      sd.addEventListener('click', function(){ submitDispute(o, ta.value, sd); });
+      form.appendChild(sd);
+
+      const db = el('button', 'btn secondary', 'Dispute');
+      db.type = 'button';
+      db.id = 'dispute-btn';
+      db.style.marginBottom = '10px';
+      db.addEventListener('click', function(){ form.style.display = ''; db.style.display = 'none'; ta.focus(); });
+      b.appendChild(db);
+      b.appendChild(form);
+    }
+    const cl = el('button', 'btn secondary', 'Close');
+    cl.type = 'button';
+    cl.style.marginTop = '10px';
+    cl.addEventListener('click', closeSheet);
+    b.appendChild(cl);
+  });
+}
+async function downloadOrderReceipt(o, btn){
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Preparing...';
+  try {
+    const res = await fetch('/api/receipt/' + encodeURIComponent(o.id), { headers: getAuthHeader() });
+    if (!res.ok) {
+      btn.disabled = false;
+      btn.textContent = orig;
+      if (res.status === 404 || res.status === 405 || res.status === 501) {
+        showToast('Coming in backend update');
+        btn.style.display = 'none';
+      } else {
+        showToast('Could not download receipt');
+      }
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'paylock-receipt-' + (o.reference || o.id) + '.pdf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    btn.disabled = false;
+    btn.textContent = orig;
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = orig;
+    showToast('Network error. Try again.');
+  }
+}
+async function submitDispute(o, text, btn){
+  const reason = String(text || '').trim().slice(0, 1000);
+  if (!reason) { showToast('Tell us what went wrong'); return; }
+  const restore = setBusy(btn, 'Submitting...');
+  let r = await postApi('/api/dispute', { order_id: o.id, reason: reason }, true);
+  if (r.soon) {
+    // backend /api/dispute not live yet: fall back to the existing escrow freeze
+    try {
+      const r2 = await api('/api/escrow/dispute', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ order_id: o.id, reason: reason }) });
+      if (!r2.res.ok) showToast(r2.data.error || 'Could not open dispute');
+      r = { ok: r2.res.ok };
+    } catch (e) { showToast('Network error. Try again.'); r = { ok: false }; }
+  }
+  restore();
+  if (r.ok) {
+    showToast('Dispute opened - escrow frozen');
+    closeSheet();
+    loadEscrowOrders();
+    loadBalance();
+  }
+}
+
+/* ----- chat extras: preview / download / keep / rate-then-release ----- */
+function chatExtrasRender(){
+  const st = chatState.stage;
+  const paid = (st === 'paid' || st === 'done');
+  const d = $('download-in-chat'), k = $('chat-keep-btn'), rr = $('chat-refund-row');
+  if (d) d.style.display = paid ? '' : 'none';
+  if (k) k.style.display = paid ? '' : 'none';
+  if (st !== 'paid') chatState.refundPrompt = false;
+  if (rr) rr.style.display = (chatState.refundPrompt && st === 'paid') ? '' : 'none';
+}
+function openChatPreview(){
+  const p = chatState.product;
+  if (!p) return;
+  openSheet(function(b){
+    const imgs = pvImages(p);
+    if (imgs.length) {
+      const im = document.createElement('img');
+      im.className = 'pv-img';
+      im.alt = '';
+      im.src = imgs[0];
+      b.appendChild(im);
+    }
+    b.appendChild(el('h3', null, p.name || p.title || p.product_name || 'Product'));
+    const pr = el('div', 'pv-price', nairaFmt(p.buyer_pays_kobo || p.price_kobo || 0));
+    pr.style.marginTop = '6px';
+    b.appendChild(pr);
+    const c = el('button', 'btn secondary', 'Close');
+    c.type = 'button';
+    c.addEventListener('click', closeSheet);
+    b.appendChild(c);
+  });
+}
+function chatDownload(){
+  const p = chatState.product;
+  const url = p && (p.file_url || p.download_url);
+  if (typeof url === 'string' && url.indexOf('https://') === 0) {
+    try { if (tg && tg.openLink) tg.openLink(url); else window.open(url, '_blank'); }
+    catch (e) { window.open(url, '_blank'); }
+  } else {
+    showToast('Coming in backend update');
+  }
+}
+function chatKeep(){
+  const p = chatState.product;
+  if (!p) return;
+  try { localStorage.setItem('paylock_kept_' + p.id, JSON.stringify({ id: p.id, name: p.name || p.title || '', ts: Date.now() })); } catch (e) {}
+  showToast('Saved to your library');
+}
+async function rateInEscrow(stars){
+  const p = chatState.product, oid = chatState.orderId;
+  if (!p || !oid || chatState.ratingBusy) return;
+  chatState.ratingBusy = true;
+  let saved = false;
+  try {
+    const sellerId = p.seller_id !== undefined ? p.seller_id : p.owner_id;
+    const r = await postApi('/api/rate', { order_id: oid, product_id: p.id, buyer_id: state.telegram_id, seller_id: sellerId, stars: stars });
+    saved = r.ok;
+  } finally {
+    chatState.ratingBusy = false;
+  }
+  if (saved) { try { localStorage.setItem('rated_' + String(oid), String(stars)); } catch (e) {} }
+  if (stars >= 3) {
+    await chatOrderAction($('chat-confirm-btn'), confirmDelivery, 'released', 'Thanks! Payment released to seller.');
+  } else {
+    chatState.refundPrompt = true;
+    chatPush('paylock', 'Sorry to hear that. Do you want a refund?');
+  }
+  renderChatMessages();
+}
+
+/* ----- deep link ----- */
+function getStartParam(){
+  try { const sp = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param; return sp ? String(sp) : ''; } catch (e) { return ''; }
+}
+async function handleDeepLink(){
+  const sp = getStartParam();
+  if (sp.indexOf('prod_') !== 0) return;
+  const code = sp.slice(5);
+  if (!code) return;
+  const match = function(p){ return String(p.id) === code || prodCode(p) === code; };
+  let prod = null;
+  try {
+    const r = await api('/api/products?code=' + encodeURIComponent(code));
+    if (r.res.ok) {
+      const d = r.data;
+      prod = d.product || (Array.isArray(d.products) ? (d.products.filter(match)[0] || null) : null);
+    }
+  } catch (e) {}
+  if (!prod) {
+    try {
+      const r2 = await api('/api/products/' + encodeURIComponent(code));
+      if (r2.res.ok) prod = r2.data.product || (r2.data.id ? r2.data : null);
+    } catch (e) {}
+  }
+  if (!prod) { showToast('Product not found'); return; }
+  openProductPreview(prod);
+}
+
+/* ----- seller dashboard: analytics, visibility, boost ----- */
+function pVisible(p){ return !(p.visible === false || p.is_visible === false || p.hidden === true || p.is_hidden === true); }
+function pBoosted(p){ return !!(p.boosted || p.is_boosted); }
+function renderAnalytics(d){
+  d = d || {};
+  const sales = Number(d.total_sales || 0) || 0;
+  const revKobo = (d.total_revenue_kobo !== undefined && d.total_revenue_kobo !== null)
+    ? Number(d.total_revenue_kobo) || 0
+    : Math.round((Number(d.total_revenue) || 0) * 100);
+  const rt = Number(d.avg_rating || 0) || 0;
+  $('an-sales').textContent = sales.toLocaleString('en-US');
+  $('an-revenue').textContent = nairaFmt(revKobo);
+  $('an-rating').textContent = rt.toFixed(1);
+}
+async function loadAnalytics(){
+  let d = {};
+  try {
+    const r = await api('/api/analytics', { headers: getAuthHeader() });
+    if (r.res.ok) d = r.data.analytics || r.data || {};
+  } catch (e) {}
+  renderAnalytics(d);
+}
+async function loadMyProducts(){
+  renderAnalytics(null);
+  loadAnalytics();
+  let rows = [];
+  try {
+    const r = await api('/api/products?mine=1', { headers: getAuthHeader() });
+    rows = (r.res.ok && Array.isArray(r.data.products)) ? r.data.products : [];
+  } catch (e) { rows = []; }
+  rows = rows.filter(isOwnProduct);
+  if (!rows.length) rows = state.products.filter(isOwnProduct);
+  state.myProducts = rows;
+  renderMyProducts();
+}
+function renderMyProducts(){
+  const list = $('mp-list'), empty = $('mp-empty');
+  clearNode(list);
+  const rows = state.myProducts || [];
+  if (!rows.length) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(function(p, i){
+    const hidden = state.banned || !pVisible(p);
+    const row = el('div', 'mp-row');
+    const top = el('div', 'mp-top');
+    top.appendChild(el('div', 'mp-title', p.name || p.title || 'Untitled'));
+    const price = el('div', null, nairaFmt(p.buyer_pays_kobo || p.price_kobo || 0));
+    price.style.fontWeight = '800';
+    top.appendChild(price);
+    row.appendChild(top);
+    row.appendChild(el('div', 'pc-meta', salesLine(p)));
+    const badges = el('div', 'mp-badges');
+    if (state.banned) badges.appendChild(el('span', 'badge b-banned', 'Hidden - Banned'));
+    else if (!pVisible(p)) badges.appendChild(el('span', 'badge b-hidden', 'Hidden'));
+    if (pBoosted(p)) badges.appendChild(el('span', 'badge b-boost', 'Boosted'));
+    if (badges.childNodes.length) row.appendChild(badges);
+    const acts = el('div', 'mp-actions');
+    const vis = el('div', 'mp-vis');
+    const tgl = el('button', 'toggle' + (hidden ? '' : ' on'));
+    tgl.type = 'button';
+    tgl.setAttribute('aria-label', 'Toggle visibility');
+    if (i === 0) tgl.id = 'visibility-toggle';
+    tgl.addEventListener('click', function(){ toggleVisibility(p, tgl); });
+    vis.appendChild(tgl);
+    vis.appendChild(el('span', null, hidden ? 'Hidden' : 'Visible'));
+    const boost = el('button', 'btn sm secondary', pBoosted(p) ? 'Boosted' : 'Boost');
+    boost.type = 'button';
+    if (i === 0) boost.id = 'boost-btn';
+    if (pBoosted(p)) boost.disabled = true;
+    boost.addEventListener('click', function(){ boostProduct(p, boost); });
+    acts.appendChild(vis);
+    acts.appendChild(boost);
+    row.appendChild(acts);
+    list.appendChild(row);
+  });
+}
+async function toggleVisibility(p, btn){
+  if (state.banned) { showToast('Account banned - submit an appeal first'); return; }
+  const next = !pVisible(p);
+  btn.disabled = true;
+  const r = await postApi('/api/toggle-visibility', { product_id: p.id, visible: next });
+  btn.disabled = false;
+  if (r.ok) {
+    p.visible = next; p.is_visible = next; p.hidden = !next; p.is_hidden = !next;
+    renderMyProducts();
+  }
+}
+async function boostProduct(p, btn){
+  if (state.banned || !pVisible(p)) { showToast('Make the product visible first'); return; }
+  btn.disabled = true;
+  const r = await postApi('/api/boost', { product_id: p.id });
+  if (r.ok) { p.boosted = true; p.is_boosted = true; renderMyProducts(); }
+  else btn.disabled = false;
+}
+
+/* ----- ban banner, appeal, admin ----- */
+function renderBanBanner(){
+  const b = $('banned-banner');
+  if (b) b.style.display = state.banned ? 'flex' : 'none';
+}
+function isAdmin(){
+  return !!CONFIG.ADMIN_ID && state.telegram_id !== null && String(state.telegram_id) === String(CONFIG.ADMIN_ID);
+}
+function setupAdmin(){
+  if (!isAdmin() || $('admin-link')) return;
+  const slot = $('account-links');
+  if (slot) {
+    const b = el('button', 'row-link');
+    b.type = 'button';
+    b.id = 'admin-link';
+    b.appendChild(el('span', null, 'Admin Panel'));
+    b.appendChild(el('span', 'muted', '›'));
+    b.addEventListener('click', function(){ goPage('pg-admin'); });
+    slot.appendChild(b);
+  }
+  const sec = el('section', 'page');
+  sec.id = 'pg-admin';
+  const back = el('button', 'back-btn', '‹ Back');
+  back.type = 'button';
+  back.addEventListener('click', function(){ goPage('pg-wallet'); });
+  sec.appendChild(back);
+  sec.appendChild(el('h2', 'page-title', 'Admin Panel'));
+  const card = el('div', 'card');
+  card.appendChild(el('div', 'card-title', 'Appeals'));
+  const list = el('div');
+  list.id = 'admin-appeals';
+  card.appendChild(list);
+  sec.appendChild(card);
+  document.querySelector('.app-shell').appendChild(sec);
+}
+async function loadAppeals(){
+  const list = $('admin-appeals');
+  if (!list) return;
+  clearNode(list);
+  let rows = [];
+  try {
+    const r = await api('/api/admin/appeals', { headers: getAuthHeader() });
+    if (r.res.status === 404) showToast('Coming in backend update');
+    rows = (r.res.ok && Array.isArray(r.data.appeals)) ? r.data.appeals : [];
+  } catch (e) { rows = []; }
+  if (!rows.length) { list.appendChild(el('div', 'empty', 'No appeals')); return; }
+  rows.forEach(function(a){
+    const row = el('div', 'esc-card');
+    row.appendChild(el('div', 't', 'User ' + (a.user_id || a.telegram_id || '?')));
+    row.appendChild(el('div', 'small muted', fmtDate(a.created_at)));
+    row.appendChild(el('div', 'small', String(a.message || a.text || '')));
+    const acts = el('div', 'esc-actions');
+    const un = el('button', 'btn sm', 'Unban');
+    un.type = 'button';
+    un.addEventListener('click', function(){ adminAppealAction(a, 'unban', un); });
+    const pb = el('button', 'btn sm danger', 'Permanent Ban');
+    pb.type = 'button';
+    pb.addEventListener('click', function(){ adminAppealAction(a, 'permanent', pb); });
+    acts.appendChild(un);
+    acts.appendChild(pb);
+    row.appendChild(acts);
+    list.appendChild(row);
+  });
+}
+async function adminAppealAction(a, action, btn){
+  const restore = setBusy(btn, 'Working...');
+  const r = await postApi('/api/admin/appeals/action', { appeal_id: a.id, action: action });
+  restore();
+  if (r.ok) { showToast(action === 'unban' ? 'User unbanned' : 'User permanently banned'); loadAppeals(); }
+}
+function openSupport(){
+  const url = 'https://t.me/' + CONFIG.BOT_USERNAME;
+  try { if (tg && tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank'); }
+  catch (e) { try { window.open(url, '_blank'); } catch (e2) {} }
+}
+
+(function wireAdditions(){
+  const retry = $('offline-retry');
+  if (retry) retry.addEventListener('click', retryLast);
+  window.addEventListener('online', hideOfflineBanner);
+  window.addEventListener('offline', showOfflineBanner);
+  const xs = $('xs-overlay');
+  if (xs) xs.addEventListener('click', function(ev){ if (ev.target === xs) closeSheet(); });
+
+  const sup = $('support-btn');
+  if (sup) sup.addEventListener('click', openSupport);
+
+  const ap = $('appeal-btn'), am = $('appeal-modal');
+  if (ap && am) ap.addEventListener('click', function(){ am.classList.add('open'); });
+  const ac = $('appeal-cancel');
+  if (ac && am) ac.addEventListener('click', function(){ am.classList.remove('open'); });
+  const as = $('appeal-submit');
+  if (as) as.addEventListener('click', async function(){
+    const txt = $('appeal-text').value.trim();
+    if (!txt) { showToast('Write a short message'); return; }
+    const restore = setBusy(as, 'Sending...');
+    const r = await postApi('/api/appeal', { message: txt.slice(0, 1000) });
+    restore();
+    if (r.ok) { $('appeal-text').value = ''; am.classList.remove('open'); showToast('Appeal submitted'); }
+  });
+
+  const pv = $('chat-preview-btn'); if (pv) pv.addEventListener('click', openChatPreview);
+  const dl = $('download-in-chat'); if (dl) dl.addEventListener('click', chatDownload);
+  const kp = $('chat-keep-btn'); if (kp) kp.addEventListener('click', chatKeep);
+  const ry = $('chat-refund-yes');
+  if (ry) ry.addEventListener('click', function(){
+    chatOrderAction($('chat-dispute-btn'), disputeEscrow, 'disputed', 'Refund requested - escrow frozen');
+  });
+  const rn = $('chat-refund-no');
+  if (rn) rn.addEventListener('click', function(){
+    chatOrderAction($('chat-confirm-btn'), confirmDelivery, 'released', 'Payment released to seller.');
+  });
+
+  buildEmpty('home-empty', 'No products yet', 'pg-buy');
+  buildEmpty('buy-empty', 'No products yet', 'pg-buy');
+  buildEmpty('esc-empty', 'No orders yet', 'pg-buy');
+  buildEmpty('tx-empty', 'No transactions yet', 'pg-buy');
+  buildEmpty('mp-empty', 'No products yet', 'pg-buy');
 })();
 
 function init(){
