@@ -65,6 +65,7 @@ PAYSTACK_SECRET_KEY = os.environ.get("PAYSTACK_SECRET_KEY")
 PAYSTACK_PUBLIC_KEY = os.environ.get("PAYSTACK_PUBLIC_KEY")
 BOT_TOKEN = (os.environ.get("BOT_TOKEN") or "").strip()
 PAYSTACK_BASE = os.environ.get("PAYSTACK_BASE", "https://api.paystack.co")
+WEBAPP_URL = os.environ.get("WEBAPP_URL", "").rstrip("/")
 
 logging.basicConfig(level=logging.INFO)
 
@@ -3070,7 +3071,7 @@ def admin_webhook_logs(user):
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path):
-    if path.startswith("api/"):
+    if path.startswith("api/") or path in ("webhook", "set-webhook"):
         abort(404)
     if path and path != "index.html":
         abort(404)
@@ -3096,6 +3097,98 @@ def handle_500(e):
     original = getattr(e, "original_exception", None)
     logging.error("Internal server error: %r", original or e, exc_info=original)
     return jsonify({"error": "Internal server error"}), 500
+
+
+# =============================================================================
+# Telegram bot (webhook mode) — thin handlers, no business logic
+# =============================================================================
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import BotCommand, BotCommandScopeChat
+from telegram.ext import Application, CommandHandler, ContextTypes
+import asyncio
+
+async def _bot_start(update, context):
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("Open PayLock", web_app=WebAppInfo(url=WEBAPP_URL))]]) if WEBAPP_URL else None
+    await update.message.reply_text("Welcome to PayLock — Sell, buy and get paid safely with escrow.", reply_markup=kb)
+async def _bot_support(update, context):
+    await update.message.reply_text("Support: Describe your issue here. Our team will reply. For orders, include your Order ID / Reference.")
+async def _bot_balance(update, context):
+    await update.message.reply_text("Open PayLock to see your balance:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Open PayLock", web_app=WebAppInfo(url=WEBAPP_URL))]]) if WEBAPP_URL else None)
+async def _bot_help(update, context):
+    await update.message.reply_text("/start - Open PayLock\n/support - Contact support\n/balance - Check balance\n/help - Show this")
+async def _bot_admin(update, context):
+    if update.effective_user is None or str(update.effective_user.id) != str(ADMIN_ID):
+        await update.message.reply_text("Admin only")
+        return
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("Admin Panel", web_app=WebAppInfo(url=WEBAPP_URL))]]) if WEBAPP_URL else None
+    await update.message.reply_text("Admin Panel - Daily activities", reply_markup=kb)
+def _get_bot_app():
+    app_bot = Application.builder().token(BOT_TOKEN).build()
+    app_bot.add_handler(CommandHandler("start", _bot_start))
+    app_bot.add_handler(CommandHandler("support", _bot_support))
+    app_bot.add_handler(CommandHandler("balance", _bot_balance))
+    app_bot.add_handler(CommandHandler("help", _bot_help))
+    app_bot.add_handler(CommandHandler("admin", _bot_admin))
+    return app_bot
+
+# One coroutine per request: a single asyncio.run() keeps the bot's HTTP client
+# on one event loop (separate asyncio.run() calls reuse a client bound to a closed loop).
+async def _process_telegram_update(data):
+    bot_app = _get_bot_app()
+    await bot_app.initialize()
+    try:
+        update = Update.de_json(data, bot_app.bot)
+        await bot_app.process_update(update)
+    finally:
+        await bot_app.shutdown()
+
+_PUBLIC_BOT_COMMANDS = [
+    BotCommand("start", "Open PayLock"),
+    BotCommand("support", "Contact support"),
+    BotCommand("balance", "Check balance"),
+    BotCommand("help", "Show help"),
+]
+
+async def _configure_telegram(url):
+    bot_app = _get_bot_app()
+    await bot_app.initialize()
+    try:
+        ok = await bot_app.bot.set_webhook(url)
+        if ok:
+            # Default scope (everyone): NO /admin.
+            await bot_app.bot.set_my_commands(_PUBLIC_BOT_COMMANDS)
+            # Admin chat only: same list plus /admin.
+            if ADMIN_ID.isdigit():
+                await bot_app.bot.set_my_commands(
+                    _PUBLIC_BOT_COMMANDS + [BotCommand("admin", "Admin panel")],
+                    scope=BotCommandScopeChat(chat_id=int(ADMIN_ID)),
+                )
+        return ok
+    finally:
+        await bot_app.shutdown()
+
+@app.route("/webhook", methods=["POST"])
+def telegram_webhook():
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        asyncio.run(_process_telegram_update(data))
+        return jsonify({"ok": True})
+    except Exception:
+        logging.exception("telegram_webhook: processing failed")
+        return jsonify({"ok": False}), 200
+
+@app.route("/set-webhook", methods=["GET"])
+def set_webhook():
+    try:
+        if not WEBAPP_URL:
+            return jsonify({"ok": False, "error": "WEBAPP_URL not set"}), 500
+        url = WEBAPP_URL + "/webhook"
+        ok = asyncio.run(_configure_telegram(url))
+        return jsonify({"ok": ok, "url": url})
+    except Exception as e:
+        logging.exception("set_webhook failed")
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 if __name__ == "__main__":
