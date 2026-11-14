@@ -18,14 +18,31 @@
 #   products.price (NOT NULL) — must be populated alongside price_kobo
 #
 # Optional env vars (additive): ADMIN_ID (Telegram id of the admin; empty = every
-#   /api/admin/* route returns 403), BOT_USERNAME (default PayLockOfficialBot).
+#   /api/admin/* route returns 403 and bot /admin answers "Admin only"),
+#   BOT_USERNAME (default PayLockOfficialBot), APP_SHORT_NAME (the Mini App short
+#   name from BotFather, used for t.me/<bot>/<app>?startapp= bot buttons).
 #
 # Additive schema this file expects (every use is guarded: a missing table or
 # column makes that one feature answer 501 NOT_READY / fall back, never crash):
 #   products.code, sales_count, avg_rating, is_boosted, boosted_until, visible
 #   users.banned, banned_permanent, referred_by
 #   tables: ratings (unique order_id), disputes, product_reports, appeals,
-#           referrals, webhook_logs
+#           referrals (+ commission_count int default 0,
+#                        total_commission_kobo bigint default 0), webhook_logs,
+#           extra_images
+#   NEW tables (all optional, all guarded):
+#     support_tickets(id, user_id bigint, message text, order_id text null,
+#                     status text default 'pending', created_at timestamptz)
+#     chat_messages(id, order_id text, sender_id bigint, text text,
+#                   created_at timestamptz default now())
+#     referral_commissions(id, order_id text UNIQUE, referrer_id bigint,
+#                          referred_id bigint (= the SELLER of the order),
+#                          seller_id bigint, price_kobo bigint,
+#                          platform_fee_kobo bigint, commission_kobo bigint,
+#                          status text default 'pending' (pending/paid/failed),
+#                          created_at timestamptz)
+#   products.deleted_at (optional; if absent, hidden products are the only
+#     'not active' signal used by the seller check)
 # =============================================================================
 
 import os
@@ -139,6 +156,10 @@ INIT_DATA_MAX_AGE_SECONDS = 7 * 24 * 60 * 60  # 7 days — soft/warn-only check
 
 # --- CONFIG (additive) --------------------------------------------------------
 BOT_USERNAME = os.environ.get("BOT_USERNAME", "PayLockOfficialBot")
+# REPLACE WITH REAL BOT USERNAME / APP SHORT NAME BEFORE DEPLOY
+# (set the BOT_USERNAME and APP_SHORT_NAME env vars on Render, or edit here).
+_APP_SHORT_NAME_PLACEHOLDER = "REPLACE_WITH_APP_SHORT_NAME"
+APP_SHORT_NAME = (os.environ.get("APP_SHORT_NAME") or _APP_SHORT_NAME_PLACEHOLDER).strip()
 # Leave empty until you fill it in (here or via the ADMIN_ID env var).
 # While empty, EVERY /api/admin/* route returns 403.
 ADMIN_ID = str(os.environ.get("ADMIN_ID", "") or "").strip()
@@ -149,6 +170,12 @@ BOOST_HOURS = 24
 DAILY_LISTING_LIMIT = 10
 PRODUCT_CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 REPORT_REASONS = {"scam": "Scam", "fake": "Fake", "wrong file": "Wrong file", "spam": "Spam"}
+
+# --- CONFIG (additive: referral / support / chat) -----------------------------
+REFERRAL_RATE = 0.009              # 0.9% of the sale price ...
+REFERRAL_MAX_SALES = 10            # ... on the referred buyer's first 10 released sales
+SUPPORT_MESSAGE_MAX = 1000
+CHAT_TEXT_MAX = 500
 
 # -----------------------------------------------------------------------------
 # Fee model (LOCKED — do not alter)
@@ -841,6 +868,270 @@ def _mark_referral_rewarded(*user_ids):
             logging.warning("_mark_referral_rewarded: skipped for %s", uid, exc_info=True)
 
 
+# ---- referral commission (paid ONLY out of the order's own platform fee) -------
+
+def _referral_commission_amount(price_kobo, platform_fee_kobo):
+    """
+    Commission = MIN( round(price_kobo * 0.9%), platform_fee_kobo of THIS order ).
+    No platform fee collected -> 0. Never negative, never above the fee.
+    """
+    try:
+        price = int(price_kobo or 0)
+        fee = int(platform_fee_kobo or 0)
+    except (TypeError, ValueError):
+        return 0
+    if price <= 0 or fee <= 0:
+        return 0
+    return max(0, min(round_half_up(price * REFERRAL_RATE), fee))
+
+
+def _is_seller(telegram_id):
+    """
+    True ONLY if the user has at least one ACTIVE listing: is_hidden = False AND
+    deleted_at IS NULL. Hidden or deleted listings do not count, so a former
+    seller with 0 active listings is a buyer and may earn commission.
+    Returns False if there is no active listing, None if it could not be checked
+    (callers treat None as 'do not pay').
+    """
+    try:
+        key = str(int(telegram_id))
+
+        def active(check_deleted):
+            q = supabase.table("products").select("id").eq("seller_id", key).eq("is_hidden", False)
+            if check_deleted:
+                q = q.is_("deleted_at", "null")
+            return q.limit(1).execute().data or []
+
+        try:
+            return bool(active(True))
+        except Exception as exc:
+            if not _is_schema_missing(exc):
+                raise
+            # products.deleted_at is not migrated: deleted accounts' products are
+            # is_hidden=True already, so the is_hidden check alone is still correct.
+            return bool(active(False))
+    except Exception:
+        logging.warning("_is_seller: lookup failed for %s", telegram_id, exc_info=True)
+        return None
+
+
+def _bump_referral_totals(referred_id, commission_kobo):
+    """referrals.commission_count +1 and total_commission_kobo += commission (compare-and-set)."""
+    for _ in range(5):
+        rows = (
+            supabase.table("referrals").select("commission_count,total_commission_kobo")
+            .eq("referred_id", int(referred_id)).limit(1).execute()
+        ).data or []
+        if not rows:
+            return
+        cnt = int(rows[0].get("commission_count") or 0)
+        tot = int(rows[0].get("total_commission_kobo") or 0)
+        upd = (
+            supabase.table("referrals")
+            .update({"commission_count": cnt + 1, "total_commission_kobo": tot + int(commission_kobo)})
+            .eq("referred_id", int(referred_id))
+            .eq("commission_count", cnt)
+            .execute()
+        )
+        if upd.data:
+            return
+    logging.warning("_bump_referral_totals: gave up for referred_id=%s", referred_id)
+
+
+def _settle_commission(row):
+    """
+    Pays ONE referral_commissions row (status pending/failed) to the referrer.
+    Idempotent: the row is claimed with a compare-and-set on status, and an
+    existing REF-<order_id> wallet transaction is never credited twice.
+    On a credit failure the row is KEPT with status='failed' so a later retry
+    can pay it. Returns {"status": paid|already_paid|failed|zero_commission, ...}.
+    """
+    order_id = str(row["order_id"])
+    referrer_id = int(row["referrer_id"])
+    referred_id = int(row["referred_id"])
+    amount = int(row.get("commission_kobo") or 0)
+    if amount <= 0:
+        return {"status": "zero_commission", "commission_kobo": 0}
+
+    claim = (
+        supabase.table("referral_commissions")
+        .update({"status": "paid"})
+        .eq("order_id", order_id)
+        .in_("status", ["pending", "failed"])
+        .execute()
+    )
+    if not claim.data:
+        return {"status": "already_paid", "commission_kobo": 0}  # paid, or another caller holds it
+
+    reference = f"REF-{order_id}"
+    already_credited = False
+    try:
+        already_credited = bool(
+            (supabase.table("wallet_transactions").select("id").eq("reference", reference).limit(1).execute()).data
+        )
+        if not already_credited:
+            _credit_balance(referrer_id, amount)
+    except Exception:
+        logging.exception("_settle_commission: credit failed for order %s, keeping row as failed", order_id)
+        try:
+            (
+                supabase.table("referral_commissions")
+                .update({"status": "failed"})
+                .eq("order_id", order_id)
+                .eq("status", "paid")
+                .execute()
+            )
+        except Exception:
+            logging.exception("_settle_commission: CRITICAL could not mark order %s failed", order_id)
+        return {"status": "failed", "commission_kobo": 0}
+
+    if not already_credited:
+        try:
+            supabase.table("wallet_transactions").insert({
+                "user_id": referrer_id,
+                "type": "credit",
+                "amount_kobo": amount,
+                "reason": "referral_commission",
+                "reference": reference,
+            }).execute()
+        except Exception:
+            logging.exception("_settle_commission: credited but transaction row failed for order %s", order_id)
+        try:
+            _bump_referral_totals(referred_id, amount)
+        except Exception:
+            logging.warning("_settle_commission: referrals totals not updated for %s", referred_id, exc_info=True)
+    return {"status": "paid", "commission_kobo": amount}
+
+
+def _retry_pending_commissions(referrer_id=None, limit=25):
+    """
+    Retries referral_commissions rows with status pending/failed (optionally only
+    one referrer's). Safe to call any number of times: _settle_commission claims
+    each row, so the same order_id can never pay twice. Never raises.
+    Returns the number of rows paid by this call.
+    """
+    try:
+        q = supabase.table("referral_commissions").select("*").in_("status", ["pending", "failed"])
+        if referrer_id is not None:
+            q = q.eq("referrer_id", int(referrer_id))
+        rows = q.limit(int(limit)).execute().data or []
+    except Exception as exc:
+        if _is_schema_missing(exc):
+            logging.info("_retry_pending_commissions: schema not ready (%s)", exc)
+        else:
+            logging.warning("_retry_pending_commissions: lookup failed", exc_info=True)
+        return 0
+    paid = 0
+    for r in rows:
+        try:
+            if _settle_commission(r).get("status") == "paid":
+                paid += 1
+        except Exception:
+            logging.warning("_retry_pending_commissions: row skipped (order %s)", r.get("order_id"), exc_info=True)
+    return paid
+
+
+def _pay_referral_commission(order, prior_status="held"):
+    """
+    Pays the referrer of the SELLER 0.9% of the sale, capped at the platform fee
+    collected on this exact order. Commission is on the referred person's sales
+    AS A SELLER: referred_id = order.seller_id, referrer = users.referred_by of
+    the seller, and the "first 10" limit counts released orders where
+    seller_id = referred_id (the referred user's own purchases never count).
+    Called ONLY by _release_escrow, ONLY for held -> released. Never raises into
+    the release; returns {"status": ..., "commission_kobo": n}.
+    Statuses: paid, failed (row kept, retried later), pending, already_paid,
+              not_applicable, blocked_*, limit_reached, zero_commission, not_ready, error.
+    """
+    try:
+        if prior_status != "held":
+            return {"status": "not_applicable", "commission_kobo": 0}  # disputed/refunded never pay
+
+        order_id = str(order.get("id"))
+        buyer_id = int(order["buyer_id"])
+        seller_id = int(order["seller_id"])          # the referred user (earner of the sale)
+        if buyer_id == seller_id:
+            return {"status": "blocked_self_sale", "commission_kobo": 0}
+
+        # Referrer = users.referred_by of the SELLER (never of the buyer).
+        seller_rows = (
+            supabase.table("users").select("telegram_id,referred_by")
+            .eq("telegram_id", seller_id).limit(1).execute()
+        ).data or []
+        if not seller_rows or not seller_rows[0].get("referred_by"):
+            return {"status": "not_applicable", "commission_kobo": 0}
+        referrer_id = int(seller_rows[0]["referred_by"])
+        referred_id = seller_id
+
+        if referrer_id == referred_id:
+            return {"status": "blocked_self_referral", "commission_kobo": 0}
+        if referrer_id == buyer_id:
+            return {"status": "blocked_circular_sale", "commission_kobo": 0}
+
+        commission = _referral_commission_amount(order.get("price_kobo"), order.get("platform_fee_kobo"))
+        if commission <= 0:
+            return {"status": "zero_commission", "commission_kobo": 0}
+
+        # Seller-Ban ON: a referrer with an ACTIVE listing earns N0. Unknown -> do not pay.
+        if _is_seller(referrer_id) is not False:
+            return {"status": "blocked_seller_inviter", "commission_kobo": 0}
+
+        inviter = (
+            supabase.table("users").select("telegram_id,deleted_at")
+            .eq("telegram_id", referrer_id).limit(1).execute()
+        ).data or []
+        if not inviter or inviter[0].get("deleted_at"):
+            return {"status": "blocked_inviter_unavailable", "commission_kobo": 0}
+
+        # One row per order (unique order_id). An existing unpaid row is left to the retry.
+        existing = (
+            supabase.table("referral_commissions").select("status")
+            .eq("order_id", order_id).limit(1).execute()
+        ).data or []
+        if existing:
+            return {"status": "already_paid" if existing[0].get("status") == "paid" else "pending",
+                    "commission_kobo": 0}
+
+        # First 10 released sales of the referred user AS SELLER (this order is already
+        # 'released', so it is counted: the 11th released sale gives a count of 11).
+        sales = int((
+            supabase.table("escrow_orders").select("id", count="exact")
+            .eq("seller_id", referred_id).eq("status", "released").execute()
+        ).count or 0)
+        if sales > REFERRAL_MAX_SALES:
+            return {"status": "limit_reached", "commission_kobo": 0}
+
+        # Insert as pending FIRST (unique(order_id) stops a concurrent double insert),
+        # then try to credit. The row is never deleted on failure.
+        try:
+            supabase.table("referral_commissions").insert({
+                "order_id": order_id,
+                "referrer_id": referrer_id,
+                "referred_id": referred_id,
+                "seller_id": seller_id,
+                "price_kobo": int(order.get("price_kobo") or 0),
+                "platform_fee_kobo": int(order.get("platform_fee_kobo") or 0),
+                "commission_kobo": commission,
+                "status": "pending",
+                "created_at": _now_iso(),
+            }).execute()
+        except Exception as exc:
+            if "duplicate" in str(exc).lower() or "23505" in str(exc):
+                return {"status": "already_paid", "commission_kobo": 0}
+            raise
+
+        return _settle_commission({
+            "order_id": order_id, "referrer_id": referrer_id,
+            "referred_id": referred_id, "commission_kobo": commission,
+        })
+    except Exception as exc:
+        if _is_schema_missing(exc):
+            logging.warning("_pay_referral_commission: schema not ready (%s)", exc)
+            return {"status": "not_ready", "commission_kobo": 0}
+        logging.exception("_pay_referral_commission: failed for order %s", order.get("id"))
+        return {"status": "error", "commission_kobo": 0}
+
+
 def _release_escrow(order_id, from_statuses=("held",)):
     """
     Atomically moves the order to 'released' and pays the seller.
@@ -886,6 +1177,12 @@ def _release_escrow(order_id, from_statuses=("held",)):
 
     _refresh_product_sales(order.get("product_id"))
     _mark_referral_rewarded(order.get("buyer_id"), seller_id)
+    # Referral commission: separate credit to the referrer, funded only from this
+    # order's platform fee. seller_gets_kobo above is untouched. Never blocks a release.
+    try:
+        _pay_referral_commission(order, prior)
+    except Exception:
+        logging.exception("_release_escrow: referral commission step failed for order %s", order_id)
     order["status"] = "released"
     return order
 
@@ -1048,7 +1345,10 @@ def _check_auto_ban(seller_id):
 # ---- referral ----------------------------------------------------------------
 
 def _handle_referral(user, init_data):
-    """ref_<id> / inv_<id> start_param -> users.referred_by + referrals row. prod_* is ignored."""
+    """
+    ref_<id> / inv_<id> start_param -> users.referred_by + referrals row. prod_* is ignored.
+    Blocked: self-referral, double referral, deleted/unknown inviter, seller inviter.
+    """
     try:
         sp = dict(parse_qsl(init_data, keep_blank_values=True)).get("start_param") or ""
         m = re.fullmatch(r"(?:ref|inv)_(\d{1,15})", sp)
@@ -1061,6 +1361,8 @@ def _handle_referral(user, init_data):
         inv = supabase.table("users").select("telegram_id,deleted_at").eq("telegram_id", inviter).limit(1).execute()
         rows = inv.data or []
         if not rows or rows[0].get("deleted_at"):
+            return
+        if _is_seller(inviter) is True:  # Seller-Ban: buyer-only referral
             return
         upd = (
             supabase.table("users")
@@ -1121,6 +1423,64 @@ def _build_simple_pdf(title, rows):
         out.write(f"{off:010d} 00000 n \n".encode())
     out.write(f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
     return out.getvalue()
+
+
+# ---- support tickets (shared by POST /api/support and bot /support) ----------
+
+def _create_support_ticket(telegram_id, message, order_id=None):
+    """
+    Inserts a pending support ticket and returns the saved row. Raises on any
+    database error (a missing table/column is mapped to 501 / a bot notice by
+    the callers).
+    """
+    payload = {
+        "user_id": int(telegram_id),
+        "message": str(message)[:SUPPORT_MESSAGE_MAX],
+        "status": "pending",
+        "created_at": _now_iso(),
+    }
+    if order_id:
+        payload["order_id"] = str(order_id)
+    rows = supabase.table("support_tickets").insert(payload).execute().data or []
+    return rows[0] if rows else payload
+
+
+# ---- admin summary (shared by bot /admin; same tables as /api/admin/*) --------
+
+def _count_rows(table, col="id", **eq):
+    q = supabase.table(table).select(col, count="exact")
+    for k, v in eq.items():
+        q = q.eq(k, v)
+    return int(q.execute().count or 0)
+
+
+def _admin_stats():
+    """Text-ready admin numbers. Every figure is guarded: a failure shows 'n/a'."""
+    stats = {
+        "orders_today": "n/a", "volume_today_kobo": None, "open_disputes": "n/a",
+        "reports": "n/a", "appeals": "n/a", "users": "n/a",
+    }
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    try:
+        rows = _fetch_all(lambda a, b: (
+            supabase.table("escrow_orders").select("id,price_kobo")
+            .gte("created_at", today).order("id").range(a, b)
+        ))
+        stats["orders_today"] = len(rows)
+        stats["volume_today_kobo"] = sum(int(r.get("price_kobo") or 0) for r in rows)
+    except Exception:
+        logging.warning("_admin_stats: orders unavailable", exc_info=True)
+    for key, table, col, eq in (
+        ("open_disputes", "disputes", "id", {"status": "open"}),
+        ("reports", "product_reports", "id", {"status": "pending"}),
+        ("appeals", "appeals", "id", {"status": "pending"}),
+        ("users", "users", "telegram_id", {}),
+    ):
+        try:
+            stats[key] = _count_rows(table, col, **eq)
+        except Exception:
+            logging.warning("_admin_stats: %s unavailable", table, exc_info=True)
+    return stats
 
 
 # =============================================================================
@@ -2443,6 +2803,12 @@ def escrow_list(user):
             except Exception:
                 logging.exception("escrow_list: auto-release failed for order %s", o.get("id"))
 
+    # Pay any referral commission whose earlier credit failed. Never breaks the list.
+    try:
+        _retry_pending_commissions()
+    except Exception:
+        logging.warning("escrow_list: commission retry skipped", exc_info=True)
+
     ids = list({o.get("product_id") for o in orders if o.get("product_id") is not None})
     names = {}
     if ids:
@@ -3065,6 +3431,220 @@ def admin_webhook_logs(user):
 
 
 # =============================================================================
+# Support tickets (additive — Prompt 1)
+# =============================================================================
+
+@app.route("/api/support", methods=["POST"])
+@require_auth
+@limiter.limit("10 per hour")
+def support_create(user):
+    tid = int(user["telegram_id"])
+    data = request.get_json(silent=True) or {}
+    message = str(data.get("message") or "").strip()[:SUPPORT_MESSAGE_MAX]
+    if not message:
+        return jsonify({"error": "message is required"}), 400
+
+    order_id = str(data.get("order_id") or "").strip() or None
+    if order_id:
+        order = _escrow_get(order_id)
+        if not order:
+            return jsonify({"error": "Order not found"}), 404
+        if tid not in (int(order.get("buyer_id") or 0), int(order.get("seller_id") or 0)):
+            return jsonify({"error": "Forbidden"}), 403
+        order_id = str(order.get("id"))
+
+    try:
+        ticket = _create_support_ticket(tid, message, order_id)
+    except Exception as exc:
+        return _db_error(exc, "support_create: save failed")  # missing table/column -> 501
+    return jsonify({"ok": True, "ticket": ticket}), 201
+
+
+@app.route("/api/support", methods=["GET"])
+@require_auth
+def support_list(user):
+    tid = int(user["telegram_id"])
+
+    def mine():  # fresh builder each time (builders are mutable)
+        return supabase.table("support_tickets").select("*").eq("user_id", tid)
+
+    try:
+        try:
+            rows = mine().order("created_at", desc=True).limit(100).execute().data or []
+        except Exception:
+            rows = mine().limit(100).execute().data or []
+    except Exception as exc:
+        return _db_error(exc, "support_list: lookup failed")  # missing table -> 501
+    return jsonify({"tickets": rows}), 200
+
+
+# =============================================================================
+# Seller <-> buyer chat (additive — Prompt 5)
+# =============================================================================
+
+def _chat_order_for(user, order_id):
+    """Returns (order, error_response). Only the order's buyer or seller may pass."""
+    order_id = str(order_id or "").strip()
+    if not order_id:
+        return None, (jsonify({"error": "order_id required"}), 400)
+    order = _escrow_get(order_id)
+    if not order:
+        return None, (jsonify({"error": "Order not found"}), 404)
+    tid = int(user["telegram_id"])
+    if tid not in (int(order.get("buyer_id") or 0), int(order.get("seller_id") or 0)):
+        return None, (jsonify({"error": "Forbidden"}), 403)
+    return order, None
+
+
+@app.route("/api/chat/send", methods=["POST"])
+@require_auth
+@limiter.limit("30 per minute")
+def chat_send(user):
+    data = request.get_json(silent=True) or {}
+    order, err = _chat_order_for(user, data.get("order_id"))
+    if err:
+        return err
+    text = str(data.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "text is required"}), 400
+    if len(text) > CHAT_TEXT_MAX:
+        return jsonify({"error": f"text must be {CHAT_TEXT_MAX} characters or less"}), 400
+
+    try:
+        rows = supabase.table("chat_messages").insert({
+            "order_id": str(order.get("id")),
+            "sender_id": int(user["telegram_id"]),
+            "text": text,
+            "created_at": _now_iso(),
+        }).execute().data or []
+    except Exception as exc:
+        return _db_error(exc, "chat_send: save failed")  # missing table -> 501
+    return jsonify({"ok": True, "message": rows[0] if rows else {"text": text}}), 201
+
+
+@app.route("/api/chat/<order_id>", methods=["GET"])
+@require_auth
+def chat_list(user, order_id):
+    order, err = _chat_order_for(user, order_id)
+    if err:
+        return err
+    tid = int(user["telegram_id"])
+
+    def build():  # fresh builder each time (builders are mutable)
+        return supabase.table("chat_messages").select("*").eq("order_id", str(order.get("id")))
+
+    try:
+        try:
+            rows = build().order("created_at", desc=False).limit(200).execute().data or []
+        except Exception:
+            rows = build().limit(200).execute().data or []
+    except Exception as exc:
+        return _db_error(exc, "chat_list: lookup failed")  # missing table -> 501
+
+    for r in rows:
+        r["is_mine"] = str(r.get("sender_id")) == str(tid)
+        r["sender_role"] = "buyer" if str(r.get("sender_id")) == str(order.get("buyer_id")) else "seller"
+    return jsonify({"messages": rows}), 200
+
+
+# =============================================================================
+# Referrals (additive — Prompt 2)
+# =============================================================================
+
+def _in_chunks(items, size=100):
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+
+@app.route("/api/referrals/mine", methods=["GET"])
+@require_auth
+def referrals_mine(user):
+    tid = int(user["telegram_id"])
+
+    # Pay any of this referrer's commissions whose earlier credit failed. Never breaks mine.
+    try:
+        _retry_pending_commissions(referrer_id=tid)
+    except Exception:
+        logging.warning("referrals_mine: commission retry skipped", exc_info=True)
+
+    try:
+        refs = _fetch_all(lambda a, b: (
+            supabase.table("referrals").select("*").eq("referrer_id", tid).order("referred_id").range(a, b)
+        ))
+    except Exception as exc:
+        return _db_error(exc, "referrals_mine: lookup failed")  # missing table -> 501
+
+    referred_ids = [int(r["referred_id"]) for r in refs if r.get("referred_id") is not None]
+
+    # Commission rows are the source of truth; referrals.* columns are the fallback.
+    comm_by_user, comm_ok = {}, False
+    try:
+        crows = _fetch_all(lambda a, b: (
+            supabase.table("referral_commissions").select("referred_id,commission_kobo,status")
+            .eq("referrer_id", tid).order("order_id").range(a, b)
+        ))
+        for c in crows:
+            if c.get("status") != "paid":
+                continue  # pending / failed are not earned yet; the retry pays them
+            slot = comm_by_user.setdefault(int(c["referred_id"]), {"count": 0, "kobo": 0})
+            slot["count"] += 1
+            slot["kobo"] += int(c.get("commission_kobo") or 0)
+        comm_ok = True
+    except Exception:
+        logging.warning("referrals_mine: referral_commissions unavailable", exc_info=True)
+
+    shown = referred_ids[:100]
+    sales, names = {}, {}
+    for chunk in _in_chunks(shown):
+        try:
+            orders = (
+                supabase.table("escrow_orders").select("seller_id")
+                .in_("seller_id", chunk).eq("status", "released").limit(5000).execute()
+            ).data or []
+            for o in orders:  # sales AS SELLER only; the referred user's purchases do not count
+                sales[int(o["seller_id"])] = sales.get(int(o["seller_id"]), 0) + 1
+        except Exception:
+            logging.warning("referrals_mine: sales counts unavailable", exc_info=True)
+        try:
+            for u in (
+                supabase.table("users").select("telegram_id,first_name,username")
+                .in_("telegram_id", chunk).execute()
+            ).data or []:
+                names[int(u["telegram_id"])] = u.get("first_name") or u.get("username") or "User"
+        except Exception:
+            logging.warning("referrals_mine: names unavailable", exc_info=True)
+
+    referred, total_count, total_kobo = [], 0, 0
+    for r in refs:
+        rid = int(r["referred_id"])
+        if comm_ok:
+            cnt = comm_by_user.get(rid, {}).get("count", 0)
+            kobo = comm_by_user.get(rid, {}).get("kobo", 0)
+        else:
+            cnt = int(r.get("commission_count") or 0)
+            kobo = int(r.get("total_commission_kobo") or 0)
+        total_count += cnt
+        total_kobo += kobo
+        if rid in shown:
+            referred.append({
+                "referred_id": rid,
+                "name": names.get(rid, "User"),
+                "sales_count": sales.get(rid, 0),
+                "commission_count": cnt,
+                "commission_progress": f"{min(cnt, REFERRAL_MAX_SALES)} / {REFERRAL_MAX_SALES}",
+                "total_commission_kobo": kobo,
+            })
+
+    return jsonify({
+        "referral_count": len(refs),
+        "commission_count": total_count,
+        "total_commission_kobo": total_kobo,
+        "max_sales_per_referred": REFERRAL_MAX_SALES,
+        "referred": referred,
+    }), 200
+
+
+# =============================================================================
 # Frontend (serves ONLY index.html)
 # =============================================================================
 
@@ -3108,21 +3688,124 @@ from telegram import BotCommand, BotCommandScopeChat
 from telegram.ext import Application, CommandHandler, ContextTypes
 import asyncio
 
+_WELCOME_TEXT = "Welcome to PayLock — Sell, buy and get paid safely with escrow."
+
+
+def _app_link(startapp=None):
+    """
+    t.me/<BOT_USERNAME>/<APP_SHORT_NAME>[?startapp=<param>]. Telegram only passes
+    initData.start_param to the Mini App for this kind of link (a plain WEBAPP_URL query string never carries it).
+    Returns None while BOT_USERNAME / APP_SHORT_NAME are unset or still placeholders.
+    """
+    if not BOT_USERNAME or not APP_SHORT_NAME or APP_SHORT_NAME == _APP_SHORT_NAME_PLACEHOLDER:
+        return None
+    link = f"https://t.me/{BOT_USERNAME}/{APP_SHORT_NAME}"
+    return f"{link}?startapp={startapp}" if startapp else link
+
+
+def _open_button(startapp=None):
+    """
+    'Open PayLock' keyboard. With a startapp param it is always a t.me Mini App link.
+    Plain (no param) uses the t.me link too, falling back to the plain WEBAPP_URL
+    WebApp button (no query string) only if APP_SHORT_NAME is not configured yet.
+    """
+    link = _app_link(startapp)
+    if link:
+        return InlineKeyboardMarkup([[InlineKeyboardButton("Open PayLock", url=link)]])
+    if not startapp and WEBAPP_URL:
+        return InlineKeyboardMarkup([[InlineKeyboardButton("Open PayLock", web_app=WebAppInfo(url=WEBAPP_URL))]])
+    if startapp:
+        logging.warning("_open_button: APP_SHORT_NAME is not set; deep link button omitted")
+    return None
+
+
 async def _bot_start(update, context):
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("Open PayLock", web_app=WebAppInfo(url=WEBAPP_URL))]]) if WEBAPP_URL else None
-    await update.message.reply_text("Welcome to PayLock — Sell, buy and get paid safely with escrow.", reply_markup=kb)
+    if update.message is None:
+        return
+    kb = _open_button()
+    text = _WELCOME_TEXT
+    try:
+        arg = str((context.args or [""])[0] or "").strip()[:64]
+        if arg:
+            m_ref = re.fullmatch(r"(?:ref|inv)_(\d{1,15})", arg, flags=re.IGNORECASE)
+            m_prod = re.fullmatch(r"prod_([A-Za-z0-9]{1,12})", arg, flags=re.IGNORECASE)
+            m_code = re.fullmatch(r"[A-Za-z0-9]{6}", arg)
+            if m_ref:
+                text = _WELCOME_TEXT + "\n\nYou were invited to PayLock. Tap below to get started."
+                kb = _open_button(f"ref_{m_ref.group(1)}") or _open_button()  # startapp=ref_<id>
+            elif m_prod or m_code:
+                code = (m_prod.group(1) if m_prod else arg).upper()
+                product = _find_product("prod_" + code, mode="code")
+                if product:
+                    name = product.get("name") or product.get("title") or "Product"
+                    price = "NGN " + format(int(product.get("price_kobo") or 0) / 100, ",.2f")
+                    text = _WELCOME_TEXT + f"\n\n{name}\nPrice: {price}"
+                    kb = _open_button(f"prod_{product.get('code') or code}") or _open_button()  # startapp=prod_<code>
+                else:
+                    text = _WELCOME_TEXT + "\n\nProduct not found."
+            # any other arg: plain welcome, no crash
+    except Exception:
+        logging.warning("_bot_start: deep link handling failed", exc_info=True)
+        text, kb = _WELCOME_TEXT, _open_button()
+    await update.message.reply_text(text, reply_markup=kb)
+
+
 async def _bot_support(update, context):
-    await update.message.reply_text("Support: Describe your issue here. Our team will reply. For orders, include your Order ID / Reference.")
+    if update.message is None:
+        return
+    text = " ".join(context.args or []).strip()[:SUPPORT_MESSAGE_MAX]
+    if not text or update.effective_user is None:
+        await update.message.reply_text(
+            "Support: send /support followed by your issue, e.g. /support I need help with my order. "
+            "Include your Order ID / Reference for orders. Our team will reply."
+        )
+        return
+    try:
+        ticket = _create_support_ticket(update.effective_user.id, text)
+    except Exception as exc:
+        if _is_schema_missing(exc):
+            logging.warning("_bot_support: support_tickets not ready (%s)", exc)
+            await update.message.reply_text("Support tickets are not available yet. Please try again later.")
+        else:
+            logging.exception("_bot_support: ticket save failed")
+            await update.message.reply_text("Could not save your ticket right now. Please try again.")
+        return
+    ref = ticket.get("id") if isinstance(ticket, dict) else None
+    await update.message.reply_text(
+        "Your support ticket has been received" + (f" (#{ref})" if ref is not None else "") +
+        ". Our team will reply."
+    )
+
+
 async def _bot_balance(update, context):
-    await update.message.reply_text("Open PayLock to see your balance:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Open PayLock", web_app=WebAppInfo(url=WEBAPP_URL))]]) if WEBAPP_URL else None)
+    await update.message.reply_text("Open PayLock to see your balance:", reply_markup=_open_button())
+
+
 async def _bot_help(update, context):
     await update.message.reply_text("/start - Open PayLock\n/support - Contact support\n/balance - Check balance\n/help - Show this")
+
+
 async def _bot_admin(update, context):
-    if update.effective_user is None or str(update.effective_user.id) != str(ADMIN_ID):
+    """Admin summary is TEXT ONLY in the bot chat: no WebApp button, no web route."""
+    if update.message is None:
+        return
+    if update.effective_user is None or not ADMIN_ID or str(update.effective_user.id) != str(ADMIN_ID):
         await update.message.reply_text("Admin only")
         return
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("Admin Panel", web_app=WebAppInfo(url=WEBAPP_URL))]]) if WEBAPP_URL else None
-    await update.message.reply_text("Admin Panel - Daily activities", reply_markup=kb)
+    s = _admin_stats()
+    vol = s["volume_today_kobo"]
+    volume = "n/a" if vol is None else "NGN " + format(int(vol) / 100, ",.2f")
+    await update.message.reply_text(
+        "Admin Summary\n"
+        f"Orders today: {s['orders_today']}\n"
+        f"Volume today: {volume}\n"
+        f"Open disputes: {s['open_disputes']}\n"
+        f"Reports (pending): {s['reports']}\n"
+        f"Appeals (pending): {s['appeals']}\n"
+        f"Users: {s['users']}"
+    )
+
+
 def _get_bot_app():
     app_bot = Application.builder().token(BOT_TOKEN).build()
     app_bot.add_handler(CommandHandler("start", _bot_start))
