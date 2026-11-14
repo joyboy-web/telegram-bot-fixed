@@ -17,6 +17,7 @@
 [data-theme="dark"]{
   --bg:#000000; --card:#0E0E0F; --ink:#FFFFFF; --muted:#9CA3AF; --line:#26282B; --chip:#1F2124;
 }
+.theme-btn{background:var(--chip);border:0;border-radius:10px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.45}
 button{font-family:inherit;color:inherit;cursor:pointer}
@@ -52,7 +53,7 @@ h1,h2,h3,p{margin:0}
 .hello{display:flex;align-items:center;gap:8px;margin-bottom:4px}
 .hello h1{font-size:26px;font-weight:800}
 .welcome{font-size:13px;color:var(--muted);font-weight:600}
-.balance-card{background:linear-gradient(135deg,#000000 0%,#2B2B2B 100%);color:#fff;border-radius:22px;padding:20px;margin:16px 0;border:1px solid var(--line);position:relative}
+.balance-card{background:#000000;color:#fff;border-radius:22px;padding:20px;margin:16px 0;border:1px solid var(--line);position:relative}
 .balance-card .label{font-size:13px;opacity:0.75}
 .balance-card .amount{font-size:32px;font-weight:800;margin:6px 0 4px;letter-spacing:-0.5px}
 .balance-card .idline{font-size:12px;opacity:0.7;margin-bottom:14px}
@@ -67,7 +68,7 @@ h1,h2,h3,p{margin:0}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 .pcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px;display:flex;flex-direction:column;gap:8px}
 .pcard .pimg{width:100%;aspect-ratio:1/1;border-radius:12px;background:var(--chip);object-fit:cover;display:block}
-.pcard .ptitle{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcard .ptitle{font-weight:700;font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:36px}
 .pcard .pprice{font-weight:800;font-size:15px}
 .empty{text-align:center;color:var(--muted);padding:36px 12px;font-size:14px}
 .empty .big{font-weight:700;color:var(--ink);font-size:16px;margin-bottom:4px}
@@ -199,7 +200,7 @@ h1,h2,h3,p{margin:0}
 /* Fix 6: marketplace grid */
 .grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; width:100%; }
 .pcard{ min-width:0; overflow:hidden; cursor:pointer; }
-.pcard .ptitle{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.pcard .ptitle{ overflow:hidden; max-width:100%; }
 .pcard .pprice{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 html,body{ overflow-x:hidden; }
 .app-shell{ overflow-x:hidden; }
@@ -258,8 +259,8 @@ html,body{ overflow-x:hidden; }
 /* ===== PAYLOCK ADDITIONS (additive) ===== */
 .chat-msg-paylock{background:#1f1f1f;color:#fff;border-bottom-left-radius:4px}
 .chat-msg-label{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#9CA3AF;margin-bottom:3px}
-.chat-tick{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#1D9BF0;color:#fff;font-size:9px;line-height:1}
-#offline-banner{display:none;position:fixed;top:0;left:0;right:0;z-index:2500;align-items:center;justify-content:center;gap:10px;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top));background:var(--red);color:#fff;font-size:13.5px;font-weight:600}
+.chat-tick{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--ink);color:var(--bg);font-size:9px;line-height:1}
+#offline-banner{display:none;position:fixed;top:0;left:0;right:0;z-index:2500;align-items:center;justify-content:center;gap:10px;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top));background:#000;color:#fff;font-size:13.5px;font-weight:600}
 #offline-banner.show{display:flex}
 #offline-banner button{background:#fff;color:#000;border:0;border-radius:8px;padding:5px 12px;font-weight:700;font-size:13px}
 .ban-banner{display:none;align-items:center;justify-content:space-between;gap:10px;background:var(--red);color:#fff;border-radius:14px;padding:10px 12px;margin-bottom:12px;font-size:13px;font-weight:600}
@@ -287,11 +288,65 @@ html,body{ overflow-x:hidden; }
 .mp-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
 .mp-vis{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
 .b-hidden{background:rgba(107,114,128,.2);color:var(--muted)}
-.b-boost{background:rgba(29,155,240,.15);color:#1D9BF0}
+.b-boost{background:var(--chip);color:var(--ink)}
 .b-banned{background:rgba(220,38,38,.15);color:var(--red)}
 .app-footer{text-align:center;font-size:11.5px;color:var(--muted);margin:18px 0 4px}
 .empty .empty-ic{display:flex;justify-content:center;margin-bottom:8px;color:var(--muted)}
 .empty .btn{margin-top:10px}
+
+/* ===== DESIGN SYSTEM: PURE BLACK & WHITE (additive; colours / borders / shadows only) ===== */
+/* Light must come BEFORE dark so the dark block wins when data-theme="dark". */
+:root,[data-theme="light"]{
+  --bg:#FFFFFF; --card:#FFFFFF; --ink:#000000; --text:#000000; --muted:#666666;
+  --line:#E5E5E5; --border:#E5E5E5; --chip:#F2F2F2;
+  --chip-active-bg:#000000; --chip-active-text:#FFFFFF;
+  --btn-primary-bg:#000000; --btn-primary-text:#FFFFFF;
+  --btn-secondary-bg:transparent; --btn-secondary-border:#DDDDDD; --btn-secondary-text:#000000;
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 14px rgba(0,0,0,.05);
+  --shadow-up:0 -4px 14px rgba(0,0,0,.05);
+}
+[data-theme="dark"]{
+  --bg:#000000; --card:#0A0A0A; --ink:#FFFFFF; --text:#FFFFFF; --muted:#A1A1AA;
+  --line:#222222; --border:#222222; --chip:#1A1A1A;
+  --chip-active-bg:#FFFFFF; --chip-active-text:#000000;
+  --btn-primary-bg:#FFFFFF; --btn-primary-text:#000000;
+  --btn-secondary-bg:transparent; --btn-secondary-border:#333333; --btn-secondary-text:#FFFFFF;
+  --shadow:0 1px 2px rgba(0,0,0,.6),0 4px 14px rgba(0,0,0,.45);
+  --shadow-up:0 -4px 14px rgba(0,0,0,.5);
+}
+body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-btn,.theme-btn,.quick button,.esc-card,.mp-row,.stat-card,.chat-head,#chat-product,.rate-box,.upload-box,.card-row,.bank-list,.ic-btn{
+  transition:background-color .2s ease,color .2s ease,border-color .2s ease,box-shadow .2s ease,transform .2s ease;
+}
+.btn{transition:background-color .2s ease,color .2s ease,border-color .2s ease,transform .2s ease,opacity .2s ease}
+.card,.pcard,.esc-card,.mp-row,.stat-card,.chat-head,#chat-product,.rate-box,.card-row{border-radius:16px;box-shadow:var(--shadow);border-color:var(--line)}
+.sheet{border-color:var(--line);box-shadow:var(--shadow)}
+.tabbar{box-shadow:var(--shadow-up)}
+.input,.select,.textarea{border-radius:14px}
+.input:focus,.select:focus,.textarea:focus{border-color:var(--ink)}
+.btn{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:var(--btn-primary-bg);border-radius:14px}
+.btn.secondary{background:var(--btn-secondary-bg);color:var(--btn-secondary-text);border-color:var(--btn-secondary-border)}
+.btn.danger{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:var(--btn-primary-bg)}
+.chip.active{background:var(--chip-active-bg);color:var(--chip-active-text)}
+.balance-card{background:#000000;border-radius:22px;box-shadow:var(--shadow);border-color:var(--line)}
+[data-theme="dark"] .balance-card{background:var(--card);border-color:var(--line)}
+.toggle:not(.on)::after{background:var(--muted)}
+.toggle.on{background:var(--ink)}
+.toggle.on::after{background:var(--bg)}
+.credit,.debit{color:var(--ink)}
+.b-pending,.b-held,.b-failed,.b-disputed,.b-boost,.b-banned{background:var(--chip);color:var(--ink)}
+.danger-zone{border-color:var(--ink);border-radius:16px}
+.danger-zone .card-title{color:var(--ink)}
+.ban-banner{background:var(--ink);color:var(--bg)}
+.ban-banner .btn{background:var(--bg);color:var(--ink);border-color:var(--bg)}
+.chat-badge{background:var(--ink);color:var(--bg)}
+.pin-error{color:var(--ink)}
+.chat-tick{background:var(--ink);color:var(--bg)}
+.chat-head-name svg circle{fill:var(--ink)}
+.chat-head-name svg path{stroke:var(--bg)}
+.chat-msg-paylock{background:var(--chip);color:var(--ink)}
+.pv-stars{color:var(--ink)}
+.rate-star{color:var(--ink)!important}
+#offline-banner{border-bottom:1px solid #333}
 </style>
 </head>
 <body>
@@ -330,6 +385,7 @@ html,body{ overflow-x:hidden; }
     <div class="welcome">Welcome back</div>
     <div class="hello">
       <h1 id="home-greeting">Hi there</h1>
+      <button class="theme-btn" type="button" id="theme-btn" onclick="PayLock.toggleTheme()" aria-label="Toggle theme">🌙</button>
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v6"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-5.9-2.4L3.4 16a2 2 0 0 1 3.2-2.4L8 15"/></svg>
     </div>
     <p class="muted small">Sell, buy and get paid safely with escrow protection.</p>
@@ -986,6 +1042,50 @@ function applyTheme(){
   } catch (e) {}
 }
 
+/* ---------- Theme toggle (dark / light, saved in localStorage "paylock_theme") ---------- */
+function setThemeIcon(){
+  const b = document.getElementById('theme-btn');
+  if (b) b.textContent = (document.documentElement.getAttribute('data-theme') === 'dark') ? '☀️' : '🌙';
+}
+// Removes the inline colour overrides that applyTheme() sets from Telegram's themeParams,
+// so the pure black & white palettes in CSS apply exactly.
+function clearThemeInline(){
+  try {
+    const st = document.documentElement.style;
+    ['--bg', '--ink', '--muted', '--card'].forEach(function(k){ st.removeProperty(k); });
+  } catch (e) {}
+}
+function syncTelegramChrome(){
+  try {
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const c = dark ? '#000000' : '#FFFFFF';
+    if (tg && tg.setHeaderColor) tg.setHeaderColor(c);
+    if (tg && tg.setBackgroundColor) tg.setBackgroundColor(c);
+  } catch (e) {}
+}
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const next = (cur === 'dark') ? 'light' : 'dark';
+  clearThemeInline();
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('paylock_theme', next); } catch (e) {}
+  setThemeIcon();
+  syncTelegramChrome();
+}
+function loadTheme(){
+  let saved = null;
+  try { saved = localStorage.getItem('paylock_theme'); } catch (e) { saved = null; }
+  if (saved === 'dark' || saved === 'light') {
+    clearThemeInline();
+    document.documentElement.setAttribute('data-theme', saved);
+  } else {
+    applyTheme();          // default: follow Telegram theme
+    clearThemeInline();    // keep the pure B&W palette
+  }
+  setThemeIcon();
+  syncTelegramChrome();
+}
+
 /* ---------- Navigation ---------- */
 function goPage(id){
   document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
@@ -1002,7 +1102,10 @@ function goPage(id){
   else if (id === 'pg-withdraw') { loadBalance(); loadBanks(); loadWithdrawals(); }
   else if (id === 'pg-buy' || id === 'pg-home') { loadProducts(); renderBanBanner(); }
   else if (id === 'pg-myproducts') { loadMyProducts(); }
-  else if (id === 'pg-admin' && isAdmin()) { loadAppeals(); }
+  else if (id === 'pg-admin') {
+    if (isAdmin()) { loadAdmin(); }
+    else { showToast('Admin only'); goPage('pg-wallet'); }
+  }
 }
 
 /* ---------- Balance ---------- */
@@ -2685,7 +2788,7 @@ function applyBuyFilter(){
 
 /* ===================== PAYLOCK ADDITIONS (additive) ===================== */
 // CONFIG: set ADMIN_ID to your Telegram user ID to unlock the Admin Panel (empty = nobody).
-const CONFIG = { BOT_USERNAME: 'PayLockOfficialBot', ADMIN_ID: '', BAN_THRESHOLD: 5 };
+const CONFIG = { BOT_USERNAME: 'PayLockOfficialBot', ADMIN_ID: '123456789', BAN_THRESHOLD: 5 };
 state.banned = false;
 state.myProducts = [];
 let lastApi = null;
@@ -3228,6 +3331,7 @@ function renderBanBanner(){
 function isAdmin(){
   return !!CONFIG.ADMIN_ID && state.telegram_id !== null && String(state.telegram_id) === String(CONFIG.ADMIN_ID);
 }
+// Admin entry is created ONLY when isAdmin() is true. Normal users never get admin-link or pg-admin.
 function setupAdmin(){
   if (!isAdmin() || $('admin-link')) return;
   const slot = $('account-links');
@@ -3240,6 +3344,7 @@ function setupAdmin(){
     b.addEventListener('click', function(){ goPage('pg-admin'); });
     slot.appendChild(b);
   }
+  if ($('pg-admin')) return;
   const sec = el('section', 'page');
   sec.id = 'pg-admin';
   const back = el('button', 'back-btn', '‹ Back');
@@ -3247,13 +3352,146 @@ function setupAdmin(){
   back.addEventListener('click', function(){ goPage('pg-wallet'); });
   sec.appendChild(back);
   sec.appendChild(el('h2', 'page-title', 'Admin Panel'));
-  const card = el('div', 'card');
-  card.appendChild(el('div', 'card-title', 'Appeals'));
-  const list = el('div');
-  list.id = 'admin-appeals';
-  card.appendChild(list);
-  sec.appendChild(card);
+  const rf = el('button', 'btn secondary', 'Refresh');
+  rf.type = 'button';
+  rf.id = 'admin-refresh';
+  rf.style.marginBottom = '14px';
+  rf.addEventListener('click', function(){ loadAdmin(); });
+  sec.appendChild(rf);
+  [
+    ['adminStats', 'Daily Activities'],
+    ['adminOrders', 'Recent Orders'],
+    ['adminDisputes', 'Open Disputes'],
+    ['adminReports', 'Reports'],
+    ['adminAppeals', 'Appeals'],
+    ['adminUsers', 'Users']
+  ].forEach(function(c){
+    const card = el('div', 'card');
+    card.appendChild(el('div', 'card-title', c[1]));
+    const body = el('div');
+    body.id = c[0];
+    if (c[0] === 'adminAppeals') {
+      // loadAppeals() renders into #admin-appeals, so keep that id inside the Appeals card.
+      const inner = el('div');
+      inner.id = 'admin-appeals';
+      body.appendChild(inner);
+    }
+    card.appendChild(body);
+    sec.appendChild(card);
+  });
   document.querySelector('.app-shell').appendChild(sec);
+}
+function adminFill(id, rows, rowFn, emptyText){
+  const box = $(id);
+  if (!box) return;
+  clearNode(box);
+  if (!rows || !rows.length) { box.appendChild(el('div', 'empty', emptyText)); return; }
+  rows.slice(0, 50).forEach(function(r){ box.appendChild(rowFn(r)); });
+}
+function adminFail(id, status){
+  const box = $(id);
+  if (!box) return;
+  clearNode(box);
+  box.appendChild(el('div', 'empty', (status === 404 || status === 405 || status === 501) ? 'Not available yet' : 'Could not load'));
+}
+function adminItem(title, sub, right){
+  const row = el('div', 'item');
+  const mid = el('div', 'mid');
+  mid.appendChild(el('div', 't', title));
+  mid.appendChild(el('div', 's', sub));
+  row.appendChild(mid);
+  if (right) row.appendChild(el('div', 'amt', right));
+  return row;
+}
+async function loadAdmin(){
+  if (!isAdmin()) return;
+  const get = async function(path, key){
+    try {
+      const r = await api(path, { headers: getAuthHeader() });
+      if (r.res.ok) return { ok: true, rows: Array.isArray(r.data[key]) ? r.data[key] : [], data: r.data };
+      return { ok: false, status: r.res.status };
+    } catch (e) { return { ok: false, status: 0 }; }
+  };
+  const res = await Promise.all([
+    get('/api/admin/orders', 'orders'),
+    get('/api/admin/disputes', 'disputes'),
+    get('/api/admin/reports', 'reports'),
+    get('/api/admin/users', 'users')
+  ]);
+  const orders = res[0], disputes = res[1], reports = res[2], users = res[3];
+
+  if (orders.ok) {
+    adminFill('adminOrders', orders.rows, function(o){
+      return adminItem(
+        String(o.product_name || o.reference || ('Order ' + (o.id || ''))),
+        String(o.status || '-') + ' · ' + fmtDate(o.created_at),
+        nairaFmt(o.buyer_pays_kobo || o.amount_kobo || 0)
+      );
+    }, 'No orders');
+  } else adminFail('adminOrders', orders.status);
+
+  if (disputes.ok) {
+    adminFill('adminDisputes', disputes.rows, function(d){
+      return adminItem(
+        'Order ' + String(d.order_id || d.id || '?'),
+        String(d.reason || d.status || '') + (d.created_at ? ' · ' + fmtDate(d.created_at) : ''),
+        d.status ? String(d.status) : ''
+      );
+    }, 'No open disputes');
+  } else adminFail('adminDisputes', disputes.status);
+
+  if (reports.ok) {
+    adminFill('adminReports', reports.rows, function(r){
+      return adminItem(
+        'Product ' + String(r.product_name || r.product_id || '?'),
+        String(r.reason || '') + (r.created_at ? ' · ' + fmtDate(r.created_at) : ''),
+        r.reporter_id ? ('By ' + r.reporter_id) : ''
+      );
+    }, 'No reports');
+  } else adminFail('adminReports', reports.status);
+
+  if (users.ok) {
+    adminFill('adminUsers', users.rows, function(u){
+      const name = u.first_name || u.username || ('User ' + (u.telegram_id || u.id || '?'));
+      const flag = (u.banned || u.is_banned || u.status === 'banned') ? 'Banned' : '';
+      return adminItem(String(name), 'ID: ' + String(u.telegram_id || u.id || '-'), flag);
+    }, 'No users');
+  } else adminFail('adminUsers', users.status);
+
+  // Daily Activities summary (computed from what the endpoints returned)
+  const stats = $('adminStats');
+  if (stats) {
+    clearNode(stats);
+    const today = new Date().toDateString();
+    let todayCount = 0, todayVol = 0;
+    if (orders.ok) {
+      orders.rows.forEach(function(o){
+        const t = new Date(o.created_at);
+        if (!isNaN(t.getTime()) && t.toDateString() === today) {
+          todayCount++;
+          todayVol += Number(o.buyer_pays_kobo || o.amount_kobo || 0) || 0;
+        }
+      });
+    }
+    const userTotal = users.ok ? ((users.data && Number(users.data.total)) || users.rows.length) : null;
+    const cells = [
+      [orders.ok ? String(todayCount) : '-', 'Orders today'],
+      [orders.ok ? nairaFmt(todayVol) : '-', 'Volume today'],
+      [disputes.ok ? String(disputes.rows.length) : '-', 'Open disputes'],
+      [reports.ok ? String(reports.rows.length) : '-', 'Reports'],
+      [userTotal !== null ? String(userTotal) : '-', 'Users']
+    ];
+    const g = el('div', 'grid');
+    cells.forEach(function(c){
+      const sc = el('div', 'stat-card');
+      sc.appendChild(el('div', 'sv', c[0]));
+      sc.appendChild(el('div', 'sl', c[1]));
+      g.appendChild(sc);
+    });
+    stats.appendChild(g);
+  }
+
+  loadAppeals();
 }
 async function loadAppeals(){
   const list = $('admin-appeals');
@@ -3341,10 +3579,10 @@ function openSupport(){
 })();
 
 function init(){
-  applyTheme();
+  loadTheme();   // saved paylock_theme, else follows Telegram theme via applyTheme()
   if (tg) {
     try { tg.ready(); tg.expand(); } catch (e) {}
-    if (tg.onEvent) tg.onEvent('themeChanged', applyTheme);
+    if (tg.onEvent) tg.onEvent('themeChanged', loadTheme);
   }
   window.addEventListener('offline', function(){ showGate('offline'); });
   document.addEventListener('click', function(ev){
@@ -3377,7 +3615,9 @@ return {
   payNow: payNow, downloadReceipt: downloadReceipt,
   openDeleteSheet: openDeleteSheet, closeDeleteSheet: closeDeleteSheet, onDeleteInput: onDeleteInput,
   startDeleteFlow: startDeleteFlow, closePinModal: closePinModal, pinAction: pinAction,
-  openProductPreview: openProductPreview, previewBack: previewBack, printReceipt: printReceipt
+  openProductPreview: openProductPreview, previewBack: previewBack, printReceipt: printReceipt,
+  toggleTheme: toggleTheme,
+  loadAdmin: loadAdmin
 };
 })();
 </script>
