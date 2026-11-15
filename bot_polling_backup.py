@@ -3,7 +3,7 @@
 #
 # ARCHIVED: Polling disabled - app.py webhook handles updates now.
 # This file is NOT part of the Render deployment. The only live bot is the
-# /webhook route in app.py (Render Start Command: gunicorn main:app).
+# /webhook route in app.py (Render Start Command: gunicorn app:app).
 # Running this file never polls. Only the one-shot helper below is available:
 #     python bot_polling_backup.py set-commands
 
