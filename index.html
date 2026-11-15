@@ -17,7 +17,7 @@
 [data-theme="dark"]{
   --bg:#000000; --card:#0E0E0F; --ink:#FFFFFF; --muted:#9CA3AF; --line:#26282B; --chip:#1F2124;
 }
-.theme-btn{background:var(--chip);border:0;border-radius:10px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.theme-btn{background:var(--chip);border:0;border-radius:10px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--ink)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.45}
 button{font-family:inherit;color:inherit;cursor:pointer}
@@ -34,7 +34,7 @@ h1,h2,h3,p{margin:0}
 .card-title{font-weight:700;font-size:15px;margin-bottom:10px}
 
 /* Buttons */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--ink);color:var(--bg);border:1px solid var(--ink);border-radius:14px;padding:13px 16px;font-weight:700;font-size:15px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--ink);color:var(--bg);border:1px solid var(--ink);border-radius:14px;padding:13px 16px;font-weight:700;font-size:15px;text-decoration:none}
 .btn.secondary{background:transparent;color:var(--ink);border:1px solid var(--line)}
 .btn.danger{background:var(--red);border-color:var(--red);color:#fff}
 .btn.sm{width:auto;padding:8px 12px;font-size:13px;border-radius:10px}
@@ -53,13 +53,14 @@ h1,h2,h3,p{margin:0}
 .hello{display:flex;align-items:center;gap:8px;margin-bottom:4px}
 .hello h1{font-size:26px;font-weight:800}
 .welcome{font-size:13px;color:var(--muted);font-weight:600}
-.balance-card{background:#000000;color:#fff;border-radius:22px;padding:20px;margin:16px 0;border:1px solid var(--line);position:relative}
-.balance-card .label{font-size:13px;opacity:0.75}
-.balance-card .amount{font-size:32px;font-weight:800;margin:6px 0 4px;letter-spacing:-0.5px}
-.balance-card .idline{font-size:12px;opacity:0.7;margin-bottom:14px}
-.balance-card .btn{background:#fff;color:#000;border-color:#fff}
-.balance-card .btn.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4)}
-.eye-btn{position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.12);border:0;border-radius:10px;width:36px;height:36px;color:#fff;display:flex;align-items:center;justify-content:center}
+.balance-card{background:var(--card);color:var(--ink);border-radius:24px;padding:22px;margin:16px 0;border:1px solid var(--line);position:relative}
+.balance-card .label{font-size:13px;color:var(--muted);font-weight:600}
+.balance-card .amount{font-size:36px;font-weight:800;margin:6px 0 4px;letter-spacing:-0.8px}
+.balance-card .idline{font-size:12px;color:var(--muted);margin-bottom:14px}
+.bal-held{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--chip);border-radius:14px;padding:10px 12px;margin:0 0 14px;font-size:13px}
+.bal-held .bh-k{color:var(--muted);font-weight:600}
+.bal-held .bh-v{font-weight:800}
+.eye-btn{position:absolute;top:16px;right:16px;background:var(--chip);border:0;border-radius:10px;width:36px;height:36px;color:var(--ink);display:flex;align-items:center;justify-content:center}
 .quick{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
 .quick button{background:var(--chip);border:0;border-radius:14px;padding:14px 8px;font-weight:700;font-size:14px}
 .section-title{font-size:16px;font-weight:800;margin:6px 0 10px}
@@ -79,6 +80,10 @@ h1,h2,h3,p{margin:0}
 .upload-box .ub-sub{font-size:12px;color:var(--muted);margin-top:2px}
 .upload-box img{max-width:100%;border-radius:10px;display:block;margin:0 auto 6px}
 .upload-box .fname{font-weight:600;font-size:13px;word-break:break-all;margin-top:6px}
+.extra-thumbs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.extra-thumb{position:relative;width:76px;height:76px;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--chip)}
+.extra-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.extra-thumb button{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;padding:0}
 .fee-row{display:flex;justify-content:space-between;padding:6px 0;font-size:14px}
 .fee-row.total{border-top:1px solid var(--line);margin-top:4px;padding-top:10px;font-weight:800}
 
@@ -94,6 +99,8 @@ h1,h2,h3,p{margin:0}
 .item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
 .item:last-child{border-bottom:0}
 .icon-circle{width:38px;height:38px;border-radius:50%;background:var(--chip);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.icon-circle.credit{color:var(--green)}
+.icon-circle.debit{color:var(--red)}
 .item .mid{flex:1;min-width:0}
 .item .t{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .item .s{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -110,7 +117,7 @@ h1,h2,h3,p{margin:0}
 .esc-card{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
 .esc-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
 .esc-top .t{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.esc-actions{display:flex;gap:8px;margin-top:10px}
+.esc-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .esc-actions .btn{flex:1}
 
 /* Bank */
@@ -184,6 +191,7 @@ h1,h2,h3,p{margin:0}
 .chat-msg{max-width:85%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.4;word-break:break-word;white-space:pre-wrap}
 .chat-msg-user{align-self:flex-end;background:var(--ink);color:var(--bg);border-bottom-right-radius:4px}
 .chat-msg-paylock{align-self:flex-start;background:var(--chip);color:var(--ink);border-bottom-left-radius:4px}
+.chat-msg-peer{align-self:flex-start;background:var(--chip);color:var(--ink);border-bottom-left-radius:4px}
 .chat-msg-system{align-self:center;background:transparent;border:1px solid var(--line);color:var(--muted);font-size:12.5px;text-align:center}
 .chat-actions{display:flex;gap:8px;margin:12px 0}
 .chat-actions .btn{flex:1}
@@ -191,13 +199,14 @@ h1,h2,h3,p{margin:0}
 #chat-input{flex:1;min-width:0}
 #chat-send{flex:none}
 
-/* ===== BLOCK E - RATING (new classes only) ===== */
+/* ===== BLOCK E - RATING ===== */
 .rate-box { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); font-size: 14px; font-weight: 600; }
-.rate-star { background: none; border: 0; padding: 0 4px; font-size: 30px; line-height: 1.2; cursor: pointer; color: var(--muted); }
+.rate-star { background: none; border: 0; padding: 0 4px; line-height: 1; cursor: pointer; color: var(--ink); }
+.rate-star svg { display:block; fill: none; }
+.rate-star.on svg { fill: currentColor; }
 .rate-star:disabled { cursor: default; }
 
-/* ===== MINOR FIXES 1-9 + BATCH 4 (additive; later rules override) ===== */
-/* Fix 6: marketplace grid */
+/* ===== MINOR FIXES 1-9 + BATCH 4 ===== */
 .grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; width:100%; }
 .pcard{ min-width:0; overflow:hidden; cursor:pointer; }
 .pcard .ptitle{ overflow:hidden; max-width:100%; }
@@ -205,13 +214,11 @@ h1,h2,h3,p{margin:0}
 html,body{ overflow-x:hidden; }
 .app-shell{ overflow-x:hidden; }
 
-/* Fix 8 + 9: gate layout */
 .gate h2,.gate p{text-align:center;line-height:1.35;overflow-wrap:anywhere}
 .gate p{line-height:1.5;margin:0 auto}
 .gate-logo{width:64px;height:64px;border-radius:50%;background:var(--chip);color:var(--ink);display:flex;align-items:center;justify-content:center;margin-bottom:4px}
 .gate .gate-tg{width:100%;max-width:320px;min-width:0;margin-top:8px}
 
-/* Fix 3: chat header */
 .chat-head{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--card);margin-bottom:12px}
 .chat-head .back-btn{margin:0;padding:8px 12px;flex:none}
 .chat-head svg{flex:none}
@@ -220,9 +227,12 @@ html,body{ overflow-x:hidden; }
 .chat-head-sub{font-size:12px;color:var(--muted);line-height:1.3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-head-logo{color:var(--muted)}
 
-/* Fix 4: chat list */
 .chat-list-mode #chat-root,.chat-list-mode #chat-empty{display:none!important}
-#pg-chat:not(.chat-list-mode) #chat-list{display:none}
+#pg-chat:not(.chat-list-mode) #chat-list,
+#pg-chat:not(.chat-list-mode) #chat-profiles,
+#pg-chat:not(.chat-list-mode) #chat-orders,
+#pg-chat:not(.chat-list-mode) #chat-support{display:none!important}
+.chat-profiles{display:flex;gap:8px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px}
 .chat-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
 .chat-row:last-child{border-bottom:0}
 .chat-thumb{width:48px;height:48px;border-radius:12px;background:var(--chip);object-fit:cover;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--muted)}
@@ -232,34 +242,31 @@ html,body{ overflow-x:hidden; }
 .chat-meta{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
 .chat-time{font-size:11.5px;color:var(--muted)}
 .chat-badge{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--red);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+#support-thread{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto;margin-bottom:12px;padding:2px}
+.support-meta{font-size:11px;color:var(--muted);align-self:flex-end;margin-top:-4px}
 
-/* Fix 5: marketplace search + filter */
 .mk-bar{display:flex;justify-content:flex-end;margin:-6px 0 10px}
 .mk-bar .chip{display:inline-flex;align-items:center;gap:6px}
 .mk-search{margin-bottom:10px}
 
-/* Fix 2: product preview */
 .pv-img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:16px;background:var(--chip);display:block;margin-bottom:14px}
 .pv-price{font-size:22px;font-weight:800;margin-bottom:10px}
 .pv-desc{font-size:14px;color:var(--muted);margin-bottom:14px;white-space:pre-wrap;word-break:break-word}
 .pv-review{padding:8px 0;border-bottom:1px solid var(--line)}
 .pv-review:last-child{border-bottom:0}
-.pv-stars{color:#FFC107;font-size:16px}
+.pv-stars{display:flex;gap:2px;color:var(--ink)}
 #pv-body .btn{margin-bottom:14px}
 
-/* B4-2 pill spacing */
 .esc-card .badge.b-held{margin-top:6px}
 
-/* B4-5 print receipt */
 @media print{
   .tabbar,.btn,.btn-row,.back-btn,.toast,.overlay{display:none!important}
   .app-shell{padding:0;max-width:none}
 }
 
-/* ===== PAYLOCK ADDITIONS (additive) ===== */
-.chat-msg-paylock{background:#1f1f1f;color:#fff;border-bottom-left-radius:4px}
-.chat-msg-label{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#9CA3AF;margin-bottom:3px}
-.chat-tick{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--ink);color:var(--bg);font-size:9px;line-height:1}
+/* ===== PAYLOCK ADDITIONS ===== */
+.chat-msg-label{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px}
+.chat-tick{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--ink);color:var(--bg)}
 #offline-banner{display:none;position:fixed;top:0;left:0;right:0;z-index:2500;align-items:center;justify-content:center;gap:10px;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top));background:#000;color:#fff;font-size:13.5px;font-weight:600}
 #offline-banner.show{display:flex}
 #offline-banner button{background:#fff;color:#000;border:0;border-radius:8px;padding:5px 12px;font-weight:700;font-size:13px}
@@ -277,7 +284,8 @@ html,body{ overflow-x:hidden; }
 .pc-icons{display:flex;gap:4px;flex:none}
 .ic-btn{background:var(--chip);border:0;border-radius:8px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--muted);padding:0}
 .pv-thumbs{display:flex;gap:8px;margin:-6px 0 14px}
-.pv-thumb{width:64px;height:64px;border-radius:10px;object-fit:cover;background:var(--chip);cursor:pointer;border:1px solid var(--line)}
+.pv-thumb{width:64px;height:64px;border-radius:10px;object-fit:cover;background:var(--chip);cursor:pointer;border:2px solid var(--line)}
+.pv-thumb.active{border-color:var(--ink)}
 .stat-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 6px;text-align:center;min-width:0}
 .stat-card .sv{font-weight:800;font-size:15px;word-break:break-all}
 .stat-card .sl{font-size:11px;color:var(--muted);margin-top:2px}
@@ -288,14 +296,16 @@ html,body{ overflow-x:hidden; }
 .mp-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
 .mp-vis{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
 .b-hidden{background:rgba(107,114,128,.2);color:var(--muted)}
-.b-boost{background:var(--chip);color:var(--ink)}
+.b-boost{background:var(--chip);color:var(--ink);text-transform:none}
 .b-banned{background:rgba(220,38,38,.15);color:var(--red)}
 .app-footer{text-align:center;font-size:11.5px;color:var(--muted);margin:18px 0 4px}
 .empty .empty-ic{display:flex;justify-content:center;margin-bottom:8px;color:var(--muted)}
 .empty .btn{margin-top:10px}
+.ref-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0 12px}
+.ref-link-row{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+.ref-link-row .input{flex:1;min-width:0;font-size:13px}
 
-/* ===== DESIGN SYSTEM: PURE BLACK & WHITE (additive; colours / borders / shadows only) ===== */
-/* Light must come BEFORE dark so the dark block wins when data-theme="dark". */
+/* ===== DESIGN SYSTEM: PURE BLACK & WHITE (+ bright green credit / bright red debit only) ===== */
 :root,[data-theme="light"]{
   --bg:#FFFFFF; --card:#FFFFFF; --ink:#000000; --text:#000000; --muted:#666666;
   --line:#E5E5E5; --border:#E5E5E5; --chip:#F2F2F2;
@@ -304,6 +314,8 @@ html,body{ overflow-x:hidden; }
   --btn-secondary-bg:transparent; --btn-secondary-border:#DDDDDD; --btn-secondary-text:#000000;
   --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 14px rgba(0,0,0,.05);
   --shadow-up:0 -4px 14px rgba(0,0,0,.05);
+  --shadow-hero:0 2px 4px rgba(0,0,0,.04),0 16px 36px rgba(0,0,0,.10);
+  --hero-bg:linear-gradient(160deg,#FFFFFF 0%,#F2F2F2 100%);
 }
 [data-theme="dark"]{
   --bg:#000000; --card:#0A0A0A; --ink:#FFFFFF; --text:#FFFFFF; --muted:#A1A1AA;
@@ -313,6 +325,8 @@ html,body{ overflow-x:hidden; }
   --btn-secondary-bg:transparent; --btn-secondary-border:#333333; --btn-secondary-text:#FFFFFF;
   --shadow:0 1px 2px rgba(0,0,0,.6),0 4px 14px rgba(0,0,0,.45);
   --shadow-up:0 -4px 14px rgba(0,0,0,.5);
+  --shadow-hero:0 2px 4px rgba(0,0,0,.6),0 16px 36px rgba(0,0,0,.7);
+  --hero-bg:linear-gradient(160deg,#161616 0%,#0A0A0A 100%);
 }
 body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-btn,.theme-btn,.quick button,.esc-card,.mp-row,.stat-card,.chat-head,#chat-product,.rate-box,.upload-box,.card-row,.bank-list,.ic-btn{
   transition:background-color .2s ease,color .2s ease,border-color .2s ease,box-shadow .2s ease,transform .2s ease;
@@ -327,12 +341,10 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
 .btn.secondary{background:var(--btn-secondary-bg);color:var(--btn-secondary-text);border-color:var(--btn-secondary-border)}
 .btn.danger{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:var(--btn-primary-bg)}
 .chip.active{background:var(--chip-active-bg);color:var(--chip-active-text)}
-.balance-card{background:#000000;border-radius:22px;box-shadow:var(--shadow);border-color:var(--line)}
-[data-theme="dark"] .balance-card{background:var(--card);border-color:var(--line)}
+.balance-card{background:var(--hero-bg);color:var(--ink);border-radius:24px;box-shadow:var(--shadow-hero);border-color:var(--line)}
 .toggle:not(.on)::after{background:var(--muted)}
 .toggle.on{background:var(--ink)}
 .toggle.on::after{background:var(--bg)}
-.credit,.debit{color:var(--ink)}
 .b-pending,.b-held,.b-failed,.b-disputed,.b-boost,.b-banned{background:var(--chip);color:var(--ink)}
 .danger-zone{border-color:var(--ink);border-radius:16px}
 .danger-zone .card-title{color:var(--ink)}
@@ -340,13 +352,13 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
 .ban-banner .btn{background:var(--bg);color:var(--ink);border-color:var(--bg)}
 .chat-badge{background:var(--ink);color:var(--bg)}
 .pin-error{color:var(--ink)}
-.chat-tick{background:var(--ink);color:var(--bg)}
 .chat-head-name svg circle{fill:var(--ink)}
 .chat-head-name svg path{stroke:var(--bg)}
 .chat-msg-paylock{background:var(--chip);color:var(--ink)}
-.pv-stars{color:var(--ink)}
-.rate-star{color:var(--ink)!important}
 #offline-banner{border-bottom:1px solid #333}
+/* Credit = bright green, Debit = bright red, everywhere */
+.credit{color:#16A34A}
+.debit{color:#DC2626}
 </style>
 </head>
 <body>
@@ -365,6 +377,7 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
   <h2>Verification failed</h2>
   <p>We could not verify your Telegram session. Please try again.</p>
   <button class="btn" type="button" onclick="PayLock.boot()">Retry</button>
+  <a class="btn secondary gate-tg" href="https://t.me/PayLockOfficialBot/app">Open in Telegram</a>
 </div>
 <div class="gate" id="gate-offline">
   <h2>You are offline</h2>
@@ -385,15 +398,16 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
     <div class="welcome">Welcome back</div>
     <div class="hello">
       <h1 id="home-greeting">Hi there</h1>
-      <button class="theme-btn" type="button" id="theme-btn" onclick="PayLock.toggleTheme()" aria-label="Toggle theme">🌙</button>
+      <span class="theme-btn" id="theme-btn" role="img" aria-label="Theme follows Telegram"></span>
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v6"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-5.9-2.4L3.4 16a2 2 0 0 1 3.2-2.4L8 15"/></svg>
     </div>
     <p class="muted small">Sell, buy and get paid safely with escrow protection.</p>
 
     <div class="balance-card">
-      <div class="label">Total balance</div>
+      <div class="label">Available balance</div>
       <div class="amount" id="home-balance">₦0.00</div>
       <div class="idline" id="home-id">ID: -</div>
+      <div class="bal-held"><span class="bh-k">Held in escrow</span><span class="bh-v" id="home-held">₦0.00</span></div>
       <button class="btn sm" type="button" onclick="PayLock.goPage('pg-wallet')">View Wallet</button>
     </div>
 
@@ -417,96 +431,49 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
       <label class="upload-box" id="cover-box"></label>
       <label class="upload-box" id="file-box"></label>
 
+      <div class="card" id="extra-card">
+        <div class="card-title">Extra images <span class="muted small" id="extra-count">(optional, 0 / 3)</span></div>
+        <div class="extra-thumbs" id="extra-thumbs"></div>
+        <label class="upload-box" id="extra-box" style="margin-bottom:0">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
+          <div class="ub-title">Add extra image</div><div class="ub-sub">Up to 3 · JPG, PNG or WEBP · max 5MB each</div>
+          <input type="file" id="extra-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        </label>
+      </div>
+
       <div class="field"><label for="sell-name">Product name</label><input class="input" id="sell-name" type="text" maxlength="100" placeholder="e.g. Logo design pack"></div>
       <div class="field"><label for="sell-desc">Description</label><textarea class="textarea" id="sell-desc" maxlength="1000" placeholder="Describe your product"></textarea></div>
       <div class="field"><label for="sell-category">Category</label>
         <select class="select" id="sell-category">
-          <option value="Digital Products">Digital Products</option>
-          <option value="E-books">E-books</option>
-          <option value="E-book Templates">E-book Templates</option>
-          <option value="Online Courses">Online Courses</option>
-          <option value="Video Courses">Video Courses</option>
-          <option value="Masterclasses">Masterclasses</option>
-          <option value="Workshops">Workshops</option>
-          <option value="Webinars">Webinars</option>
-          <option value="Templates">Templates</option>
-          <option value="Website Templates">Website Templates</option>
-          <option value="Notion Templates">Notion Templates</option>
-          <option value="Spreadsheets">Spreadsheets</option>
-          <option value="Documents">Documents</option>
-          <option value="Presentations">Presentations</option>
-          <option value="UI Kits">UI Kits</option>
-          <option value="Design Templates">Design Templates</option>
-          <option value="Social Media Templates">Social Media Templates</option>
-          <option value="Resume Templates">Resume Templates</option>
-          <option value="Business Templates">Business Templates</option>
-          <option value="Software">Software</option>
-          <option value="SaaS Tools">SaaS Tools</option>
-          <option value="Mobile Apps">Mobile Apps</option>
-          <option value="Desktop Apps">Desktop Apps</option>
-          <option value="Plugins">Plugins</option>
-          <option value="WordPress Themes">WordPress Themes</option>
-          <option value="Shopify Themes">Shopify Themes</option>
-          <option value="Code Scripts">Code Scripts</option>
-          <option value="Source Code">Source Code</option>
-          <option value="Graphics">Graphics</option>
-          <option value="Illustrations">Illustrations</option>
-          <option value="Fonts">Fonts</option>
-          <option value="Icons">Icons</option>
-          <option value="Logos">Logos</option>
-          <option value="Stock Photos">Stock Photos</option>
-          <option value="Stock Videos">Stock Videos</option>
-          <option value="Stock Audio">Stock Audio</option>
-          <option value="Music">Music</option>
-          <option value="Beats">Beats</option>
-          <option value="Sound Effects">Sound Effects</option>
-          <option value="Voiceovers">Voiceovers</option>
-          <option value="Animation">Animation</option>
-          <option value="3D Models">3D Models</option>
-          <option value="Presets">Presets</option>
-          <option value="Lightroom Presets">Lightroom Presets</option>
-          <option value="LUTs">LUTs</option>
-          <option value="Filters">Filters</option>
-          <option value="AI Prompts">AI Prompts</option>
-          <option value="AI Tools">AI Tools</option>
-          <option value="Prompts Pack">Prompts Pack</option>
-          <option value="Chatbot Templates">Chatbot Templates</option>
-          <option value="Automation Templates">Automation Templates</option>
-          <option value="Digital Art">Digital Art</option>
-          <option value="NFTs (Digital Art)">NFTs (Digital Art)</option>
-          <option value="Wallpapers">Wallpapers</option>
-          <option value="Planners">Planners</option>
-          <option value="Journals">Journals</option>
-          <option value="Printable">Printable</option>
-          <option value="Stickers">Stickers</option>
-          <option value="Emotes">Emotes</option>
-          <option value="Overlays">Overlays</option>
-          <option value="Stream Assets">Stream Assets</option>
-          <option value="Game Assets">Game Assets</option>
-          <option value="Mods">Mods</option>
-          <option value="Cheat Sheets">Cheat Sheets</option>
-          <option value="Guides">Guides</option>
-          <option value="Tutorials">Tutorials</option>
-          <option value="Research Reports">Research Reports</option>
-          <option value="Data Sets">Data Sets</option>
-          <option value="Leads Lists">Leads Lists</option>
-          <option value="Business Plans">Business Plans</option>
-          <option value="Marketing Kits">Marketing Kits</option>
-          <option value="SEO Tools">SEO Tools</option>
-          <option value="Email Templates">Email Templates</option>
-          <option value="Copywriting Templates">Copywriting Templates</option>
-          <option value="Services - Design">Services - Design</option>
-          <option value="Services - Development">Services - Development</option>
-          <option value="Services - Writing">Services - Writing</option>
-          <option value="Services - Marketing">Services - Marketing</option>
-          <option value="Services - Video Editing">Services - Video Editing</option>
-          <option value="Services - Music Production">Services - Music Production</option>
-          <option value="Services - Consulting">Services - Consulting</option>
-          <option value="Services - Coaching">Services - Coaching</option>
-          <option value="Services - Virtual Assistance">Services - Virtual Assistance</option>
-          <option value="Services - Translation">Services - Translation</option>
-          <option value="Services - Other Digital Service">Services - Other Digital Service</option>
-          <option value="Other Digital Product">Other Digital Product</option>
+          <option value="Digital Products">Digital Products</option><option value="E-books">E-books</option><option value="E-book Templates">E-book Templates</option>
+          <option value="Online Courses">Online Courses</option><option value="Video Courses">Video Courses</option><option value="Masterclasses">Masterclasses</option>
+          <option value="Workshops">Workshops</option><option value="Webinars">Webinars</option><option value="Templates">Templates</option>
+          <option value="Website Templates">Website Templates</option><option value="Notion Templates">Notion Templates</option><option value="Spreadsheets">Spreadsheets</option>
+          <option value="Documents">Documents</option><option value="Presentations">Presentations</option><option value="UI Kits">UI Kits</option>
+          <option value="Design Templates">Design Templates</option><option value="Social Media Templates">Social Media Templates</option><option value="Resume Templates">Resume Templates</option>
+          <option value="Business Templates">Business Templates</option><option value="Software">Software</option><option value="SaaS Tools">SaaS Tools</option>
+          <option value="Mobile Apps">Mobile Apps</option><option value="Desktop Apps">Desktop Apps</option><option value="Plugins">Plugins</option>
+          <option value="WordPress Themes">WordPress Themes</option><option value="Shopify Themes">Shopify Themes</option><option value="Code Scripts">Code Scripts</option>
+          <option value="Source Code">Source Code</option><option value="Graphics">Graphics</option><option value="Illustrations">Illustrations</option>
+          <option value="Fonts">Fonts</option><option value="Icons">Icons</option><option value="Logos">Logos</option>
+          <option value="Stock Photos">Stock Photos</option><option value="Stock Videos">Stock Videos</option><option value="Stock Audio">Stock Audio</option>
+          <option value="Music">Music</option><option value="Beats">Beats</option><option value="Sound Effects">Sound Effects</option>
+          <option value="Voiceovers">Voiceovers</option><option value="Animation">Animation</option><option value="3D Models">3D Models</option>
+          <option value="Presets">Presets</option><option value="Lightroom Presets">Lightroom Presets</option><option value="LUTs">LUTs</option>
+          <option value="Filters">Filters</option><option value="AI Prompts">AI Prompts</option><option value="AI Tools">AI Tools</option>
+          <option value="Prompts Pack">Prompts Pack</option><option value="Chatbot Templates">Chatbot Templates</option><option value="Automation Templates">Automation Templates</option>
+          <option value="Digital Art">Digital Art</option><option value="NFTs (Digital Art)">NFTs (Digital Art)</option><option value="Wallpapers">Wallpapers</option>
+          <option value="Planners">Planners</option><option value="Journals">Journals</option><option value="Printable">Printable</option>
+          <option value="Stickers">Stickers</option><option value="Emotes">Emotes</option><option value="Overlays">Overlays</option>
+          <option value="Stream Assets">Stream Assets</option><option value="Game Assets">Game Assets</option><option value="Mods">Mods</option>
+          <option value="Cheat Sheets">Cheat Sheets</option><option value="Guides">Guides</option><option value="Tutorials">Tutorials</option>
+          <option value="Research Reports">Research Reports</option><option value="Data Sets">Data Sets</option><option value="Leads Lists">Leads Lists</option>
+          <option value="Business Plans">Business Plans</option><option value="Marketing Kits">Marketing Kits</option><option value="SEO Tools">SEO Tools</option>
+          <option value="Email Templates">Email Templates</option><option value="Copywriting Templates">Copywriting Templates</option>
+          <option value="Services - Design">Services - Design</option><option value="Services - Development">Services - Development</option><option value="Services - Writing">Services - Writing</option>
+          <option value="Services - Marketing">Services - Marketing</option><option value="Services - Video Editing">Services - Video Editing</option><option value="Services - Music Production">Services - Music Production</option>
+          <option value="Services - Consulting">Services - Consulting</option><option value="Services - Coaching">Services - Coaching</option><option value="Services - Virtual Assistance">Services - Virtual Assistance</option>
+          <option value="Services - Translation">Services - Translation</option><option value="Services - Other Digital Service">Services - Other Digital Service</option><option value="Other Digital Product">Other Digital Product</option>
         </select>
       </div>
       <div class="field"><label for="sell-price">Price (₦)</label><input class="input" id="sell-price" type="text" inputmode="decimal" placeholder="0.00" oninput="PayLock.updateFeePreview()"></div>
@@ -526,14 +493,27 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
   <!-- ============ CHAT ============ -->
   <section class="page" id="pg-chat">
     <h2 class="page-title">Chat</h2>
+    <div class="chat-profiles" id="chat-profiles">
+      <button class="chip active" type="button" data-profile="bot">PayLock Bot</button>
+      <button class="chip" type="button" data-profile="seller">Seller ID</button>
+      <button class="chip" type="button" data-profile="support">Support Chat</button>
+    </div>
     <div id="chat-list"></div>
+    <div id="chat-orders" style="display:none"></div>
+    <div id="chat-support" style="display:none">
+      <div id="support-thread"></div>
+      <div class="chat-inputbar">
+        <input class="input" id="support-input" type="text" maxlength="1000" autocomplete="off" placeholder="Describe your issue">
+        <button class="btn sm" type="button" id="support-send">Send</button>
+      </div>
+    </div>
     <div class="empty" id="chat-empty"><div class="big">No conversations yet</div></div>
     <div id="chat-room" style="display:contents"><div id="chat-root" style="display:none">
       <div class="chat-head" id="chat-head">
         <button class="back-btn" type="button" id="chat-back" aria-label="Back to chats">‹</button>
         <svg class="chat-head-logo" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
         <div class="chat-head-txt">
-          <div class="chat-head-name">PayLock <svg width="16" height="16" viewBox="0 0 24 24" aria-label="Verified"><circle cx="12" cy="12" r="12" fill="#1D9BF0"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="chat-head-name">PayLock <svg width="16" height="16" viewBox="0 0 24 24" aria-label="Verified"><circle cx="12" cy="12" r="12" fill="currentColor"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="chat-head-sub">Escrow protected • Online</div>
         </div>
       </div>
@@ -542,11 +522,11 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
       <div id="ratingBox" class="rate-box" style="display:none">
         <div id="rating-label">Rate this seller:</div>
         <div id="rate-stars">
-          <button type="button" class="rate-star" id="star-1">&#9734;</button>
-          <button type="button" class="rate-star" id="star-2">&#9734;</button>
-          <button type="button" class="rate-star" id="star-3">&#9734;</button>
-          <button type="button" class="rate-star" id="star-4">&#9734;</button>
-          <button type="button" class="rate-star" id="star-5">&#9734;</button>
+          <button type="button" class="rate-star" id="star-1" aria-label="1 star"></button>
+          <button type="button" class="rate-star" id="star-2" aria-label="2 stars"></button>
+          <button type="button" class="rate-star" id="star-3" aria-label="3 stars"></button>
+          <button type="button" class="rate-star" id="star-4" aria-label="4 stars"></button>
+          <button type="button" class="rate-star" id="star-5" aria-label="5 stars"></button>
         </div>
       </div>
       <div class="chat-actions" id="chat-refund-row" style="display:none">
@@ -594,10 +574,11 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
       <button class="eye-btn" type="button" id="eye-btn" onclick="PayLock.toggleBalanceVisibility()" aria-label="Toggle balance visibility"></button>
       <div class="label">Available balance</div>
       <div class="amount" id="wallet-balance">₦0.00</div>
-      <div class="idline">Escrow funds are held separately</div>
+      <div class="idline">Ready to spend or withdraw</div>
+      <div class="bal-held"><span class="bh-k">Held in escrow</span><span class="bh-v" id="wallet-held">₦0.00</span></div>
       <div class="btn-row">
         <button class="btn sm" type="button" onclick="PayLock.openFundSheet()">Fund</button>
-        <button class="btn sm ghost" type="button" onclick="PayLock.goPage('pg-withdraw')">Withdraw</button>
+        <button class="btn sm secondary" type="button" onclick="PayLock.goPage('pg-withdraw')">Withdraw</button>
       </div>
     </div>
 
@@ -605,6 +586,21 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
       <div class="card-title">History</div>
       <button class="row-link" type="button" onclick="PayLock.goPage('pg-tx')"><span>Transaction History</span><span class="muted">›</span></button>
       <button class="row-link" type="button" onclick="PayLock.goPage('pg-withdraw')"><span>Withdrawal History</span><span class="muted">›</span></button>
+    </div>
+
+    <div class="card" id="ref-card" style="display:none">
+      <div class="card-title">Referrals</div>
+      <p class="small muted" id="ref-explainer">Earn 0.9% on your referrals first 10 sales, paid from platform fee, max N200 per sale.</p>
+      <div class="ref-stats">
+        <div class="stat-card"><div class="sv" id="ref-count">0</div><div class="sl">Referrals</div></div>
+        <div class="stat-card"><div class="sv" id="ref-paid">0</div><div class="sl">Paid sales</div></div>
+        <div class="stat-card"><div class="sv" id="ref-total">₦0.00</div><div class="sl">Total earned</div></div>
+      </div>
+      <div class="ref-link-row" id="ref-link-row">
+        <input class="input" id="ref-link" type="text" readonly aria-label="Your referral link">
+        <button class="btn sm" type="button" id="ref-copy">Copy</button>
+      </div>
+      <div id="ref-list"></div>
     </div>
 
     <div class="card">
@@ -854,8 +850,13 @@ const PayLock = (function(){
 const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
 const PLATFORM_FEE = 20000;
 const SVGNS = 'http://www.w3.org/2000/svg';
+const MAX_EXTRA = 3;
+const MAX_IMG_BYTES = 5 * 1024 * 1024;
 const EYE_ON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+const ICON_SUN = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const ICON_MOON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+const STAR_POINTS = '12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26';
 
 const COVER_BOX_HTML =
   '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>' +
@@ -869,7 +870,8 @@ const FILE_BOX_HTML =
 const TX_LABELS = {
   wallet_funding:'Wallet funding', wallet_funding_pending:'Funding (pending)',
   escrow_release:'Escrow release', escrow_hold:'Escrow payment', withdrawal:'Withdrawal',
-  purchase:'Purchase', escrow_purchase:'Escrow payment', withdrawal_revert:'Withdrawal reversal'
+  purchase:'Purchase', escrow_purchase:'Escrow payment', withdrawal_revert:'Withdrawal reversal',
+  referral_commission:'Referral commission', escrow_refund:'Escrow refund', boost_fee:'Boost fee'
 };
 
 /* ---------- State ---------- */
@@ -880,16 +882,24 @@ const state = {
   products: [], transactions: [],
   txFilter: 'all',
   banks: [], selectedBankCode: null, selectedBankName: '', accountName: '',
-  coverFile: null, productFile: null, submitting: false,
+  coverFile: null, productFile: null, extraFiles: [], submitting: false,
   fund: { amount: 0, email: '', phone: '', saveCard: false, step: 1 },
-  wd: null
+  wd: null,
+  banned: false, myProducts: []
 };
 const pinModal = { mode: 'withdraw', value: '', firstPin: '', after: null, busy: false, locked: false };
 const uploadedFileFingerprints = new Set();
 let banksLoaded = false;
 let resolveTimer = null;
-const verifiedRefs = new Set();   // Fix 7: each reference is verified once
-let fundVerifying = false;        // Fix 7: keeps Pay disabled while verify runs
+const verifiedRefs = new Set();   // each reference is verified once
+let fundVerifying = false;        // keeps Pay disabled while verify runs
+let booted = false;               // true after the first successful boot
+let bootBusy = false;
+let lastApi = null;
+let chatMode = 'list';            // 'list' = Chat List, 'room' = open chat room
+let chatProfile = 'bot';          // 'bot' | 'seller' | 'support'
+let previewPrev = 'pg-buy';       // page to return to from product preview
+let referralNoted = false;
 
 /* ---------- Helpers ---------- */
 function $(id){ return document.getElementById(id); }
@@ -918,10 +928,33 @@ function svgIcon(paths, size){
   });
   return s;
 }
+// Clean SVG star (replaces the old star characters). filled=true draws it solid.
+function starIcon(filled, size){
+  const s = document.createElementNS(SVGNS, 'svg');
+  s.setAttribute('viewBox', '0 0 24 24');
+  s.setAttribute('width', String(size || 16));
+  s.setAttribute('height', String(size || 16));
+  s.setAttribute('stroke', 'currentColor');
+  s.setAttribute('stroke-width', '2');
+  s.setAttribute('stroke-linejoin', 'round');
+  s.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS(SVGNS, 'polygon');
+  p.setAttribute('points', STAR_POINTS);
+  if (filled !== null) p.setAttribute('fill', filled ? 'currentColor' : 'none');
+  s.appendChild(p);
+  return s;
+}
+function starsRow(n){
+  const row = el('div', 'pv-stars');
+  for (let i = 1; i <= 5; i++) row.appendChild(starIcon(i <= n, 16));
+  return row;
+}
+function checkIcon(size){ return svgIcon(['M20 6L9 17l-5-5'], size || 10); }
 const ICON_UP = ['M12 19V5', 'M5 12l7-7 7 7'];
 const ICON_DOWN = ['M12 5v14', 'M19 12l-7 7-7-7'];
 const ICON_FILE = ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6'];
 const ICON_BACKSPACE = ['M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z', 'M18 9l-6 6', 'M12 9l6 6'];
+const ICON_CLOSE = ['M18 6L6 18', 'M6 6l12 12'];
 
 function nairaFmt(kobo){
   const n = (Number(kobo) || 0) / 100;
@@ -953,6 +986,59 @@ function setBusy(btn, text){
     btn.textContent = orig;
     siblings.forEach(function(b){ b.disabled = false; });
   };
+}
+function withTimeout(promise, ms){
+  return Promise.race([
+    promise,
+    new Promise(function(_, reject){ setTimeout(function(){ reject(new Error('timeout')); }, ms); })
+  ]);
+}
+function saveBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+/* ---------- Minimal PDF writer (used only when there is no order to fetch a receipt for) ---------- */
+function pdfText(v){
+  return String(v === undefined || v === null ? '-' : v)
+    .replace(/[^\x20-\x7E]/g, '?').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)').slice(0, 90);
+}
+function pdfNaira(kobo){
+  return 'NGN ' + ((Number(kobo) || 0) / 100).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function buildPdf(title, rows){
+  const ops = ['BT /F2 20 Tf 50 790 Td (' + pdfText(title) + ') Tj ET'];
+  let y = 750;
+  rows.forEach(function(r){
+    ops.push('BT /F2 11 Tf 50 ' + y + ' Td (' + pdfText(r[0]) + ') Tj ET');
+    ops.push('BT /F1 11 Tf 210 ' + y + ' Td (' + pdfText(r[1]) + ') Tj ET');
+    y -= 22;
+  });
+  const stream = ops.join('\n');
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+    '<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream'
+  ];
+  let out = '%PDF-1.4\n';
+  const offs = [];
+  objs.forEach(function(b, i){ offs.push(out.length); out += (i + 1) + ' 0 obj\n' + b + '\nendobj\n'; });
+  const xref = out.length;
+  out += 'xref\n0 ' + (objs.length + 1) + '\n0000000000 65535 f \n';
+  offs.forEach(function(o){ out += String(o).padStart(10, '0') + ' 00000 n \n'; });
+  out += 'trailer\n<< /Size ' + (objs.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF\n';
+  const bytes = new Uint8Array(out.length);
+  for (let i = 0; i < out.length; i++) bytes[i] = out.charCodeAt(i) & 255;
+  return new Blob([bytes], { type: 'application/pdf' });
 }
 
 /* ---------- Fees (must match backend calc_fees exactly) ---------- */
@@ -1001,7 +1087,8 @@ async function api(path, opts){
   try {
     res = await fetch(path, opts || {});
   } catch (err) {
-    if (!navigator.onLine) showGate('offline');
+    // The offline GATE is only for boot. After boot a failure only shows the retry banner.
+    if (!booted && !navigator.onLine) showGate('offline');
     showOfflineBanner();
     throw err;
   }
@@ -1021,39 +1108,33 @@ function showGate(name){
     if (n) n.classList.toggle('show', g === name);
   });
 }
-function hideGates(){ GATES.forEach(function(g){ $('gate-' + g).classList.remove('show'); }); }
+function hideGates(){ GATES.forEach(function(g){ const n = $('gate-' + g); if (n) n.classList.remove('show'); }); }
 function showDeletedGate(){ showGate('deleted'); }
 function closeApp(){ if (tg && tg.close) tg.close(); }
 
-/* ---------- Theme ---------- */
-function applyTheme(){
-  const dark = tg && tg.colorScheme === 'dark';
-  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-  try {
-    const st = document.documentElement.style;
-    const tp = (tg && tg.themeParams) || {};
-    const set = function(k, v){ if (v) st.setProperty(k, v); else st.removeProperty(k); };
-    set('--bg', tp.bg_color);
-    set('--ink', tp.text_color);
-    set('--muted', tp.hint_color);
-    set('--card', dark ? tp.secondary_bg_color : tp.bg_color);
-    if (tg && tg.setHeaderColor && tp.bg_color) tg.setHeaderColor(tp.bg_color);
-    if (tg && tg.setBackgroundColor && tp.bg_color) tg.setBackgroundColor(tp.bg_color);
-  } catch (e) {}
-}
-
-/* ---------- Theme toggle (dark / light, saved in localStorage "paylock_theme") ---------- */
+/* ---------- Theme: ALWAYS follows Telegram (colorScheme + themeParams + themeChanged) ---------- */
 function setThemeIcon(){
-  const b = document.getElementById('theme-btn');
-  if (b) b.textContent = (document.documentElement.getAttribute('data-theme') === 'dark') ? '☀️' : '🌙';
+  const b = $('theme-btn');
+  if (b) b.innerHTML = (document.documentElement.getAttribute('data-theme') === 'dark') ? ICON_MOON : ICON_SUN; // static SVG constants only
 }
-// Removes the inline colour overrides that applyTheme() sets from Telegram's themeParams,
-// so the pure black & white palettes in CSS apply exactly.
+// Removes any inline colour overrides so the pure black & white palettes in CSS apply exactly.
 function clearThemeInline(){
   try {
     const st = document.documentElement.style;
     ['--bg', '--ink', '--muted', '--card'].forEach(function(k){ st.removeProperty(k); });
   } catch (e) {}
+}
+function detectScheme(){
+  try {
+    if (tg && tg.colorScheme) return tg.colorScheme === 'dark' ? 'dark' : 'light';
+    const tp = (tg && tg.themeParams) || {};
+    if (tp.bg_color && /^#[0-9a-fA-F]{6}$/.test(tp.bg_color)) {
+      const r = parseInt(tp.bg_color.slice(1, 3), 16), g = parseInt(tp.bg_color.slice(3, 5), 16), b = parseInt(tp.bg_color.slice(5, 7), 16);
+      return (0.299 * r + 0.587 * g + 0.114 * b) < 128 ? 'dark' : 'light';
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+  } catch (e) {}
+  return 'light';
 }
 function syncTelegramChrome(){
   try {
@@ -1063,49 +1144,33 @@ function syncTelegramChrome(){
     if (tg && tg.setBackgroundColor) tg.setBackgroundColor(c);
   } catch (e) {}
 }
-function toggleTheme(){
-  const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-  const next = (cur === 'dark') ? 'light' : 'dark';
-  clearThemeInline();
-  document.documentElement.setAttribute('data-theme', next);
-  try { localStorage.setItem('paylock_theme', next); } catch (e) {}
-  setThemeIcon();
-  syncTelegramChrome();
-}
 function loadTheme(){
-  let saved = null;
-  try { saved = localStorage.getItem('paylock_theme'); } catch (e) { saved = null; }
-  if (saved === 'dark' || saved === 'light') {
-    clearThemeInline();
-    document.documentElement.setAttribute('data-theme', saved);
-  } else {
-    applyTheme();          // default: follow Telegram theme
-    clearThemeInline();    // keep the pure B&W palette
-  }
+  clearThemeInline();
+  document.documentElement.setAttribute('data-theme', detectScheme());
   setThemeIcon();
   syncTelegramChrome();
 }
 
 /* ---------- Navigation ---------- */
 function goPage(id){
+  let target = $(id);
+  if (!target) { id = 'pg-home'; target = $(id); }   // never throws on a missing page
+  if (!target) return;
   document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
-  const target = $(id);
-  if (target) target.classList.add('active');
+  target.classList.add('active');
   const mainTabs = ['pg-home', 'pg-sell', 'pg-chat', 'pg-buy', 'pg-wallet'];
   const activeTab = mainTabs.indexOf(id) >= 0 ? id : (id === 'pg-preview' ? 'pg-buy' : (id === 'pg-myproducts' ? 'pg-sell' : 'pg-wallet'));
   document.querySelectorAll('.tab').forEach(function(t){
     t.classList.toggle('active', t.getAttribute('data-tab') === activeTab);
   });
-  window.scrollTo(0, 0);
-  if (id === 'pg-wallet') { loadBalance(); loadEscrowOrders(); }
-  else if (id === 'pg-tx') { loadTransactions(); }
-  else if (id === 'pg-withdraw') { loadBalance(); loadBanks(); loadWithdrawals(); }
-  else if (id === 'pg-buy' || id === 'pg-home') { loadProducts(); renderBanBanner(); }
-  else if (id === 'pg-myproducts') { loadMyProducts(); }
-  else if (id === 'pg-admin') {
-    if (isAdmin()) { loadAdmin(); }
-    else { showToast('Admin only'); goPage('pg-wallet'); }
-  }
+  try { window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0; } catch (e) {}
+  try {
+    if (id === 'pg-wallet') { loadBalance(); loadEscrowOrders(); loadReferrals(); }
+    else if (id === 'pg-tx') { loadTransactions(); }
+    else if (id === 'pg-withdraw') { loadBalance(); loadBanks(); loadWithdrawals(); }
+    else if (id === 'pg-buy' || id === 'pg-home') { loadProducts(); renderBanBanner(); }
+    else if (id === 'pg-myproducts') { loadMyProducts(); }
+  } catch (e) { /* a failed loader must never break navigation */ }
 }
 
 /* ---------- Balance ---------- */
@@ -1124,9 +1189,12 @@ function toggleBalanceVisibility(){
   renderBalance();
 }
 function renderBalance(){
-  const txt = state.balanceVisible ? nairaFmt(state.balance_kobo) : '₦••••••';
-  $('home-balance').textContent = txt;
-  $('wallet-balance').textContent = txt;
+  const mask = '₦••••••';
+  const vis = state.balanceVisible;
+  $('home-balance').textContent = vis ? nairaFmt(state.balance_kobo) : mask;
+  $('wallet-balance').textContent = vis ? nairaFmt(state.balance_kobo) : mask;
+  $('home-held').textContent = vis ? nairaFmt(state.held_kobo) : mask;
+  $('wallet-held').textContent = vis ? nairaFmt(state.held_kobo) : mask;
 }
 async function loadBalance(){
   try {
@@ -1136,11 +1204,36 @@ async function loadBalance(){
     state.balance_kobo = data.balance_kobo || 0;
     state.held_kobo = data.held_kobo || 0;
     renderBalance();
-    // FIX 1: balance_kobo is already net of escrow (the backend deducts escrow at purchase),
+    // balance_kobo is already net of escrow (the backend deducts escrow at purchase),
     // so "Available" is balance_kobo ONLY. Never subtract held_kobo here; held is info only.
     $('wd-available').textContent = nairaFmt(data.balance_kobo || 0);
     $('wd-held').textContent = nairaFmt(data.held_kobo || 0);
   } catch (e) { /* silent */ }
+}
+
+/* ---------- Boost expiry (uses boosted_until from the API; the fee is charged by the backend only) ---------- */
+function boostUntilMs(p){
+  const t = Date.parse(p && p.boosted_until);
+  return isNaN(t) ? 0 : t;
+}
+function pBoosted(p){
+  if (!p) return false;
+  const u = boostUntilMs(p);
+  if (u) return u > Date.now();            // an expired boost is never shown
+  return !!(p.boosted || p.is_boosted);
+}
+function boostText(untilMs){
+  const ms = Math.max(0, untilMs - Date.now());
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  return 'Boosted - Expires in ' + h + 'h ' + m + 'm';
+}
+function boostBadge(p){
+  if (!pBoosted(p)) return null;
+  const u = boostUntilMs(p);
+  const b = el('span', 'badge b-boost boost-badge', u ? boostText(u) : 'Boosted');
+  if (u) b.setAttribute('data-until', String(u));
+  return b;
 }
 
 /* ---------- Products ---------- */
@@ -1177,6 +1270,8 @@ function renderProductGrid(gridId, emptyId, list){
     }
     card.appendChild(el('div', 'ptitle', p.name || p.title || 'Untitled'));
     card.appendChild(el('div', 'pc-meta', salesLine(p)));
+    const bb = boostBadge(p);
+    if (bb) { const wrap = el('div'); wrap.appendChild(bb); card.appendChild(wrap); }
     const prow = el('div', 'pc-row');
     prow.appendChild(el('div', 'pprice', nairaFmt(p.buyer_pays_kobo)));
     const picons = el('div', 'pc-icons');
@@ -1245,6 +1340,7 @@ function resetUploadBoxes(){
   $('cover-box').innerHTML = COVER_BOX_HTML; // static markup only
   $('file-box').innerHTML = FILE_BOX_HTML;   // static markup only
   attachUploadListeners();
+  clearExtras();
 }
 function makeInput(id, accept, handler){
   const inp = document.createElement('input');
@@ -1260,7 +1356,7 @@ function handleCover(e){
   if (!file) return;
   const okTypes = ['image/jpeg', 'image/png', 'image/webp'];
   if (okTypes.indexOf(file.type) < 0) { showToast('Cover must be JPG, PNG or WEBP'); e.target.value = ''; return; }
-  if (file.size > 5 * 1024 * 1024) { showToast('Cover image must be 5MB or less'); e.target.value = ''; return; }
+  if (file.size > MAX_IMG_BYTES) { showToast('Cover image must be 5MB or less'); e.target.value = ''; return; }
   state.coverFile = file;
   const reader = new FileReader();
   reader.onload = function(){
@@ -1297,6 +1393,52 @@ async function handleFile(e){
   box.appendChild(el('div', 'fname', file.name.length > 80 ? file.name.slice(0, 77) + '...' : file.name));
   box.appendChild(makeInput('file-input', '.zip,.pdf,.mp4,.docx', handleFile));
 }
+
+/* ----- extra images (max 3, same validation as the cover) ----- */
+function renderExtras(){
+  const box = $('extra-thumbs'), cnt = $('extra-count');
+  if (!box) return;
+  clearNode(box);
+  state.extraFiles.forEach(function(x, i){
+    const t = el('div', 'extra-thumb');
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = x.url;
+    t.appendChild(img);
+    const rm = el('button');
+    rm.type = 'button';
+    rm.setAttribute('aria-label', 'Remove image');
+    rm.appendChild(svgIcon(ICON_CLOSE, 12));
+    rm.addEventListener('click', function(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      try { URL.revokeObjectURL(x.url); } catch (e) {}
+      state.extraFiles.splice(i, 1);
+      renderExtras();
+    });
+    t.appendChild(rm);
+    box.appendChild(t);
+  });
+  if (cnt) cnt.textContent = '(optional, ' + state.extraFiles.length + ' / ' + MAX_EXTRA + ')';
+}
+function clearExtras(){
+  state.extraFiles.forEach(function(x){ try { URL.revokeObjectURL(x.url); } catch (e) {} });
+  state.extraFiles = [];
+  renderExtras();
+}
+function handleExtra(e){
+  const files = Array.prototype.slice.call(e.target.files || []);
+  e.target.value = '';
+  const okTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  files.forEach(function(f){
+    if (state.extraFiles.length >= MAX_EXTRA) { showToast('Maximum 3 extra images'); return; }
+    if (okTypes.indexOf(f.type) < 0) { showToast('Extra images must be JPG, PNG or WEBP'); return; }
+    if (f.size > MAX_IMG_BYTES) { showToast('Each image must be 5MB or less'); return; }
+    state.extraFiles.push({ file: f, url: URL.createObjectURL(f) });
+  });
+  renderExtras();
+}
+
 async function submitSellForm(e){
   e.preventDefault();
   if (state.submitting) return;
@@ -1308,6 +1450,7 @@ async function submitSellForm(e){
   // Snapshot files BEFORE any await/POST so later state changes cannot affect this request.
   const coverFile = state.coverFile;
   const productFile = state.productFile;
+  const extraFiles = state.extraFiles.map(function(x){ return x.file; }).slice(0, MAX_EXTRA);
   if (!coverFile) { showToast('Cover image is required - please re-select'); return; }
   if (!name) { showToast('Enter a product name'); return; }
   if (!(price > 0)) { showToast('Enter a valid price'); return; }
@@ -1334,6 +1477,7 @@ async function submitSellForm(e){
     fd.append('price_naira', String(price));
     fd.append('cover', coverFile);
     if (productFile) fd.append('product_file', productFile);
+    extraFiles.forEach(function(f){ fd.append('extra_images', f); });   // repeatable field, max 3
     const r = await api('/api/products', { method: 'POST', headers: getAuthHeader(), body: fd });
     if (r.res.status === 201 || r.res.ok) {
       if (fp) uploadedFileFingerprints.add(fp);
@@ -1386,6 +1530,9 @@ function renderEscrowList(list){
     const detailBtn = el('button', 'btn sm secondary', 'Details');
     detailBtn.type = 'button';
     detailBtn.addEventListener('click', function(){ openOrderDetail(o); });
+    const chatBtn = el('button', 'btn sm secondary', 'Chat');
+    chatBtn.type = 'button';
+    chatBtn.addEventListener('click', function(){ openOrderChat(o); });
     if (status === 'held' && isBuyer) {
       const cb = el('button', 'btn sm', 'Confirm Delivery');
       cb.type = 'button';
@@ -1398,6 +1545,7 @@ function renderEscrowList(list){
       db.addEventListener('click', function(){ disputeEscrow(o.id, db); });
       actions.appendChild(db);
     }
+    actions.appendChild(chatBtn);
     actions.appendChild(detailBtn);
     card.appendChild(actions);
     box.appendChild(card);
@@ -1472,7 +1620,7 @@ function renderTransactions(){
   rows.forEach(function(t){
     const isCredit = t.type === 'credit';
     const item = el('div', 'item');
-    const ic = el('div', 'icon-circle');
+    const ic = el('div', 'icon-circle ' + (isCredit ? 'credit' : 'debit'));
     ic.appendChild(svgIcon(isCredit ? ICON_DOWN : ICON_UP, 18));
     item.appendChild(ic);
     const mid = el('div', 'mid');
@@ -1499,7 +1647,7 @@ async function loadWithdrawals(){
   rows.forEach(function(w){
     const status = String(w.status || 'pending');
     const item = el('div', 'item');
-    const ic = el('div', 'icon-circle');
+    const ic = el('div', 'icon-circle debit');
     ic.appendChild(svgIcon(ICON_UP, 18));
     item.appendChild(ic);
     const mid = el('div', 'mid');
@@ -1510,7 +1658,7 @@ async function loadWithdrawals(){
     item.appendChild(mid);
     const right = el('div');
     right.style.textAlign = 'right';
-    right.appendChild(el('div', 'amt', nairaFmt(w.amount_kobo)));
+    right.appendChild(el('div', 'amt debit', '-' + nairaFmt(w.amount_kobo)));
     right.appendChild(el('span', 'badge b-' + status.replace(/[^a-z]/g, ''), status));
     item.appendChild(right);
     list.appendChild(item);
@@ -1596,7 +1744,7 @@ async function loadSavedCards(){
     const r = await api('/api/wallet/cards', { headers: getAuthHeader() });
     const cards = (r.res.ok && r.data.cards) ? r.data.cards : [];
     if (!cards.length) { sec.style.display = 'none'; return; }
-    // FIX 2: saved cards are DISPLAY-ONLY history. No click-to-select, not a payment method.
+    // Saved cards are DISPLAY-ONLY history. No click-to-select, not a payment method.
     cards.forEach(function(c){
       const row = el('div', 'card-row');
       const left = el('div');
@@ -1660,7 +1808,7 @@ async function payNow(){
   btn.textContent = 'Processing...';
   const reenable = function(){ if (fundVerifying) return; btn.disabled = false; btn.textContent = origText; };
   try {
-    // FIX 2: payload is ONLY {amount_kobo, email}. No card_id / save_card.
+    // Payload is ONLY {amount_kobo, email}. No card_id / save_card.
     const r = await api('/api/wallet/fund/initialize', {
       method: 'POST', headers: jsonHeaders(),
       body: JSON.stringify({ amount_kobo: amount_kobo, email: state.fund.email })
@@ -1715,29 +1863,47 @@ function handleFundSuccess(data, reference){
   $('receipt-ref').textContent = ref;
   $('receipt-date').textContent = date;
   $('receipt-status').textContent = 'Paid';
-  window._lastReceipt = { reference: ref, amount_kobo: amount_kobo, date: date, status: 'Paid' };
+  window._lastReceipt = { reference: ref, amount_kobo: amount_kobo, date: date, status: 'Paid', order_id: null };
   $('fund-amount').value = '';
   state.fund.amount = 0;
   highlightChips();
   goPage('pg-receipt');
 }
-function downloadReceipt(){
+
+/* ---------- Receipt PDF (no TXT path anywhere) ---------- */
+// Fetches the REAL backend PDF for an order. Returns true when a PDF was saved.
+async function fetchReceiptPdf(orderId, reference){
+  try {
+    const res = await fetch('/api/receipt/' + encodeURIComponent(orderId), { headers: getAuthHeader() });
+    if (!res.ok) {
+      if (res.status === 404) showToast('Receipt not found');
+      else if (res.status === 405 || res.status === 501) showToast('Coming in backend update');
+      else if (res.status === 403) showToast('You cannot download this receipt');
+      else showToast('Could not download receipt');
+      return false;
+    }
+    const blob = await res.blob();
+    if (!blob || (blob.type && blob.type.indexOf('pdf') < 0)) { showToast('Receipt is not available as PDF'); return false; }
+    saveBlob(blob, 'paylock-receipt-' + (reference || orderId) + '.pdf');
+    return true;
+  } catch (e) {
+    showToast('Network error. Try again.');
+    return false;
+  }
+}
+async function downloadReceipt(){
   const r = window._lastReceipt;
   if (!r) { showToast('No receipt available'); return; }
-  const text = 'PayLock Receipt\n' +
-    'Reference: ' + r.reference + '\n' +
-    'Amount: ' + nairaFmt(r.amount_kobo) + '\n' +
-    'Date: ' + r.date + '\n' +
-    'Status: Paid\n';
-  const blob = new Blob([text], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'paylock-receipt-' + r.reference + '.txt';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  try {
+    if (r.order_id) { await fetchReceiptPdf(r.order_id, r.reference); return; }
+    // A wallet funding has no escrow order, so the backend has no receipt endpoint for it:
+    // build the same one-page PDF here (still a real application/pdf file).
+    const blob = buildPdf('PayLock Receipt', [
+      ['Reference', r.reference], ['Type', 'Wallet funding'], ['Amount', pdfNaira(r.amount_kobo)],
+      ['Date', r.date], ['Status', 'Paid']
+    ]);
+    saveBlob(blob, 'paylock-receipt-' + r.reference + '.pdf');
+  } catch (e) { showToast('Could not create receipt'); }
 }
 
 /* ---------- Withdraw request ---------- */
@@ -1857,7 +2023,7 @@ function handlePinComplete(){
       renderPinHeader();
       updateDots();
       setPinError('PINs do not match. Try again.');
-    } else {  
+    } else {
       submitNewPin(pin);
     }
   } else if (mode === 'withdraw') {
@@ -1880,8 +2046,9 @@ async function submitNewPin(pin){
       closePinModal();
     } else {
       pinModal.mode = 'set-new';
-      pinModal.firstPin = ''; 
-      pinModal.value = '';     renderPinHeader();
+      pinModal.firstPin = '';
+      pinModal.value = '';
+      renderPinHeader();
       updateDots();
       setPinError(r.data.error || 'Could not set PIN');
     }
@@ -2048,16 +2215,25 @@ function renderLegal(containerId, sections){
 }
 
 /* ---------- Boot ---------- */
+// Gates show ONLY while booting or on a real failure. A boot can never hang: the verify call has a 15s limit.
 async function boot(){
-  showGate('loading');
-  if (!tg || !tg.initData) { showGate('blocked'); return; }
-  if (!navigator.onLine) { showGate('offline'); return; }
+  if (bootBusy) return;
+  bootBusy = true;
   try {
+    showGate('loading');
+    if (!tg || !tg.initData) { showGate('blocked'); return; }
+    if (!navigator.onLine) { showGate('offline'); return; }
     const initData = tg.initData;
-    const r = await api('/api/auth/validate', {
-      method: 'POST', headers: jsonHeaders(),
-      body: JSON.stringify({ init_data: initData, initData: initData })
-    });
+    let r;
+    try {
+      r = await withTimeout(api('/api/auth/validate', {
+        method: 'POST', headers: jsonHeaders(),
+        body: JSON.stringify({ init_data: initData, initData: initData })
+      }), 15000);
+    } catch (e) {
+      showGate(navigator.onLine ? 'error' : 'offline');
+      return;
+    }
     if (r.res.status === 403 && r.data.code === 'ACCOUNT_DELETED') { showDeletedGate(); return; }
     if (!r.res.ok || !r.data.user) { showGate('error'); return; }
     const u = r.data.user;
@@ -2065,26 +2241,30 @@ async function boot(){
     state.first_name = u.first_name || '';
     $('home-greeting').textContent = 'Hi ' + (state.first_name || 'there');
     $('home-id').textContent = 'ID: ' + u.telegram_id;
-    try {
-      state.banned = !!(u.banned || u.is_banned || u.status === 'banned');
-      setupAdmin();
-      renderBanBanner();
-      await handleDeepLink();
-    } catch (e) { /* never block boot */ }
-    hideGates();
+    state.banned = !!(u.banned || u.is_banned || u.status === 'banned');
+    booted = true;
+    hideGates();                       // the app and the tabbar are reachable from here on
+    try { renderBanBanner(); } catch (e) {}
     loadBalanceVisibility();
     updateEyeIcon();
     renderBalance();
     loadProducts();
     loadBalance();
     loadEscrowOrders();
+    handleDeepLink().catch(function(){ /* never blocks the app */ });
   } catch (e) {
-    if (navigator.onLine) showGate('error');
+    showGate(navigator.onLine ? 'error' : 'offline');
+  } finally {
+    bootBusy = false;
   }
 }
 
 /* ===================== CHAT ===================== */
-const chatState = { product:null, messages:[], stage:'ask', orderId:null, busy:false, waitingComplaint:false, waitingOrderId:null, pendingStars:0, complaintText:null, ratingBusy:false };
+const chatState = {
+  product:null, messages:[], stage:'ask', orderId:null, busy:false,
+  waitingComplaint:false, waitingOrderId:null, pendingStars:0, complaintText:null, ratingBusy:false,
+  remote:[], remoteSig:'', remoteOff:false
+};
 
 function chatPush(role, text){
   chatState.messages.push({ role: role, text: String(text) });
@@ -2098,11 +2278,17 @@ async function chatFetchOrders(){
   } catch(e){ return []; }
 }
 
+function chatResetRemote(){
+  chatState.remote = [];
+  chatState.remoteSig = '';
+  chatState.remoteOff = false;
+}
+
 function openChat(product){
   // product == null: no message pushed, no state reset, just render + navigate
   if(!product){ renderChatMessages(); goPage('pg-chat'); return; }
 
-  // seller never enters chat: send to product preview instead
+  // seller never enters the buy flow: send to product preview instead
   const sellerId0 = (product.seller_id !== undefined && product.seller_id !== null) ? product.seller_id : product.owner_id;
   if(sellerId0 !== undefined && sellerId0 !== null && state.telegram_id !== undefined && state.telegram_id !== null
      && String(sellerId0) === String(state.telegram_id)){
@@ -2112,10 +2298,10 @@ function openChat(product){
 
   // same product with messages already in memory: do not reset
   if(chatState.product && String(chatState.product.id)===String(product.id) && chatState.messages.length>0){
-    renderChatMessages(); goPage('pg-chat'); return;
+    renderChatMessages(); goPage('pg-chat'); chatLoadRemote(); return;
   }
 
-  // 4.5: nothing in memory for this product, try localStorage first
+  // nothing in memory for this product, try localStorage first
   let saved = null;
   try {
     const raw = localStorage.getItem('paylock_chat_' + product.id);
@@ -2134,7 +2320,8 @@ function openChat(product){
       chatState.stage = okStages[saved.stage] ? saved.stage : 'ask';
       chatState.orderId = (saved.orderId !== undefined) ? saved.orderId : null;
       chatState.busy = false;
-      renderChatMessages(); goPage('pg-chat'); return;
+      chatResetRemote();
+      renderChatMessages(); goPage('pg-chat'); chatLoadRemote(); return;
     }
   }
 
@@ -2144,10 +2331,44 @@ function openChat(product){
   chatState.stage = 'ask';
   chatState.orderId = null;
   chatState.busy = false;
+  chatResetRemote();
 
   chatPush('paylock', "Do you want to continue the purchase of this product? Reply with 'yes' to continue.");
   renderChatMessages();
   goPage('pg-chat');
+}
+
+// Opens the real buyer <-> seller room of an order (used by the Seller ID list and the escrow card).
+function openOrderChat(o){
+  if(!o) return;
+  const isSeller = String(o.seller_id) === String(state.telegram_id);
+  let saved = null;
+  try {
+    const raw = localStorage.getItem('paylock_chat_' + o.product_id);
+    if(raw) saved = JSON.parse(raw);
+  } catch(e){ saved = null; }
+  const sameOrder = !!(saved && String(saved.orderId) === String(o.id));
+  let p = (sameOrder && saved.product) ? saved.product : null;
+  if(!p){
+    p = { id:o.product_id, name:o.product_name || 'Order', title:o.product_name || 'Order',
+          seller_id:o.seller_id, buyer_pays_kobo:o.buyer_pays_kobo, price_kobo:o.price_kobo };
+  }
+  const okRoles = { paylock:1, user:1, system:1 };
+  chatState.product = p;
+  chatState.orderId = o.id;
+  chatState.busy = false;
+  chatState.stage = (String(o.status) === 'held') ? 'paid' : 'done';
+  chatState.messages = (!isSeller && sameOrder && Array.isArray(saved.messages))
+    ? saved.messages.filter(function(m){ return m && okRoles[m.role] && typeof m.text === 'string'; })
+    : [];
+  if(!chatState.messages.length){
+    chatState.messages.push({ role:'system', text: isSeller ? 'Chat with the buyer about this order.' : 'Chat with the seller about this order.' });
+  }
+  chatResetRemote();
+  enterChatRoom();
+  renderChatMessages();
+  goPage('pg-chat');
+  chatLoadRemote();
 }
 
 function renderChatMessages(){
@@ -2162,6 +2383,7 @@ function renderChatMessages(){
   if(rootEl) rootEl.style.display = '';
 
   const p = chatState.product;
+  const own = isOwnProduct(p);
   const card = document.getElementById('chat-product');
   while(card.firstChild) card.removeChild(card.firstChild);
   const nameEl = document.createElement('div');
@@ -2184,7 +2406,7 @@ function renderChatMessages(){
       lb.appendChild(document.createTextNode('PayLock '));
       const tk = document.createElement('span');
       tk.className = 'chat-tick';
-      tk.textContent = '✓';
+      tk.appendChild(checkIcon(9));
       lb.appendChild(tk);
       d.appendChild(lb);
       d.appendChild(document.createTextNode(m.text));
@@ -2193,9 +2415,23 @@ function renderChatMessages(){
     }
     box.appendChild(d);
   });
+  // real seller <-> buyer messages from the API
+  chatState.remote.forEach(function(m){
+    const d = document.createElement('div');
+    const mine = !!m.is_mine;
+    d.className = 'chat-msg ' + (mine ? 'chat-msg-user' : 'chat-msg-peer');
+    if (!mine) {
+      const lb = document.createElement('div');
+      lb.className = 'chat-msg-label';
+      lb.textContent = (m.sender_role === 'seller') ? 'Seller' : 'Buyer';
+      d.appendChild(lb);
+    }
+    d.appendChild(document.createTextNode(String(m.text || '')));
+    box.appendChild(d);
+  });
 
   document.getElementById('pay-in-chat').style.display = (chatState.stage === 'ask') ? '' : 'none';
-  document.getElementById('chat-confirm-btn').style.display = (chatState.stage === 'paid') ? '' : 'none';
+  document.getElementById('chat-confirm-btn').style.display = (chatState.stage === 'paid' && !own) ? '' : 'none';
   document.getElementById('chat-dispute-btn').style.display = (chatState.stage === 'paid') ? '' : 'none';
 
   try { if(box.lastChild) box.lastChild.scrollIntoView({ block: 'end' }); } catch(e){}
@@ -2208,7 +2444,7 @@ function renderChatMessages(){
 
 function chatSave(){
   try {
-    if(!chatState.product) return;
+    if(!chatState.product || isOwnProduct(chatState.product)) return;
     localStorage.setItem('paylock_chat_' + chatState.product.id, JSON.stringify({
       product: chatState.product,
       messages: chatState.messages,
@@ -2218,10 +2454,51 @@ function chatSave(){
   } catch(e){}
 }
 
+/* Real messages: GET /api/chat/<order_id>. 501 / 404 -> localStorage fallback; 403 -> not a party. */
+async function chatLoadRemote(){
+  const oid = chatState.orderId;
+  if(!oid || chatState.remoteOff) return;
+  try {
+    const r = await api('/api/chat/' + encodeURIComponent(oid), { headers: getAuthHeader() });
+    if(String(chatState.orderId) !== String(oid)) return;
+    if(r.res.status === 501 || r.res.status === 404){ chatState.remoteOff = true; return; }
+    if(r.res.status === 403){ chatState.remoteOff = true; showToast('Chat is only for the buyer and seller of this order'); return; }
+    if(!r.res.ok) return;
+    const rows = Array.isArray(r.data.messages) ? r.data.messages : [];
+    const last = rows.length ? rows[rows.length - 1] : null;
+    const sig = rows.length + ':' + (last ? String(last.id || last.created_at || '') : '');
+    if(sig === chatState.remoteSig) return;
+    chatState.remoteSig = sig;
+    chatState.remote = rows;
+    renderChatMessages();
+  } catch(e){ /* silent: next poll retries */ }
+}
+
+async function chatSendRemote(text){
+  const input = document.getElementById('chat-input');
+  try {
+    const r = await api('/api/chat/send', {
+      method: 'POST', headers: jsonHeaders(),
+      body: JSON.stringify({ order_id: chatState.orderId, text: text })
+    });
+    if(r.res.ok){ chatLoadRemote(); return; }
+    if(r.res.status === 501 || r.res.status === 404){
+      chatState.remoteOff = true;          // table not ready: keep the message locally
+      chatPush('user', text);
+      return;
+    }
+    if(r.res.status === 403) showToast('Chat is only for the buyer and seller of this order');
+    else showToast(r.data.error || 'Message not sent');
+  } catch(e){
+    showToast('Network error. Try again.');
+  }
+  if(input && !input.value) input.value = text;   // give the text back so nothing is lost
+}
+
 let chatPollTimer = null;
 
 function chatPoll(){
-  const needed = !!(chatState.product && chatState.orderId && chatState.stage !== 'done');
+  const needed = !!(chatState.product && chatState.orderId && chatMode === 'room');
   if(!needed){
     if(chatPollTimer){ clearInterval(chatPollTimer); chatPollTimer = null; }
     return;
@@ -2230,10 +2507,11 @@ function chatPoll(){
 
   chatPollTimer = setInterval(async function(){
     const pg = document.getElementById('pg-chat');
-    if(!pg || !pg.classList.contains('active') || !chatState.orderId || chatState.stage === 'done'){
+    if(!pg || !pg.classList.contains('active') || chatMode !== 'room' || !chatState.orderId){
       clearInterval(chatPollTimer); chatPollTimer = null; return;
     }
-    if(chatState.busy) return;
+    chatLoadRemote();                      // every 10s while the room is open
+    if(chatState.busy || chatState.stage === 'done') return;
 
     const watchedId = chatState.orderId;
     const list = await chatFetchOrders();
@@ -2246,12 +2524,10 @@ function chatPoll(){
     if(o.status === 'released'){
       chatState.stage = 'done';
       chatPush('system', "Seller has been paid");
-      clearInterval(chatPollTimer); chatPollTimer = null;
       renderChatMessages();
     } else if(o.status === 'disputed'){
       chatState.stage = 'done';
       chatPush('system', "Dispute opened - escrow frozen");
-      clearInterval(chatPollTimer); chatPollTimer = null;
       renderChatMessages();
     }
   }, 10000);
@@ -2262,13 +2538,10 @@ const ratingReleased = {};   // orderId -> true/false (cache of the "is released
 const ratingChecking = {};   // orderId -> true while a check is in flight
 let ratingWired = false;
 
-// private helper: fill stars up to n in #FFC107
+// private helper: fill SVG stars up to n
 const ratingFill = function(n){
   const btns = document.querySelectorAll('#rate-stars .rate-star');
-  btns.forEach(function(b, i){
-    b.textContent = (i < n) ? '\u2605' : '\u2606';
-    b.style.color = (i < n) ? '#FFC107' : '';
-  });
+  btns.forEach(function(b, i){ b.classList.toggle('on', i < n); });
 };
 
 function renderRatingBox(){
@@ -2279,10 +2552,10 @@ function renderRatingBox(){
   const p = chatState.product;
   box.style.display = 'none';
 
-  // only: pg-chat product, an order, stage 'paid' (delivered) or 'done'
+  // only: a product, an order, stage 'paid' (delivered) or 'done'
   if(!p || !chatState.orderId || (chatState.stage !== 'done' && chatState.stage !== 'paid')) return;
 
-  // buyer only (same check as 4.6)
+  // buyer only
   const sid = (p.seller_id !== undefined && p.seller_id !== null) ? p.seller_id : p.owner_id;
   const isSeller = (sid !== undefined && sid !== null && state.telegram_id !== undefined && state.telegram_id !== null)
                    && String(sid) === String(state.telegram_id);
@@ -2332,7 +2605,7 @@ function renderRatingBox(){
   } catch(e){}
   if(rated){
     const n = Math.max(1, Math.min(5, parseInt(rated, 10) || 1));
-    label.textContent = 'You rated ' + '\u2605'.repeat(n) + (complaintSaved ? ' + complaint saved' : '');
+    label.textContent = 'You rated ' + n + ' out of 5' + (complaintSaved ? ' + complaint saved' : '');
     wrap.style.display = 'none';
     return;
   }
@@ -2417,7 +2690,7 @@ async function submitRating(stars){
       if(complaint){
         chatPush('system', "Thanks, your complaint has been saved.");
       } else {
-        chatPush('system', "Thanks! You rated " + '\u2605'.repeat(stars));
+        chatPush('system', "Thanks! You rated " + stars + " out of 5");
       }
       chatSave();
     } else {
@@ -2484,6 +2757,7 @@ async function chatBuyFlow(btn){
     chatState.busy = false;
     resetChatButtons();
     renderChatMessages();
+    chatLoadRemote();
   }
 }
 
@@ -2513,10 +2787,16 @@ async function sendChatMessage(){
   const text = (input.value || '').trim();
   if(!text) return;
   input.value = '';
-  chatPush('user', text);
-  if(chatState.stage === 'ask' && text.toLowerCase() === 'yes'){
-    await chatBuyFlow(document.getElementById('pay-in-chat'));
+  // Before the purchase the room is the PayLock bot flow (reply 'yes').
+  if(chatState.stage === 'ask' || !chatState.orderId || chatState.remoteOff){
+    chatPush('user', text);
+    if(chatState.stage === 'ask' && text.toLowerCase() === 'yes'){
+      await chatBuyFlow(document.getElementById('pay-in-chat'));
+    }
+    return;
   }
+  // After the purchase: a real message to the other party of this order.
+  await chatSendRemote(text);
 }
 
 (function wireChatControls(){
@@ -2538,9 +2818,7 @@ async function sendChatMessage(){
   });
 })();
 
-/* ===================== MINOR FIXES 1-9 + BATCH 4 (additive) ===================== */
-let chatMode = 'list';        // 'list' = Chat List, 'room' = open chat room
-let previewPrev = 'pg-buy';   // page to return to from product preview
+/* ===================== MINOR FIXES 1-9 + BATCH 4 ===================== */
 const mk = { q: '', cat: 'All', sort: 'new', open: false };
 
 function isOwnProduct(p){
@@ -2550,7 +2828,7 @@ function isOwnProduct(p){
          && String(sid) === String(state.telegram_id);
 }
 
-/* B4-2: hours left before auto-release (display only) */
+/* hours left before auto-release (display only) */
 function escrowHoursLeft(o){
   if (!o || !o.release_at) return 48;
   const t = new Date(o.release_at).getTime();
@@ -2558,12 +2836,12 @@ function escrowHoursLeft(o){
   return Math.max(0, Math.ceil((t - Date.now()) / 3600000));
 }
 
-/* B4-5: print receipt */
+/* print receipt */
 function printReceipt(){
   try { window.print(); } catch (e) { showToast('Print is not available on this device'); }
 }
 
-/* ----- Fix 2 + B4-3: product preview ----- */
+/* ----- product preview + gallery ----- */
 function pvRow(k, v){
   const r = el('div', 'kv');
   r.appendChild(el('span', 'k', k));
@@ -2615,7 +2893,7 @@ function openProductPreview(p){
       valid.slice(0, 20).forEach(function(r){
         const n = Math.max(1, Math.min(5, Math.round(Number(r.stars))));
         const row = el('div', 'pv-review');
-        row.appendChild(el('div', 'pv-stars', '\u2605'.repeat(n) + '\u2606'.repeat(5 - n)));
+        row.appendChild(starsRow(n));
         const txt = r.review || r.text || r.comment || r.complaint_text;
         if (txt) row.appendChild(el('div', 'small', String(txt)));
         rv.appendChild(row);
@@ -2627,7 +2905,7 @@ function openProductPreview(p){
 }
 function previewBack(){ goPage(previewPrev || 'pg-buy'); }
 
-/* ----- Fix 4: chat list ----- */
+/* ----- chat list (bot conversations) ----- */
 function getChatMeta(id){
   try { const r = localStorage.getItem('paylock_cmeta_' + id); if (r) return JSON.parse(r); } catch (e) {}
   return null;
@@ -2714,14 +2992,166 @@ function renderChatList(){
     box.appendChild(row);
   });
 }
+
+/* ----- Seller ID profile: real order chats (buyer or seller) ----- */
+async function loadOrderChats(){
+  const box = $('chat-orders');
+  if (!box) return;
+  if (!box.firstChild) box.appendChild(el('div', 'empty', 'Loading...'));
+  const orders = await chatFetchOrders();
+  if (chatProfile !== 'seller') return;
+  clearNode(box);
+  if (!orders.length) {
+    const e = el('div', 'empty');
+    e.appendChild(el('div', 'big', 'No order chats yet'));
+    e.appendChild(document.createTextNode('Chats open once an order exists.'));
+    box.appendChild(e);
+    return;
+  }
+  orders.forEach(function(o){
+    const isSeller = String(o.seller_id) === String(state.telegram_id);
+    const row = el('div', 'chat-row');
+    const ph = el('div', 'chat-thumb');
+    ph.appendChild(svgIcon(['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'], 20));
+    row.appendChild(ph);
+    const mid = el('div', 'mid');
+    mid.appendChild(el('div', 't', o.product_name || ('Order ' + (o.reference || ''))));
+    mid.appendChild(el('div', 's', (isSeller ? 'You are selling' : 'You are buying') + ' · ' + String(o.status || '')));
+    row.appendChild(mid);
+    const meta = el('div', 'chat-meta');
+    meta.appendChild(el('div', 'chat-time', chatTime(o.created_at || Date.now())));
+    row.appendChild(meta);
+    row.addEventListener('click', function(){ openOrderChat(o); });
+    box.appendChild(row);
+  });
+}
+
+/* ----- Support Chat profile: in-app tickets (POST/GET /api/support) ----- */
+const supportState = { tickets: [], off: false };
+function renderSupport(){
+  const box = $('support-thread');
+  if (!box) return;
+  clearNode(box);
+  if (supportState.off) {
+    box.appendChild(el('div', 'empty', 'Coming in backend update'));
+    return;
+  }
+  if (!supportState.tickets.length) {
+    box.appendChild(el('div', 'chat-msg chat-msg-system', 'Describe your issue and our team will reply. Include your order reference if it is about an order.'));
+    return;
+  }
+  const USER_ROLES = { user: 1, customer: 1, client: 1, buyer: 1, seller: 1, me: 1, self: 1 };
+  const textOf = function(m){
+    if (m === undefined || m === null) return '';
+    if (typeof m === 'string') return m.trim();
+    if (typeof m !== 'object') return '';
+    const v = (m.message !== undefined && m.message !== null) ? m.message : m.text;
+    return (v === undefined || v === null) ? '' : String(v).trim();
+  };
+  const addUser = function(text){
+    box.appendChild(el('div', 'chat-msg chat-msg-user', text));
+  };
+  const addStaff = function(text, ts){
+    const d = el('div', 'chat-msg chat-msg-paylock');
+    d.appendChild(el('div', 'chat-msg-label', 'Support'));
+    d.appendChild(document.createTextNode(text));
+    box.appendChild(d);
+    const meta = el('div', 'support-meta', fmtDate(ts));
+    meta.style.alignSelf = 'flex-start';
+    box.appendChild(meta);
+  };
+  supportState.tickets.slice().reverse().forEach(function(t){
+    try {
+      if (!t || typeof t !== 'object') return;
+      const own = textOf(t.message);
+      const fallbackTs = t.reply_created_at || t.updated_at || t.created_at;
+      const metaLine = function(){
+        box.appendChild(el('div', 'support-meta', String(t.status || 'pending') + ' · ' + fmtDate(t.created_at)));
+      };
+      // Shape: t.messages = both sides in order
+      const thread = Array.isArray(t.messages) ? t.messages.filter(function(m){ return textOf(m); }) : [];
+      if (thread.length) {
+        thread.forEach(function(m, i){
+          const txt = textOf(m);
+          const role = String((m && (m.sender || m.role || m.sender_role)) || '').toLowerCase();
+          const isUser = !!(m && m.is_mine === true) || !!USER_ROLES[role] || (!role && own && txt === own);
+          if (isUser) {
+            addUser(txt);
+            box.appendChild(el('div', 'support-meta', (i === 0 ? String(t.status || 'pending') + ' · ' : '') + fmtDate((m && m.created_at) || t.created_at)));
+          } else {
+            addStaff(txt, (m && m.created_at) || fallbackTs);
+          }
+        });
+        return;
+      }
+      // Default: the user's own message + status + date (unchanged behaviour)
+      addUser(String(t.message || ''));
+      metaLine();
+      // Staff replies: string fields and t.replies, de-duplicated, never an empty bubble
+      const seen = {};
+      const push = function(txt, ts){
+        if (!txt || seen[txt]) return;
+        seen[txt] = true;
+        addStaff(txt, ts || fallbackTs);
+      };
+      [t.reply, t.admin_reply, t.response].forEach(function(s){
+        if (typeof s === 'string') push(s.trim(), fallbackTs);
+      });
+      if (Array.isArray(t.replies)) {
+        t.replies.forEach(function(m){ push(textOf(m), m && m.created_at); });
+      }
+    } catch (e) { /* one bad ticket must never break the thread */ }
+  });
+  try { box.scrollTop = box.scrollHeight; } catch (e) {}
+}
+async function loadSupport(){
+  try {
+    const r = await api('/api/support', { headers: getAuthHeader() });
+    if (r.res.status === 501 || r.res.status === 404 || r.res.status === 405) { supportState.off = true; }
+    else if (r.res.ok) { supportState.off = false; supportState.tickets = Array.isArray(r.data.tickets) ? r.data.tickets : []; }
+  } catch (e) { /* keep what we have */ }
+  renderSupport();
+}
+async function sendSupport(){
+  const input = $('support-input');
+  const btn = $('support-send');
+  if (!input || !btn || btn.disabled) return;
+  const text = (input.value || '').trim();
+  if (!text) return;
+  btn.disabled = true;
+  try {
+    const r = await postApi('/api/support', { message: text.slice(0, 1000) });
+    if (r.ok) { input.value = ''; showToast('Message sent'); await loadSupport(); }
+    else if (r.soon) { supportState.off = true; renderSupport(); }
+  } finally {
+    btn.disabled = false;
+  }
+}
+function goSupport(){
+  chatProfile = 'support';
+  chatMode = 'list';
+  applyChatMode();
+  goPage('pg-chat');
+}
+
 function applyChatMode(){
   const pg = $('pg-chat');
-  if (pg) pg.classList.toggle('chat-list-mode', chatMode === 'list');
-  if (chatMode === 'list') renderChatList();
+  if (!pg) return;
+  pg.classList.toggle('chat-list-mode', chatMode === 'list');
+  if (chatMode !== 'list') return;
+  document.querySelectorAll('#chat-profiles .chip').forEach(function(c){
+    c.classList.toggle('active', c.getAttribute('data-profile') === chatProfile);
+  });
+  $('chat-list').style.display = chatProfile === 'bot' ? '' : 'none';
+  $('chat-orders').style.display = chatProfile === 'seller' ? '' : 'none';
+  $('chat-support').style.display = chatProfile === 'support' ? '' : 'none';
+  if (chatProfile === 'bot') renderChatList();
+  else if (chatProfile === 'seller') loadOrderChats();
+  else loadSupport();
 }
 function enterChatRoom(){ chatMode = 'room'; applyChatMode(); }
 
-/* ----- Fix 5: marketplace search + filter (in-memory) ----- */
+/* ----- marketplace search + filter (in-memory) ----- */
 function renderMkChips(){
   const cats = ['All'];
   state.products.forEach(function(p){ if (p.category && cats.indexOf(p.category) < 0) cats.push(p.category); });
@@ -2766,6 +3196,9 @@ function applyBuyFilter(){
   }, true);
   const back = $('chat-back');
   if (back) back.addEventListener('click', function(){ chatMode = 'list'; applyChatMode(); });
+  document.querySelectorAll('#chat-profiles .chip').forEach(function(c){
+    c.addEventListener('click', function(){ chatProfile = c.getAttribute('data-profile') || 'bot'; applyChatMode(); });
+  });
   const msgs = $('chat-messages');
   if (msgs && window.MutationObserver) new MutationObserver(chatMetaSync).observe(msgs, { childList: true });
 
@@ -2786,12 +3219,8 @@ function applyBuyFilter(){
   renderMkChips();
 })();
 
-/* ===================== PAYLOCK ADDITIONS (additive) ===================== */
-// CONFIG: set ADMIN_ID to your Telegram user ID to unlock the Admin Panel (empty = nobody).
-const CONFIG = { BOT_USERNAME: 'PayLockOfficialBot', ADMIN_ID: '7638015119', BAN_THRESHOLD: 5 };
-state.banned = false;
-state.myProducts = [];
-let lastApi = null;
+/* ===================== PAYLOCK ADDITIONS ===================== */
+const CONFIG = { BOT_USERNAME: 'PayLockOfficialBot', BAN_THRESHOLD: 5 };
 const ICON_FLAG = ['M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z', 'M4 22v-7'];
 const ICON_LINK = ['M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71', 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'];
 const ICON_BOX = ['M21 8l-9-5-9 5v8l9 5 9-5z', 'M3 8l9 5 9-5', 'M12 13v8'];
@@ -2875,25 +3304,25 @@ function salesLine(p){
   const n = pSales(p);
   if (!n) return 'New • 0 sales';
   const r = pRating(p);
-  return n.toLocaleString('en-US') + ' sales • ' + (r ? r.toFixed(1) : '–') + '★';
+  return n.toLocaleString('en-US') + ' sales • ' + (r ? r.toFixed(1) + '/5' : 'no rating');
 }
 function prodCode(p){ return String(p.short_code || p.code || p.link_code || p.id); }
 function productLink(p){ return 'https://t.me/' + CONFIG.BOT_USERNAME + '?start=prod_' + prodCode(p); }
-async function copyLink(p){
-  const link = productLink(p);
+async function copyText(text, okMsg){
   let ok = false;
-  try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(link); ok = true; } } catch (e) {}
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); ok = true; } } catch (e) {}
   if (!ok) {
     try {
       const ta = document.createElement('textarea');
-      ta.value = link; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
       document.body.appendChild(ta); ta.select();
       ok = document.execCommand('copy');
       document.body.removeChild(ta);
     } catch (e) { ok = false; }
   }
-  showToast(ok ? 'Link copied' : 'Could not copy link');
+  showToast(ok ? okMsg : 'Could not copy link');
 }
+function copyLink(p){ return copyText(productLink(p), 'Link copied'); }
 
 /* ----- skeletons + empty states ----- */
 function renderSkeletons(gridId, n){
@@ -2922,20 +3351,22 @@ function buildEmpty(id, text, browseTo){
   e.appendChild(b);
 }
 
-/* ----- multi-image gallery + preview extras ----- */
+/* ----- multi-image gallery (main + extras from GET /api/products/<id>/images) ----- */
+function httpsList(a){
+  return a.filter(function(u){ return typeof u === 'string' && u.indexOf('https://') === 0; });
+}
 function pvImages(p){
   let a = [];
   ['images', 'image_urls', 'gallery'].forEach(function(k){
     if (!a.length && Array.isArray(p[k])) {
-      a = p[k].map(function(x){ return typeof x === 'string' ? x : (x && x.url); });
+      a = p[k].map(function(x){ return typeof x === 'string' ? x : (x && (x.url || x.image_url)); });
     }
   });
   if (!a.length && p.image_url) a = [p.image_url];
-  return a.filter(function(u){ return typeof u === 'string' && u.indexOf('https://') === 0; }).slice(0, 4);
+  return httpsList(a).slice(0, 4);
 }
 function pvGallery(body, p){
-  const imgs = pvImages(p);
-  if (!imgs.length) return;
+  let imgs = pvImages(p);
   let cur = 0;
   const wrap = el('div');
   const main = document.createElement('img');
@@ -2945,14 +3376,16 @@ function pvGallery(body, p){
   const row = el('div', 'pv-thumbs');
   wrap.appendChild(row);
   function draw(){
+    if (cur >= imgs.length) cur = 0;
+    if (!imgs.length) { main.style.display = 'none'; row.style.display = 'none'; return; }
+    main.style.display = '';
     main.src = imgs[cur];
     clearNode(row);
     if (imgs.length < 2) { row.style.display = 'none'; return; }
     row.style.display = '';
     imgs.forEach(function(u, i){
-      if (i === cur) return;
       const t = document.createElement('img');
-      t.className = 'pv-thumb';
+      t.className = 'pv-thumb' + (i === cur ? ' active' : '');
       t.alt = '';
       t.src = u;
       t.addEventListener('click', function(){ cur = i; draw(); });
@@ -2961,11 +3394,24 @@ function pvGallery(body, p){
   }
   draw();
   body.appendChild(wrap);
+  // extras (max 3) come from the backend; merge them behind the main cover
+  if (p && p.id !== undefined && p.id !== null) {
+    api('/api/products/' + encodeURIComponent(p.id) + '/images', { headers: getAuthHeader() }).then(function(r){
+      if (!r.res.ok || !wrap.isConnected) return;
+      const extra = httpsList((Array.isArray(r.data.images) ? r.data.images : []).map(function(x){ return x && x.image_url; }));
+      const merged = [];
+      imgs.concat(extra).forEach(function(u){ if (merged.indexOf(u) < 0) merged.push(u); });
+      imgs = merged.slice(0, 4);
+      draw();
+    }).catch(function(){ /* gallery stays with the cover only */ });
+  }
 }
 function pvExtras(body, p){
   const m = el('div', 'small muted', salesLine(p));
   m.style.marginBottom = '10px';
   body.appendChild(m);
+  const bb = boostBadge(p);
+  if (bb) { const w = el('div'); w.style.marginBottom = '10px'; w.appendChild(bb); body.appendChild(w); }
   const row = el('div', 'btn-row');
   row.style.marginBottom = '14px';
   const cl = el('button', 'btn sm secondary', 'Copy Link');
@@ -3021,7 +3467,7 @@ function openReportSheet(p){
   });
 }
 
-/* ----- order detail: receipt + dispute ----- */
+/* ----- order detail: receipt PDF + dispute ----- */
 function openOrderDetail(o){
   const isBuyer = String(o.buyer_id) === String(state.telegram_id);
   const isSeller = String(o.seller_id) === String(state.telegram_id);
@@ -3079,33 +3525,10 @@ async function downloadOrderReceipt(o, btn){
   btn.disabled = true;
   btn.textContent = 'Preparing...';
   try {
-    const res = await fetch('/api/receipt/' + encodeURIComponent(o.id), { headers: getAuthHeader() });
-    if (!res.ok) {
-      btn.disabled = false;
-      btn.textContent = orig;
-      if (res.status === 404 || res.status === 405 || res.status === 501) {
-        showToast('Coming in backend update');
-        btn.style.display = 'none';
-      } else {
-        showToast('Could not download receipt');
-      }
-      return;
-    }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'paylock-receipt-' + (o.reference || o.id) + '.pdf';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    await fetchReceiptPdf(o.id, o.reference || o.id);
+  } finally {
     btn.disabled = false;
     btn.textContent = orig;
-  } catch (e) {
-    btn.disabled = false;
-    btn.textContent = orig;
-    showToast('Network error. Try again.');
   }
 }
 async function submitDispute(o, text, btn){
@@ -3133,7 +3556,8 @@ async function submitDispute(o, text, btn){
 /* ----- chat extras: preview / download / keep / rate-then-release ----- */
 function chatExtrasRender(){
   const st = chatState.stage;
-  const paid = (st === 'paid' || st === 'done');
+  const own = isOwnProduct(chatState.product);
+  const paid = (st === 'paid' || st === 'done') && !own;
   const d = $('download-in-chat'), k = $('chat-keep-btn'), rr = $('chat-refund-row');
   if (d) d.style.display = paid ? '' : 'none';
   if (k) k.style.display = paid ? '' : 'none';
@@ -3200,12 +3624,36 @@ async function rateInEscrow(stars){
   renderChatMessages();
 }
 
-/* ----- deep link ----- */
+/* ----- deep link: prod_ / ref_ / inv_ from start_param (startapp) ----- */
 function getStartParam(){
-  try { const sp = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param; return sp ? String(sp) : ''; } catch (e) { return ''; }
+  const ok = function(v){ return (typeof v === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(v)) ? v : ''; };
+  let v = '';
+  try { v = ok(tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param); } catch (e) {}   // 1. initDataUnsafe.start_param
+  if (v) return v;
+  try { if (tg && tg.initData) v = ok(new URLSearchParams(tg.initData).get('start_param')); } catch (e) {}  // 2. initData start_param
+  if (v) return v;
+  try {                                                                                      // 3. URL ?startapp= / ?start=
+    const q = new URLSearchParams(window.location.search || '');
+    v = ok(q.get('startapp')) || ok(q.get('start')) || ok(q.get('tgWebAppStartParam'));
+  } catch (e) {}
+  if (v) return v;
+  try { v = ok(new URLSearchParams((window.location.hash || '').replace(/^#/, '')).get('tgWebAppStartParam')); } catch (e) {}
+  return v;
 }
 async function handleDeepLink(){
   const sp = getStartParam();
+  if (!sp) return;
+
+  const mRef = /^(?:ref|inv)_(\d{1,15})$/.exec(sp);
+  if (mRef) {
+    if (!referralNoted) {
+      referralNoted = true;
+      if (String(mRef[1]) === String(state.telegram_id)) showToast('You cannot use your own referral link');
+      else showToast('Referral accepted');
+    }
+    return;
+  }
+
   if (sp.indexOf('prod_') !== 0) return;
   const code = sp.slice(5);
   if (!code) return;
@@ -3228,9 +3676,44 @@ async function handleDeepLink(){
   openProductPreview(prod);
 }
 
+/* ----- referrals: shows ONLY what GET /api/referrals/mine returns (no local commission maths) ----- */
+function referralLink(){ return 'https://t.me/' + CONFIG.BOT_USERNAME + '?start=ref_' + state.telegram_id; }
+async function loadReferrals(){
+  const card = $('ref-card');
+  if (!card) return;
+  try {
+    const r = await api('/api/referrals/mine', { headers: getAuthHeader() });
+    if (!r.res.ok) { card.style.display = 'none'; return; }   // 501 / 404 / any error: hide, never crash
+    const d = r.data || {};
+    const max = Number(d.max_sales_per_referred) || 10;
+    $('ref-count').textContent = String(Number(d.referral_count) || 0);
+    $('ref-paid').textContent = String(Number(d.commission_count) || 0);
+    $('ref-total').textContent = nairaFmt(d.total_commission_kobo || 0);
+
+    const linkRow = $('ref-link-row');
+    if (state.banned || state.telegram_id === null) { linkRow.style.display = 'none'; }   // never show the link to banned users
+    else { linkRow.style.display = ''; $('ref-link').value = referralLink(); }
+
+    const list = $('ref-list');
+    clearNode(list);
+    (Array.isArray(d.referred) ? d.referred : []).slice(0, 50).forEach(function(u){
+      const done = Number(u.commission_count) || 0;
+      let prog = (typeof u.commission_progress === 'string' && u.commission_progress) ? u.commission_progress : (done + ' / ' + max);
+      if (done >= max) prog += ' completed';
+      const item = el('div', 'item');
+      const mid = el('div', 'mid');
+      mid.appendChild(el('div', 't', String(u.name || 'User')));
+      mid.appendChild(el('div', 's', (Number(u.sales_count) || 0) + ' sales'));
+      item.appendChild(mid);
+      item.appendChild(el('div', 'amt', prog));
+      list.appendChild(item);
+    });
+    card.style.display = '';
+  } catch (e) { card.style.display = 'none'; }
+}
+
 /* ----- seller dashboard: analytics, visibility, boost ----- */
 function pVisible(p){ return !(p.visible === false || p.is_visible === false || p.hidden === true || p.is_hidden === true); }
-function pBoosted(p){ return !!(p.boosted || p.is_boosted); }
 function renderAnalytics(d){
   d = d || {};
   const sales = Number(d.total_sales || 0) || 0;
@@ -3271,6 +3754,7 @@ function renderMyProducts(){
   empty.style.display = 'none';
   rows.forEach(function(p, i){
     const hidden = state.banned || !pVisible(p);
+    const boosted = pBoosted(p);
     const row = el('div', 'mp-row');
     const top = el('div', 'mp-top');
     top.appendChild(el('div', 'mp-title', p.name || p.title || 'Untitled'));
@@ -3282,7 +3766,8 @@ function renderMyProducts(){
     const badges = el('div', 'mp-badges');
     if (state.banned) badges.appendChild(el('span', 'badge b-banned', 'Hidden - Banned'));
     else if (!pVisible(p)) badges.appendChild(el('span', 'badge b-hidden', 'Hidden'));
-    if (pBoosted(p)) badges.appendChild(el('span', 'badge b-boost', 'Boosted'));
+    const bb = boostBadge(p);
+    if (bb) badges.appendChild(bb);
     if (badges.childNodes.length) row.appendChild(badges);
     const acts = el('div', 'mp-actions');
     const vis = el('div', 'mp-vis');
@@ -3293,10 +3778,10 @@ function renderMyProducts(){
     tgl.addEventListener('click', function(){ toggleVisibility(p, tgl); });
     vis.appendChild(tgl);
     vis.appendChild(el('span', null, hidden ? 'Hidden' : 'Visible'));
-    const boost = el('button', 'btn sm secondary', pBoosted(p) ? 'Boosted' : 'Boost');
+    const boost = el('button', 'btn sm secondary', boosted ? 'Boosted' : 'Boost');
     boost.type = 'button';
     if (i === 0) boost.id = 'boost-btn';
-    if (pBoosted(p)) boost.disabled = true;
+    if (boosted) boost.disabled = true;
     boost.addEventListener('click', function(){ boostProduct(p, boost); });
     acts.appendChild(vis);
     acts.appendChild(boost);
@@ -3317,233 +3802,70 @@ async function toggleVisibility(p, btn){
 }
 async function boostProduct(p, btn){
   if (state.banned || !pVisible(p)) { showToast('Make the product visible first'); return; }
+  if (pBoosted(p)) return;
   btn.disabled = true;
+  // The N500 fee is charged by the backend only; the app never deducts anything itself.
   const r = await postApi('/api/boost', { product_id: p.id });
-  if (r.ok) { p.boosted = true; p.is_boosted = true; renderMyProducts(); }
-  else btn.disabled = false;
+  if (r.ok) {
+    p.is_boosted = true;
+    p.boosted = true;
+    if (r.data && r.data.boosted_until) p.boosted_until = r.data.boosted_until;
+    renderMyProducts();
+    loadBalance();
+  } else btn.disabled = false;
+}
+// Keeps the countdown fresh and removes the badge the moment a boost expires (Boost button returns).
+function tickBoostBadges(){
+  let expired = false;
+  document.querySelectorAll('.boost-badge[data-until]').forEach(function(b){
+    const u = Number(b.getAttribute('data-until'));
+    if (!u) return;
+    if (u <= Date.now()) {
+      expired = true;
+      if (b.parentNode) b.parentNode.removeChild(b);
+    } else {
+      b.textContent = boostText(u);
+    }
+  });
+  if (expired) {
+    const mp = $('pg-myproducts');
+    if (mp && mp.classList.contains('active')) renderMyProducts();
+  }
 }
 
-/* ----- ban banner, appeal, admin ----- */
+/* ----- ban banner + appeal ----- */
 function renderBanBanner(){
   const b = $('banned-banner');
   if (b) b.style.display = state.banned ? 'flex' : 'none';
-}
-function isAdmin(){
-  return !!CONFIG.ADMIN_ID && state.telegram_id !== null && String(state.telegram_id) === String(CONFIG.ADMIN_ID);
-}
-// Admin entry is created ONLY when isAdmin() is true. Normal users never get admin-link or pg-admin.
-function setupAdmin(){
-  if (!isAdmin() || $('admin-link')) return;
-  const slot = $('account-links');
-  if (slot) {
-    const b = el('button', 'row-link');
-    b.type = 'button';
-    b.id = 'admin-link';
-    b.appendChild(el('span', null, 'Admin Panel'));
-    b.appendChild(el('span', 'muted', '›'));
-    b.addEventListener('click', function(){ goPage('pg-admin'); });
-    slot.appendChild(b);
-  }
-  if ($('pg-admin')) return;
-  const sec = el('section', 'page');
-  sec.id = 'pg-admin';
-  const back = el('button', 'back-btn', '‹ Back');
-  back.type = 'button';
-  back.addEventListener('click', function(){ goPage('pg-wallet'); });
-  sec.appendChild(back);
-  sec.appendChild(el('h2', 'page-title', 'Admin Panel'));
-  const rf = el('button', 'btn secondary', 'Refresh');
-  rf.type = 'button';
-  rf.id = 'admin-refresh';
-  rf.style.marginBottom = '14px';
-  rf.addEventListener('click', function(){ loadAdmin(); });
-  sec.appendChild(rf);
-  [
-    ['adminStats', 'Daily Activities'],
-    ['adminOrders', 'Recent Orders'],
-    ['adminDisputes', 'Open Disputes'],
-    ['adminReports', 'Reports'],
-    ['adminAppeals', 'Appeals'],
-    ['adminUsers', 'Users']
-  ].forEach(function(c){
-    const card = el('div', 'card');
-    card.appendChild(el('div', 'card-title', c[1]));
-    const body = el('div');
-    body.id = c[0];
-    if (c[0] === 'adminAppeals') {
-      // loadAppeals() renders into #admin-appeals, so keep that id inside the Appeals card.
-      const inner = el('div');
-      inner.id = 'admin-appeals';
-      body.appendChild(inner);
-    }
-    card.appendChild(body);
-    sec.appendChild(card);
-  });
-  document.querySelector('.app-shell').appendChild(sec);
-}
-function adminFill(id, rows, rowFn, emptyText){
-  const box = $(id);
-  if (!box) return;
-  clearNode(box);
-  if (!rows || !rows.length) { box.appendChild(el('div', 'empty', emptyText)); return; }
-  rows.slice(0, 50).forEach(function(r){ box.appendChild(rowFn(r)); });
-}
-function adminFail(id, status){
-  const box = $(id);
-  if (!box) return;
-  clearNode(box);
-  box.appendChild(el('div', 'empty', (status === 404 || status === 405 || status === 501) ? 'Not available yet' : 'Could not load'));
-}
-function adminItem(title, sub, right){
-  const row = el('div', 'item');
-  const mid = el('div', 'mid');
-  mid.appendChild(el('div', 't', title));
-  mid.appendChild(el('div', 's', sub));
-  row.appendChild(mid);
-  if (right) row.appendChild(el('div', 'amt', right));
-  return row;
-}
-async function loadAdmin(){
-  if (!isAdmin()) return;
-  const get = async function(path, key){
-    try {
-      const r = await api(path, { headers: getAuthHeader() });
-      if (r.res.ok) return { ok: true, rows: Array.isArray(r.data[key]) ? r.data[key] : [], data: r.data };
-      return { ok: false, status: r.res.status };
-    } catch (e) { return { ok: false, status: 0 }; }
-  };
-  const res = await Promise.all([
-    get('/api/admin/orders', 'orders'),
-    get('/api/admin/disputes', 'disputes'),
-    get('/api/admin/reports', 'reports'),
-    get('/api/admin/users', 'users')
-  ]);
-  const orders = res[0], disputes = res[1], reports = res[2], users = res[3];
-
-  if (orders.ok) {
-    adminFill('adminOrders', orders.rows, function(o){
-      return adminItem(
-        String(o.product_name || o.reference || ('Order ' + (o.id || ''))),
-        String(o.status || '-') + ' · ' + fmtDate(o.created_at),
-        nairaFmt(o.buyer_pays_kobo || o.amount_kobo || 0)
-      );
-    }, 'No orders');
-  } else adminFail('adminOrders', orders.status);
-
-  if (disputes.ok) {
-    adminFill('adminDisputes', disputes.rows, function(d){
-      return adminItem(
-        'Order ' + String(d.order_id || d.id || '?'),
-        String(d.reason || d.status || '') + (d.created_at ? ' · ' + fmtDate(d.created_at) : ''),
-        d.status ? String(d.status) : ''
-      );
-    }, 'No open disputes');
-  } else adminFail('adminDisputes', disputes.status);
-
-  if (reports.ok) {
-    adminFill('adminReports', reports.rows, function(r){
-      return adminItem(
-        'Product ' + String(r.product_name || r.product_id || '?'),
-        String(r.reason || '') + (r.created_at ? ' · ' + fmtDate(r.created_at) : ''),
-        r.reporter_id ? ('By ' + r.reporter_id) : ''
-      );
-    }, 'No reports');
-  } else adminFail('adminReports', reports.status);
-
-  if (users.ok) {
-    adminFill('adminUsers', users.rows, function(u){
-      const name = u.first_name || u.username || ('User ' + (u.telegram_id || u.id || '?'));
-      const flag = (u.banned || u.is_banned || u.status === 'banned') ? 'Banned' : '';
-      return adminItem(String(name), 'ID: ' + String(u.telegram_id || u.id || '-'), flag);
-    }, 'No users');
-  } else adminFail('adminUsers', users.status);
-
-  // Daily Activities summary (computed from what the endpoints returned)
-  const stats = $('adminStats');
-  if (stats) {
-    clearNode(stats);
-    const today = new Date().toDateString();
-    let todayCount = 0, todayVol = 0;
-    if (orders.ok) {
-      orders.rows.forEach(function(o){
-        const t = new Date(o.created_at);
-        if (!isNaN(t.getTime()) && t.toDateString() === today) {
-          todayCount++;
-          todayVol += Number(o.buyer_pays_kobo || o.amount_kobo || 0) || 0;
-        }
-      });
-    }
-    const userTotal = users.ok ? ((users.data && Number(users.data.total)) || users.rows.length) : null;
-    const cells = [
-      [orders.ok ? String(todayCount) : '-', 'Orders today'],
-      [orders.ok ? nairaFmt(todayVol) : '-', 'Volume today'],
-      [disputes.ok ? String(disputes.rows.length) : '-', 'Open disputes'],
-      [reports.ok ? String(reports.rows.length) : '-', 'Reports'],
-      [userTotal !== null ? String(userTotal) : '-', 'Users']
-    ];
-    const g = el('div', 'grid');
-    cells.forEach(function(c){
-      const sc = el('div', 'stat-card');
-      sc.appendChild(el('div', 'sv', c[0]));
-      sc.appendChild(el('div', 'sl', c[1]));
-      g.appendChild(sc);
-    });
-    stats.appendChild(g);
-  }
-
-  loadAppeals();
-}
-async function loadAppeals(){
-  const list = $('admin-appeals');
-  if (!list) return;
-  clearNode(list);
-  let rows = [];
-  try {
-    const r = await api('/api/admin/appeals', { headers: getAuthHeader() });
-    if (r.res.status === 404) showToast('Coming in backend update');
-    rows = (r.res.ok && Array.isArray(r.data.appeals)) ? r.data.appeals : [];
-  } catch (e) { rows = []; }
-  if (!rows.length) { list.appendChild(el('div', 'empty', 'No appeals')); return; }
-  rows.forEach(function(a){
-    const row = el('div', 'esc-card');
-    row.appendChild(el('div', 't', 'User ' + (a.user_id || a.telegram_id || '?')));
-    row.appendChild(el('div', 'small muted', fmtDate(a.created_at)));
-    row.appendChild(el('div', 'small', String(a.message || a.text || '')));
-    const acts = el('div', 'esc-actions');
-    const un = el('button', 'btn sm', 'Unban');
-    un.type = 'button';
-    un.addEventListener('click', function(){ adminAppealAction(a, 'unban', un); });
-    const pb = el('button', 'btn sm danger', 'Permanent Ban');
-    pb.type = 'button';
-    pb.addEventListener('click', function(){ adminAppealAction(a, 'permanent', pb); });
-    acts.appendChild(un);
-    acts.appendChild(pb);
-    row.appendChild(acts);
-    list.appendChild(row);
-  });
-}
-async function adminAppealAction(a, action, btn){
-  const restore = setBusy(btn, 'Working...');
-  const r = await postApi('/api/admin/appeals/action', { appeal_id: a.id, action: action });
-  restore();
-  if (r.ok) { showToast(action === 'unban' ? 'User unbanned' : 'User permanently banned'); loadAppeals(); }
-}
-function openSupport(){
-  const url = 'https://t.me/' + CONFIG.BOT_USERNAME;
-  try { if (tg && tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank'); }
-  catch (e) { try { window.open(url, '_blank'); } catch (e2) {} }
 }
 
 (function wireAdditions(){
   const retry = $('offline-retry');
   if (retry) retry.addEventListener('click', retryLast);
-  window.addEventListener('online', hideOfflineBanner);
-  window.addEventListener('offline', showOfflineBanner);
+  window.addEventListener('online', function(){
+    hideOfflineBanner();
+    const g = $('gate-offline');
+    if (g && g.classList.contains('show')) boot();   // came back while the offline gate was up
+  });
+  window.addEventListener('offline', function(){
+    if (!booted) showGate('offline');                // before boot: offline gate
+    else showOfflineBanner();                        // after boot: banner only, never a trap
+  });
   const xs = $('xs-overlay');
   if (xs) xs.addEventListener('click', function(ev){ if (ev.target === xs) closeSheet(); });
 
   const sup = $('support-btn');
-  if (sup) sup.addEventListener('click', openSupport);
+  if (sup) sup.addEventListener('click', goSupport);   // in-app Support Chat, no external link
+  const ss = $('support-send');
+  if (ss) ss.addEventListener('click', sendSupport);
+  const si = $('support-input');
+  if (si) si.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); sendSupport(); } });
+
+  const rc = $('ref-copy');
+  if (rc) rc.addEventListener('click', function(){
+    if (state.banned || state.telegram_id === null) return;
+    copyText(referralLink(), 'Referral link copied');
+  });
 
   const ap = $('appeal-btn'), am = $('appeal-modal');
   if (ap && am) ap.addEventListener('click', function(){ am.classList.add('open'); });
@@ -3571,6 +3893,11 @@ function openSupport(){
     chatOrderAction($('chat-confirm-btn'), confirmDelivery, 'released', 'Payment released to seller.');
   });
 
+  const ei = $('extra-input');
+  if (ei) ei.addEventListener('change', handleExtra);
+
+  setInterval(tickBoostBadges, 30000);
+
   buildEmpty('home-empty', 'No products yet', 'pg-buy');
   buildEmpty('buy-empty', 'No products yet', 'pg-buy');
   buildEmpty('esc-empty', 'No orders yet', 'pg-buy');
@@ -3579,12 +3906,12 @@ function openSupport(){
 })();
 
 function init(){
-  loadTheme();   // saved paylock_theme, else follows Telegram theme via applyTheme()
+  loadTheme();   // always follows Telegram: colorScheme + themeParams, re-applied on themeChanged
   if (tg) {
     try { tg.ready(); tg.expand(); } catch (e) {}
     if (tg.onEvent) tg.onEvent('themeChanged', loadTheme);
   }
-  window.addEventListener('offline', function(){ showGate('offline'); });
+  document.querySelectorAll('#rate-stars .rate-star').forEach(function(b){ b.appendChild(starIcon(null, 28)); });
   document.addEventListener('click', function(ev){
     if (!ev.target.closest('#bank-wrap')) $('bank-list').classList.remove('open');
   });
@@ -3615,9 +3942,7 @@ return {
   payNow: payNow, downloadReceipt: downloadReceipt,
   openDeleteSheet: openDeleteSheet, closeDeleteSheet: closeDeleteSheet, onDeleteInput: onDeleteInput,
   startDeleteFlow: startDeleteFlow, closePinModal: closePinModal, pinAction: pinAction,
-  openProductPreview: openProductPreview, previewBack: previewBack, printReceipt: printReceipt,
-  toggleTheme: toggleTheme,
-  loadAdmin: loadAdmin
+  openProductPreview: openProductPreview, previewBack: previewBack, printReceipt: printReceipt
 };
 })();
 </script>
