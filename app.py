@@ -1,6 +1,6 @@
 # =============================================================================
 # PayLock — Production Flask backend
-# Deploy: gunicorn main:app --bind 0.0.0.0:$PORT   (Procfile: web: gunicorn main:app)
+# Deploy: gunicorn appn:app --bind 0.0.0.0:$PORT   (Procfile: web: gunicorn app:app)
 #
 # Required env vars:
 #   SUPABASE_URL, SUPABASE_SERVICE_KEY
@@ -159,7 +159,7 @@ BOT_USERNAME = os.environ.get("BOT_USERNAME", "PayLockOfficialBot")
 # REPLACE WITH REAL BOT USERNAME / APP SHORT NAME BEFORE DEPLOY
 # (set the BOT_USERNAME and APP_SHORT_NAME env vars on Render, or edit here).
 _APP_SHORT_NAME_PLACEHOLDER = "REPLACE_WITH_APP_SHORT_NAME"
-APP_SHORT_NAME = (os.environ.get("APP_SHORT_NAME") or _APP_SHORT_NAME_PLACEHOLDER).strip()
+APP_SHORT_NAME = (os.environ.get("APP_SHORT_NAME") or "paylockapp").strip()
 # Leave empty until you fill it in (here or via the ADMIN_ID env var).
 # While empty, EVERY /api/admin/* route returns 403.
 ADMIN_ID = str(os.environ.get("ADMIN_ID", "") or "").strip()
