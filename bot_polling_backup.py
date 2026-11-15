@@ -153,8 +153,9 @@ async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg is None:
         return
     await msg.reply_text(
-        f"Support: @{BOT_USERNAME}",
-        reply_markup=InlineKeyboardMarkup([[
+    "Support is inside the PayLock app. Tap below to open Support Chat.",
+    reply_markup=open_app_markup()
+    )
             InlineKeyboardButton(text="Contact support", url=SUPPORT_URL)
         ]]),
     )
