@@ -3,7 +3,7 @@
 #
 # ARCHIVED: Polling disabled - app.py webhook handles updates now.
 # This file is NOT part of the Render deployment. The only live bot is the
-# /webhook route in app.py (Render Start Command: gunicorn app:app).
+# /webhook route in app.py (Render Start Command: gunicorn main:app).
 # Running this file never polls. Only the one-shot helper below is available:
 #     python bot_polling_backup.py set-commands
 
@@ -153,26 +153,16 @@ async def cmd_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg is None:
         return
     await msg.reply_text(
-    "Support is inside the PayLock app. Tap below to open Support Chat.",
-    reply_markup=open_app_markup()
-    )
-            InlineKeyboardButton(text="Contact support", url=SUPPORT_URL)
-        ]]),
+        "Support is inside the PayLock app. Tap below to open Support Chat.",
+        reply_markup=open_app_markup(),
     )
 
 
 async def _bot_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Admin-only guard: ADMIN_ID comes from env; empty ADMIN_ID means nobody passes.
     if update.effective_user is None or str(update.effective_user.id) != str(ADMIN_ID):
-        if update.effective_message is not None:
-            await update.effective_message.reply_text("Admin only")
         return
-    await update.effective_message.reply_text(
-        "Admin Panel - Daily activities",
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton(text="Admin Panel", web_app=WebAppInfo(url=WEBAPP_BASE))
-        ]]),
-    )
+    await update.effective_message.reply_text("Admin Panel - Daily activities")
 
 
 # Kept so the earlier handler name still resolves.
