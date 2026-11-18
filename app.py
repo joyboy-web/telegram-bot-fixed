@@ -601,6 +601,22 @@ def _auth_user_or_none():
     return user
 
 
+def _sync_username(telegram_id, username):
+    """
+    Keeps users.username current. DISPLAY-ONLY: telegram_id is the permanent key
+    and is the only thing any lookup uses. Never raises.
+    """
+    try:
+        (
+            supabase.table("users")
+            .update({"username": username or ""})
+            .eq("telegram_id", int(telegram_id))
+            .execute()
+        )
+    except Exception:
+        logging.warning("_sync_username: skipped for telegram_id=%s", telegram_id, exc_info=True)
+
+
 def _banned_response(user):
     if user.get("banned"):
         return jsonify({"error": "Account temporarily banned", "code": "ACCOUNT_BANNED"}), 403
@@ -748,6 +764,15 @@ def _find_product(key, mode="any", include_hidden=False):
         _ensure_code(row)
         return _normalize_product(row)
     return None
+
+
+def _fresh_product(product_id):
+    """One product read straight from the database (hidden ones included). None on any failure."""
+    try:
+        return _find_product(product_id, mode="any", include_hidden=True)
+    except Exception:
+        logging.warning("_fresh_product: lookup failed for %s", product_id, exc_info=True)
+        return None
 
 
 MAX_EXTRA_IMAGES = 3
@@ -1520,6 +1545,10 @@ def auth_validate():
     if user and user.get("deleted_at"):
         return jsonify(error="Account deleted", code="ACCOUNT_DELETED"), 403
 
+    # Every WebApp open: refresh the display username (telegram_id stays the key).
+    _sync_username(user["telegram_id"], tg_user.get("username"))
+    user["username"] = tg_user.get("username") or ""
+
     _handle_referral(user, init_data)
 
     body = {
@@ -1553,6 +1582,8 @@ PRODUCT_PUBLIC_COLUMNS = (
 def products_list():
     # Explicit columns only. Never select("*"), never reference is_public.
     # Hidden products (deleted sellers, owner-hidden, banned) are excluded via is_hidden.
+    # Always read straight from the database: no server-side cache (and the
+    # after_request hook below sends Cache-Control: no-store for these GETs).
 
     # ?code=XXXX -> a single product (deep link)
     code = (request.args.get("code") or "").strip()
@@ -1576,7 +1607,9 @@ def products_list():
                 .limit(200)
                 .execute()
             ))
+            boost_meta = _renew_expired_boosts(rows)  # auto-reboost (lazy); never raises
             products = [_normalize_product(r) for r in rows]
+            _attach_boost_info(products, boost_meta)  # auto_reboost, boost_days, boost_text
             _attach_event_counts(products)  # adds views / clicks to each product
             return jsonify({"products": products}), 200
         except Exception:
@@ -1592,6 +1625,7 @@ def products_list():
             .limit(200)
             .execute()
         ))
+        _renew_expired_boosts(rows)  # auto-reboost (lazy); never raises
         backfilled = 0
         for r in rows:  # old products get a code gradually (25 per request)
             if "code" in r and not r.get("code") and backfilled < 25:
@@ -1804,7 +1838,16 @@ def products_create(user):
     except Exception:
         logging.warning("products_create: extra images skipped for telegram_id=%s", tid, exc_info=True)
 
-    return jsonify({"product": rows[0] if rows else insert_payload}), 201
+    # The insert is already committed (PostgREST autocommit). Hand back the product
+    # re-read from the database, merged over the inserted row so no key is lost.
+    created = rows[0] if rows else None
+    if created and created.get("id") is not None:
+        fresh = _fresh_product(created["id"])
+        if fresh:
+            merged = dict(created)
+            merged.update(fresh)
+            created = merged
+    return jsonify({"product": created if created else insert_payload}), 201
 
 
 # =============================================================================
@@ -2140,6 +2183,32 @@ def _paystack_post(path, payload):
     return ps_res.status_code, body
 
 
+def _notify_withdrawal(telegram_id, amount_kobo, bank_name, account_number, reference, status):
+    """
+    Texts the user (Telegram Bot API) that a withdrawal was placed. Called only
+    AFTER Paystack accepted the transfer. Never raises and never affects the payout.
+    The account number is masked.
+    """
+    try:
+        if not BOT_TOKEN:
+            return
+        masked = "****" + str(account_number or "")[-4:]
+        text = (
+            "Withdrawal placed\n"
+            f"Amount: NGN {format(int(amount_kobo) / 100, ',.2f')}\n"
+            f"To: {bank_name or 'Bank'} {masked}\n"
+            f"Status: {status}\n"
+            f"Ref: {reference}"
+        )
+        requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={"chat_id": int(telegram_id), "text": text},
+            timeout=10,
+        )
+    except Exception:
+        logging.warning("_notify_withdrawal: could not text telegram_id=%s", telegram_id, exc_info=True)
+
+
 def _get_recipient_code(tid, bank_code, account_number, account_name):
     """
     Returns a Paystack transfer recipient_code for this user + account, reusing
@@ -2352,6 +2421,9 @@ def wallet_withdraw(user):
     except Exception:
         logging.exception("wallet_withdraw: could not update withdrawal status for %s", reference)
 
+    # Text the user that the withdrawal was placed (never affects the payout).
+    _notify_withdrawal(tid, amount_kobo, bank_name, account_number, reference, transfer_status)
+
     return jsonify({
         "status": "success",
         "reference": reference,
@@ -2504,9 +2576,10 @@ def wallet_buy(user, product_id):
                 .eq("reference", boost_ref).limit(1).execute()
             ).data
             if not already:
+                # type "debit" so Transaction History shows it as Boost fee -N85.00
                 supabase.table("wallet_transactions").insert({
                     "user_id": seller_id_int,
-                    "type": "boost_fee",
+                    "type": "debit",
                     "amount_kobo": boost_fee,
                     "reason": "boost_fee",
                     "reference": boost_ref,
@@ -3116,7 +3189,7 @@ def toggle_visibility(user):
     except Exception:
         logging.exception("toggle_visibility: update failed for product %s", product_id)
         return jsonify({"error": "Could not update visibility"}), 500
-    return jsonify({"ok": True, "visible": visible}), 200
+    return jsonify({"ok": True, "visible": visible, "product": _fresh_product(rows[0]["id"])}), 200
 
 
 @app.route("/api/analytics", methods=["GET"])
@@ -3148,75 +3221,295 @@ def analytics(user):
     }}), 200
 
 
-# DEPRECATED: the app now boosts through POST /api/products/<id>/boost (flag only, no
-# up-front fee; the per-sale boost fee is taken in wallet_buy). Kept so older clients still work.
-@app.route("/api/boost", methods=["POST"])
-@require_auth
-@limiter.limit("10 per minute")
-def boost_product(user):
+# ---- boost: NGN 85 per purchase (taken in wallet_buy), NOTHING charged up front ----
+# Duration 1 / 2 / 3 days (default 1, max 3). Max 3 active boosted products, max 5
+# boosts per week, 1 hour cooldown before re-boosting the same product.
+# Optional additive schema (guarded; see the SQL note delivered with this file):
+#   products.boost_days int, products.auto_reboost bool,
+#   table boost_log(id, product_id text, seller_id bigint, days int, kind text, created_at timestamptz)
+
+BOOST_ALLOWED_DAYS = (1, 2, 3)
+BOOST_DEFAULT_DAYS = 1
+BOOST_MAX_DAYS = 3
+BOOST_MAX_ACTIVE = 3
+BOOST_MAX_PER_WEEK = 5
+BOOST_COOLDOWN_MINUTES = 60
+_LAGOS_TZ = timezone(timedelta(hours=1))
+
+
+def _boost_days_from(value):
+    """1 / 2 / 3 -> int. Missing -> 1. Anything else -> None."""
+    if value in (None, ""):
+        return BOOST_DEFAULT_DAYS
+    try:
+        days = int(value)
+    except (TypeError, ValueError):
+        return None
+    return days if days in BOOST_ALLOWED_DAYS else None
+
+
+def _boost_text(until, auto):
+    """'Boosted until 21 Nov 2026 - Extend - Auto-Reboost ON' (Lagos date)."""
+    if not until:
+        return None
+    local = until.astimezone(_LAGOS_TZ)
+    return f"Boosted until {local.day} {local.strftime('%b %Y')} - Extend - Auto-Reboost {'ON' if auto else 'OFF'}"
+
+
+def _boost_meta(ids):
+    """{product_id: {auto_reboost, boost_days}}. {} when the optional columns are not migrated."""
+    meta = {}
+    try:
+        for chunk in _in_chunks([str(i) for i in ids], 100):
+            for r in (
+                supabase.table("products").select("id,auto_reboost,boost_days")
+                .in_("id", chunk).execute()
+            ).data or []:
+                meta[str(r["id"])] = r
+    except Exception:
+        logging.info("_boost_meta: auto_reboost / boost_days columns not available")
+        return {}
+    return meta
+
+
+def _boosts_this_week(seller_id):
+    """Boost actions by this seller in the last 7 days. None if boost_log is unavailable (callers fail open)."""
+    try:
+        since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        res = (
+            supabase.table("boost_log").select("id", count="exact")
+            .eq("seller_id", int(seller_id)).gte("created_at", since).execute()
+        )
+        return int(res.count or 0)
+    except Exception:
+        logging.info("_boosts_this_week: boost_log not available, weekly limit not enforced")
+        return None
+
+
+def _log_boost(product_id, seller_id, days, kind):
+    try:
+        supabase.table("boost_log").insert({
+            "product_id": str(product_id),
+            "seller_id": int(seller_id),
+            "days": int(days),
+            "kind": kind,
+            "created_at": _now_iso(),
+        }).execute()
+    except Exception:
+        logging.info("_log_boost: boost_log not available, boost not logged")
+
+
+def _active_boost_count(seller_id, exclude_id=None):
+    """Visible, currently boosted listings of this seller (raises on a database error)."""
+    rows = _fetch_all(lambda a, b: (
+        supabase.table("products").select("id,is_hidden,is_boosted,boosted_until")
+        .eq("seller_id", str(seller_id)).order("id").range(a, b)
+    ))
+    return sum(
+        1 for r in rows
+        if not r.get("is_hidden") and _boost_active(r) and str(r.get("id")) != str(exclude_id)
+    )
+
+
+def _renew_expired_boosts(rows):
+    """
+    Auto-Reboost, run lazily whenever listings are read (there is no background
+    job). For each product whose boost has ended and whose auto_reboost is ON and
+    which is still in stock (visible), the SAME duration is applied again, as long
+    as the weekly limit allows. Mutates the row dicts (boosted_until / is_boosted)
+    and returns {product_id: meta} for the products it looked at. Never raises.
+    """
+    try:
+        cands = [r for r in rows if r.get("id") is not None and (r.get("is_boosted") or r.get("boosted_until"))]
+        if not cands:
+            return {}
+        meta = _boost_meta([r["id"] for r in cands])
+        now = datetime.now(timezone.utc)
+        for r in cands:
+            m = meta.get(str(r["id"])) or {}
+            until = _parse_ts(r.get("boosted_until"))
+            if not m.get("auto_reboost") or not until or until > now:
+                continue
+            if r.get("is_hidden"):
+                continue  # not in stock: the boost simply ends
+            try:
+                seller = int(r.get("seller_id"))
+            except (TypeError, ValueError):
+                continue
+            used = _boosts_this_week(seller)
+            if used is not None and used >= BOOST_MAX_PER_WEEK:
+                continue
+            days = m.get("boost_days") if m.get("boost_days") in BOOST_ALLOWED_DAYS else BOOST_DEFAULT_DAYS
+            new_until = (now + timedelta(days=days)).isoformat()
+            try:
+                upd = (
+                    supabase.table("products")
+                    .update({"is_boosted": True, "boosted_until": new_until})
+                    .eq("id", r["id"])
+                    .eq("boosted_until", r.get("boosted_until"))  # compare-and-set: renew once
+                    .execute()
+                )
+            except Exception:
+                logging.warning("_renew_expired_boosts: update failed for %s", r.get("id"), exc_info=True)
+                continue
+            if not upd.data:
+                continue
+            r["is_boosted"] = True
+            r["boosted_until"] = new_until
+            _log_boost(r["id"], seller, days, "auto")
+        return meta
+    except Exception:
+        logging.warning("_renew_expired_boosts: skipped", exc_info=True)
+        return {}
+
+
+def _attach_boost_info(products, meta):
+    """Adds auto_reboost, boost_days and boost_text to each (normalized) product. Never raises."""
+    for p in products:
+        try:
+            m = (meta or {}).get(str(p.get("id"))) or {}
+            auto = bool(m.get("auto_reboost"))
+            p["auto_reboost"] = auto
+            p["boost_days"] = m.get("boost_days") or BOOST_DEFAULT_DAYS
+            p["boost_text"] = _boost_text(_parse_ts(p.get("boosted_until")), auto) if p.get("is_boosted") else None
+        except Exception:
+            logging.warning("_attach_boost_info: skipped one product", exc_info=True)
+
+
+def _boost_core(user, product_id, data):
+    """Shared by POST /api/products/<id>/boost and the legacy POST /api/boost. No fee is charged here."""
     tid = user["telegram_id"]
     blocked = _banned_response(user)
     if blocked:
         return blocked
-    data = request.get_json(silent=True) or {}
-    product_id = str(data.get("product_id") or "").strip()
-    if not product_id:
+
+    pid = str(product_id or "").strip()
+    if not pid:
         return jsonify({"error": "product_id required"}), 400
+
+    raw_days = data.get("days")
+    if raw_days in (None, ""):
+        raw_days = data.get("duration")
+    days = _boost_days_from(raw_days)
+    if days is None:
+        return jsonify({"error": "days must be 1, 2 or 3", "code": "INVALID_DURATION"}), 400
+    auto = _as_bool(data.get("auto_reboost"))
 
     try:
         rows = (
-            supabase.table("products")
-            .select("id,seller_id,owner_id,is_hidden,is_boosted,boosted_until")
-            .eq("id", product_id).limit(1).execute()
+            supabase.table("products").select("id,seller_id,owner_id,is_hidden,is_boosted,boosted_until")
+            .eq("id", pid).limit(1).execute()
         ).data or []
     except Exception as exc:
-        return _db_error(exc, "boost_product: product lookup failed")
+        return _db_error(exc, "product_boost: product lookup failed")
     if not rows:
         return jsonify({"error": "Product not found", "code": "PRODUCT_NOT_FOUND"}), 404
     prod = rows[0]
     if not _owns_product(prod, tid):
         return jsonify({"error": "Forbidden"}), 403
+
+    try:
+        accepted = bool(_settings_get_row(tid).get("has_accepted_boosting_terms"))
+    except Exception as exc:
+        return _db_error(exc, "product_boost: terms lookup failed")
+    if not accepted:
+        return jsonify({
+            "error": "Accept the Boosting Terms first",
+            "code": "BOOST_TERMS_REQUIRED",
+        }), 403
+
     if prod.get("is_hidden"):
         return jsonify({"error": "Make the product visible before boosting it"}), 400
-    if _boost_active(prod):
-        return jsonify({"error": "This product is already boosted", "code": "ALREADY_BOOSTED"}), 409
 
-    balance = int(user.get("balance_kobo") or 0)
-    if balance < BOOST_FEE_KOBO:
-        return jsonify({"error": "Insufficient balance for the ₦500 boost fee", "code": "INSUFFICIENT_BALANCE"}), 400
+    now = datetime.now(timezone.utc)
+    active = _boost_active(prod)
+    until_old = _parse_ts(prod.get("boosted_until"))
 
-    debit = (
-        supabase.table("users")
-        .update({"balance_kobo": balance - BOOST_FEE_KOBO})
-        .eq("telegram_id", tid)
-        .eq("balance_kobo", balance)
-        .execute()
-    )
-    if not debit.data:
-        return jsonify({"error": "Balance changed, please retry"}), 409
+    # 1 hour cooldown before RE-boosting a product whose boost has just ended.
+    if not active and until_old and (now - until_old) < timedelta(minutes=BOOST_COOLDOWN_MINUTES):
+        wait = int(math.ceil(BOOST_COOLDOWN_MINUTES * 60 - (now - until_old).total_seconds()))
+        return jsonify({
+            "error": "Please wait before boosting this product again",
+            "code": "BOOST_COOLDOWN",
+            "retry_after": wait,
+        }), 429
 
-    reference = "BST-" + uuid.uuid4().hex[:20]
-    until = (datetime.now(timezone.utc) + timedelta(hours=BOOST_HOURS)).isoformat()
+    # Max 5 boosts per week (fails open if boost_log is not created yet).
+    used = _boosts_this_week(tid)
+    if used is not None and used >= BOOST_MAX_PER_WEEK:
+        return jsonify({
+            "error": "Weekly boost limit reached (5 per week)",
+            "code": "BOOST_LIMIT_WEEKLY",
+        }), 429
+
+    # Max 3 active boosted products (extending one that is already active does not count again).
+    if not active:
+        try:
+            current = _active_boost_count(tid, exclude_id=prod["id"])
+        except Exception as exc:
+            return _db_error(exc, "product_boost: active count failed")
+        if current >= BOOST_MAX_ACTIVE:
+            return jsonify({
+                "error": "You can have at most 3 active boosted products",
+                "code": "BOOST_LIMIT_ACTIVE",
+            }), 409
+
+    # Duration: 1 / 2 / 3 days, never more than 3 days from now in total.
+    running = active and until_old and until_old > now
+    base = until_old if running else now
+    new_until = min(base + timedelta(days=days), now + timedelta(days=BOOST_MAX_DAYS))
+    if running and new_until <= until_old:
+        return jsonify({
+            "error": "This boost is already at the 3-day maximum",
+            "code": "BOOST_MAX_DURATION",
+        }), 400
+
+    fields = {"is_boosted": True, "boosted_until": new_until.isoformat()}
+    extras = {"boost_days": days}
+    if auto is not None:
+        extras["auto_reboost"] = auto
+    saved_extras = True
     try:
-        supabase.table("wallet_transactions").insert({
-            "user_id": tid,
-            "type": "debit",
-            "amount_kobo": BOOST_FEE_KOBO,
-            "reason": "boost_fee",
-            "reference": reference,
-        }).execute()
-        supabase.table("products").update({"is_boosted": True, "boosted_until": until}).eq("id", prod["id"]).execute()
+        try:
+            supabase.table("products").update({**fields, **extras}).eq("id", prod["id"]).execute()
+        except Exception as exc:
+            if not _is_schema_missing(exc):
+                raise
+            saved_extras = False  # boost_days / auto_reboost not migrated: boost still works
+            supabase.table("products").update(fields).eq("id", prod["id"]).execute()
     except Exception as exc:
-        try:
-            _credit_balance(tid, BOOST_FEE_KOBO)
-        except Exception:
-            logging.exception("boost_product: CRITICAL balance revert failed for telegram_id=%s", tid)
-        try:
-            supabase.table("wallet_transactions").delete().eq("reference", reference).execute()
-        except Exception:
-            logging.exception("boost_product: could not remove orphan transaction %s", reference)
-        return _db_error(exc, "boost_product: failed after debit, fee refunded")
-    return jsonify({"ok": True, "boosted_until": until, "fee_kobo": BOOST_FEE_KOBO}), 200
+        return _db_error(exc, "product_boost: update failed")
+
+    _log_boost(prod["id"], tid, days, "extend" if running else "boost")
+
+    auto_now = False
+    if saved_extras:
+        if auto is not None:
+            auto_now = auto
+        else:
+            auto_now = bool((_boost_meta([prod["id"]]).get(str(prod["id"])) or {}).get("auto_reboost"))
+
+    return jsonify({
+        "ok": True,
+        "is_boosted": True,
+        "boosted_until": new_until.isoformat(),
+        "boost_days": days,
+        "auto_reboost": auto_now,
+        "boost_text": _boost_text(new_until, auto_now),
+        "fee_per_sale_kobo": BOOST_PER_SALE_FEE_KOBO,
+        "product": _fresh_product(prod["id"]),
+    }), 200
+
+
+# DEPRECATED: kept so older clients still work. It no longer charges anything up
+# front: it now runs the same logic as POST /api/products/<id>/boost
+# (N85 is taken per purchase in wallet_buy).
+@app.route("/api/boost", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def boost_product(user):
+    data = request.get_json(silent=True) or {}
+    return _boost_core(user, data.get("product_id"), data)
 
 
 # =============================================================================
@@ -4379,28 +4672,44 @@ def product_visibility(user, product_id):
     except Exception:
         logging.exception("product_visibility: update failed for product %s", pid)
         return jsonify({"error": "Could not update visibility"}), 500
-    return jsonify({"ok": True, "visible": visible}), 200
+    return jsonify({"ok": True, "visible": visible, "product": _fresh_product(rows[0]["id"])}), 200
 
 
-# ---- POST /api/products/<id>/boost (flag only: NO fee is charged here) -------
+# ---- POST /api/products/<id>/boost (NO fee here: N85 is taken per purchase) ----
 
 @app.route("/api/products/<product_id>/boost", methods=["POST"])
 @require_auth
 @limiter.limit("10 per minute")
 def product_boost(user, product_id):
+    data = request.get_json(silent=True) or {}
+    return _boost_core(user, product_id, data)
+
+
+# ---- POST /api/products/<id>/auto-reboost ------------------------------------
+
+@app.route("/api/products/<product_id>/auto-reboost", methods=["POST"])
+@require_auth
+@limiter.limit("30 per minute")
+def product_auto_reboost(user, product_id):
     tid = user["telegram_id"]
     blocked = _banned_response(user)
     if blocked:
         return blocked
+    data = request.get_json(silent=True) or {}
+    enabled = _as_bool(data.get("enabled"))
+    if enabled is None:
+        enabled = _as_bool(data.get("auto_reboost"))
+    if enabled is None:
+        return jsonify({"error": "enabled (true/false) is required"}), 400
 
     pid = str(product_id or "").strip()
     try:
         rows = (
-            supabase.table("products").select("id,seller_id,owner_id,is_hidden,is_boosted")
+            supabase.table("products").select("id,seller_id,owner_id,is_boosted,boosted_until")
             .eq("id", pid).limit(1).execute()
         ).data or []
     except Exception as exc:
-        return _db_error(exc, "product_boost: product lookup failed")
+        return _db_error(exc, "product_auto_reboost: lookup failed")
     if not rows:
         return jsonify({"error": "Product not found", "code": "PRODUCT_NOT_FOUND"}), 404
     prod = rows[0]
@@ -4408,24 +4717,16 @@ def product_boost(user, product_id):
         return jsonify({"error": "Forbidden"}), 403
 
     try:
-        accepted = bool(_settings_get_row(tid).get("has_accepted_boosting_terms"))
+        supabase.table("products").update({"auto_reboost": enabled}).eq("id", prod["id"]).execute()
     except Exception as exc:
-        return _db_error(exc, "product_boost: terms lookup failed")
-    if not accepted:
-        return jsonify({
-            "error": "Accept the Boosting Terms first",
-            "code": "BOOST_TERMS_REQUIRED",
-        }), 403
+        return _db_error(exc, "product_auto_reboost: update failed")  # column missing -> 501
 
-    if prod.get("is_hidden"):
-        return jsonify({"error": "Make the product visible before boosting it"}), 400
-
-    try:
-        # boosted_until MUST be cleared: _boost_active() trusts an old (expired) boosted_until over is_boosted.
-        supabase.table("products").update({"is_boosted": True, "boosted_until": None}).eq("id", prod["id"]).execute()
-    except Exception as exc:
-        return _db_error(exc, "product_boost: update failed")
-    return jsonify({"ok": True, "is_boosted": True}), 200
+    until = _parse_ts(prod.get("boosted_until"))
+    return jsonify({
+        "ok": True,
+        "auto_reboost": enabled,
+        "boost_text": _boost_text(until, enabled) if _boost_active(prod) and until else None,
+    }), 200
 
 
 # ---- DELETE /api/products/<id> -----------------------------------------------
@@ -4840,16 +5141,28 @@ def handle_500(e):
     return jsonify({"error": "Internal server error"}), 500
 
 
+@app.after_request
+def _no_store_for_listings(resp):
+    """Marketplace / Active Listings must always be read fresh: never cached by a browser or proxy."""
+    try:
+        if request.method == "GET" and request.path.startswith("/api/products"):
+            resp.headers["Cache-Control"] = "no-store, max-age=0"
+    except Exception:
+        pass
+    return resp
+
+
 # =============================================================================
 # Telegram bot (webhook mode) — thin handlers, no business logic
 # =============================================================================
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram import BotCommand, BotCommandScopeChat
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 import asyncio
 
 _WELCOME_TEXT = "Welcome to PayLock — Sell, buy and get paid safely with escrow."
+_WELCOME_BACK_TEXT = "Welcome back! Tap Open PayLock below."
 
 
 def _app_link(startapp=None):
@@ -4880,20 +5193,47 @@ def _open_button(startapp=None):
     return None
 
 
+def _product_button(product):
+    """
+    'Open PayLock' button for a product deep link: opens index.html?product=<id>
+    (the page scrolls to that product). Falls back to the t.me startapp=prod_<code>
+    link when WEBAPP_URL is not set, then to the plain button.
+    """
+    pid = re.sub(r"[^A-Za-z0-9_-]", "", str((product or {}).get("id") or ""))
+    if WEBAPP_URL and pid:
+        url = f"{WEBAPP_URL}/?product={pid}"
+        return InlineKeyboardMarkup([[InlineKeyboardButton("Open PayLock", web_app=WebAppInfo(url=url))]])
+    code = (product or {}).get("code")
+    return (_open_button(f"prod_{code}") if code else None) or _open_button()
+
+
 async def _bot_start(update, context):
     if update.message is None:
         return
+    if update.effective_user is not None:  # keep the display username current (telegram_id is the key)
+        _sync_username(update.effective_user.id, update.effective_user.username)
     kb = _open_button()
     text = _WELCOME_TEXT
     try:
         arg = str((context.args or [""])[0] or "").strip()[:64]
         if arg:
             m_ref = re.fullmatch(r"(?:ref|inv)_(\d{1,15})", arg, flags=re.IGNORECASE)
+            m_product = re.fullmatch(r"product_([A-Za-z0-9-]{1,40})", arg, flags=re.IGNORECASE)
             m_prod = re.fullmatch(r"prod_([A-Za-z0-9]{1,12})", arg, flags=re.IGNORECASE)
             m_code = re.fullmatch(r"[A-Za-z0-9]{6}", arg)
             if m_ref:
                 text = _WELCOME_TEXT + "\n\nYou were invited to PayLock. Tap below to get started."
                 kb = _open_button(f"ref_{m_ref.group(1)}") or _open_button()  # startapp=ref_<id>
+            elif m_product:
+                # /start product_123 -> index.html?product=123 (id or code)
+                product = _find_product(m_product.group(1), mode="any")
+                if product:
+                    name = product.get("name") or product.get("title") or "Product"
+                    price = "NGN " + format(int(product.get("price_kobo") or 0) / 100, ",.2f")
+                    text = _WELCOME_TEXT + f"\n\n{name}\nPrice: {price}"
+                    kb = _product_button(product)
+                else:
+                    text = _WELCOME_TEXT + "\n\nProduct not found."
             elif m_prod or m_code:
                 code = (m_prod.group(1) if m_prod else arg).upper()
                 product = _find_product("prod_" + code, mode="code")
@@ -4901,7 +5241,7 @@ async def _bot_start(update, context):
                     name = product.get("name") or product.get("title") or "Product"
                     price = "NGN " + format(int(product.get("price_kobo") or 0) / 100, ",.2f")
                     text = _WELCOME_TEXT + f"\n\n{name}\nPrice: {price}"
-                    kb = _open_button(f"prod_{product.get('code') or code}") or _open_button()  # startapp=prod_<code>
+                    kb = _product_button(product)
                 else:
                     text = _WELCOME_TEXT + "\n\nProduct not found."
             # any other arg: plain welcome, no crash
@@ -4918,7 +5258,8 @@ async def _bot_support(update, context):
     if not text or update.effective_user is None:
         await update.message.reply_text(
             "Support: send /support followed by your issue, e.g. /support I need help with my order. "
-            "Include your Order ID / Reference for orders. Our team will reply."
+            "Include your Order ID / Reference for orders. Our team will reply.",
+            reply_markup=_open_button(),
         )
         return
     try:
@@ -4926,15 +5267,22 @@ async def _bot_support(update, context):
     except Exception as exc:
         if _is_schema_missing(exc):
             logging.warning("_bot_support: support_tickets not ready (%s)", exc)
-            await update.message.reply_text("Support tickets are not available yet. Please try again later.")
+            await update.message.reply_text(
+                "Support tickets are not available yet. Please try again later.",
+                reply_markup=_open_button(),
+            )
         else:
             logging.exception("_bot_support: ticket save failed")
-            await update.message.reply_text("Could not save your ticket right now. Please try again.")
+            await update.message.reply_text(
+                "Could not save your ticket right now. Please try again.",
+                reply_markup=_open_button(),
+            )
         return
     ref = ticket.get("id") if isinstance(ticket, dict) else None
     await update.message.reply_text(
         "Your support ticket has been received" + (f" (#{ref})" if ref is not None else "") +
-        ". Our team will reply."
+        ". Our team will reply.",
+        reply_markup=_open_button(),
     )
 
 
@@ -4942,8 +5290,33 @@ async def _bot_balance(update, context):
     await update.message.reply_text("Open PayLock to see your balance:", reply_markup=_open_button())
 
 
+async def _bot_wallet(update, context):
+    if update.message is None:
+        return
+    await update.message.reply_text("Open PayLock to see your wallet:", reply_markup=_open_button())
+
+
+async def _bot_orders(update, context):
+    if update.message is None:
+        return
+    await update.message.reply_text("Open PayLock to see your orders:", reply_markup=_open_button())
+
+
 async def _bot_help(update, context):
-    await update.message.reply_text("/start - Open PayLock\n/support - Contact support\n/balance - Check balance\n/help - Show this")
+    if update.message is None:
+        return
+    await update.message.reply_text(
+        "/start - Open PayLock\n/wallet - Your wallet\n/orders - Your orders\n"
+        "/support - Contact support\n/balance - Check balance\n/help - Show this",
+        reply_markup=_open_button(),
+    )
+
+
+async def _bot_fallback(update, context):
+    """Any other text or unknown command: same keyboard as /start, never a dead end."""
+    if update.message is None:
+        return
+    await update.message.reply_text(_WELCOME_BACK_TEXT, reply_markup=_open_button())
 
 
 async def _bot_admin(update, context):
@@ -4972,8 +5345,12 @@ def _get_bot_app():
     app_bot.add_handler(CommandHandler("start", _bot_start))
     app_bot.add_handler(CommandHandler("support", _bot_support))
     app_bot.add_handler(CommandHandler("balance", _bot_balance))
+    app_bot.add_handler(CommandHandler("wallet", _bot_wallet))
+    app_bot.add_handler(CommandHandler("orders", _bot_orders))
     app_bot.add_handler(CommandHandler("help", _bot_help))
     app_bot.add_handler(CommandHandler("admin", _bot_admin))
+    # Last: catches any other text / unknown command (the first matching handler wins).
+    app_bot.add_handler(MessageHandler(filters.TEXT, _bot_fallback))
     return app_bot
 
 # One coroutine per request: a single asyncio.run() keeps the bot's HTTP client
@@ -4989,6 +5366,8 @@ async def _process_telegram_update(data):
 
 _PUBLIC_BOT_COMMANDS = [
     BotCommand("start", "Open PayLock"),
+    BotCommand("wallet", "Your wallet"),
+    BotCommand("orders", "Your orders"),
     BotCommand("support", "Contact support"),
     BotCommand("balance", "Check balance"),
     BotCommand("help", "Show help"),
