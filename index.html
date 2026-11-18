@@ -493,6 +493,57 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
 .badge.b-ok{background:transparent;border:1px solid var(--ink);color:var(--ink);text-transform:capitalize}
 .badge.b-fail{background:var(--ink);color:var(--bg);text-transform:capitalize}
 .payload{white-space:pre-wrap;word-break:break-all;background:var(--chip);border-radius:12px;padding:12px;font-size:12px;max-height:50vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin:0}
+
+/* ===== PATCH: items 2, 6, 7, 9, 10, 11 ===== */
+:root{--gold:#D4AF37;--gold-dk:#7A5C10;--tick:#8E8E93;--purple:#8B5CF6}
+
+/* 2: support bubbles */
+#support-thread{gap:4px}
+.sup-b{display:flex;flex-direction:column;gap:4px;max-width:78%;min-width:0;padding:8px 10px 6px 10px;border-radius:14px;font-size:14px;line-height:1.4;word-break:break-word}
+.sup-me{align-self:flex-end;background:var(--ink);color:var(--bg);border-bottom-right-radius:4px}
+.sup-them{align-self:flex-start;background:var(--chip);color:var(--ink);border-bottom-left-radius:4px}
+.sup-txt{white-space:pre-wrap}
+.sup-img{width:100%;border-radius:8px;display:block}
+.sup-q{border-left:4px solid var(--gold);border-radius:6px;padding:4px 8px;background:rgba(128,128,128,.15)}
+.sup-q.purple{border-left-color:var(--purple)}
+.sup-q-n{font-weight:700;font-size:12px}
+.sup-q-t{font-size:12.5px;opacity:.7;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sup-meta{align-self:flex-end;display:flex;align-items:center;gap:3px}
+.sup-time{font-size:11px;color:var(--tick)}
+.sup-tick{display:block;flex:none;color:var(--tick)}
+.sup-tick.read{color:var(--gold)}
+.sup-bar{display:flex;align-items:center;gap:8px}
+.sup-bar .sup-pill{flex:1;min-width:0;height:48px;border-radius:24px;padding:0 16px}
+.sup-ic{flex:none;width:44px;height:44px;border-radius:50%;border:0;background:var(--chip);color:var(--ink);display:flex;align-items:center;justify-content:center;padding:0}
+.sup-bar .btn.sm{flex:none;height:44px;border-radius:22px;padding:0 16px}
+
+/* 6 + 11: professional toggle card (52x30) */
+.card.pc-card{padding:0}
+.pc-card .toggle-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px!important;margin:0!important}
+.pc-card .toggle-row>div:first-child{min-width:0;flex:1}
+.tg-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px}
+.tg-t{font-weight:700;font-size:14.5px;min-width:0}
+.pc-card .toggle,.tg-card .toggle{width:52px;height:30px;flex:none}
+.pc-card .toggle::after,.tg-card .toggle::after{width:24px;height:24px;top:3px;left:3px}
+.pc-card .toggle.on::after,.tg-card .toggle.on::after{left:25px}
+
+/* 7 */
+.twofa-txt{white-space:normal;word-break:normal;line-height:1.5}
+
+/* 9: headers, avatars, list row */
+#chat-head,.fx-head{gap:10px}
+#chat-head .back-btn,.fx-head .back-btn{width:48px;height:48px;padding:0;margin:0;flex:none;display:flex;align-items:center;justify-content:center;font-size:20px}
+#chat-head .chat-head-name,.fx-head .chat-head-name{font-size:17px;font-weight:700}
+#chat-head .chat-head-sub,.fx-head .chat-head-sub{font-size:13px}
+.chat-head-txt{cursor:pointer}
+.fx-avwrap{flex:none;display:flex;cursor:pointer}
+.fx-av{border-radius:50%;background:var(--gold);color:#000;display:flex;align-items:center;justify-content:center;flex:none}
+.fx-av.fx-init{background:var(--gold-dk);color:#FFE08A;font-weight:800}
+.fx-av.fx-system{background:#16A34A;color:#fff}
+.fx-dots{flex:none;width:40px;height:40px;border-radius:50%;border:0;padding:0;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center}
+.chat-av.init{background:var(--gold-dk);color:#FFE08A}
+.chat-row .chat-badge{background:var(--gold);color:#000}
+.fx-time-line{display:flex;align-items:center;gap:4px}
 </style>
 </head>
 <body>
@@ -724,22 +775,35 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
     <div id="chat-list"></div>
     <div id="chat-orders" style="display:none"></div>
     <div id="chat-support" style="display:none">
-      <button class="back-btn" type="button" id="support-back">‹ Back</button>
+      <div class="chat-head fx-head" id="support-head">
+        <button class="back-btn" type="button" id="support-back" aria-label="Back to chats">‹</button>
+        <div class="fx-avwrap" id="sup-head-av"></div>
+        <div class="chat-head-txt" id="sup-head-txt">
+          <div class="chat-head-name">Support Chat</div>
+          <div class="chat-head-sub">Official PayLock support</div>
+        </div>
+        <button class="fx-dots" type="button" id="sup-head-dots" aria-label="Menu"></button>
+      </div>
       <div id="support-thread"></div>
-      <div class="chat-inputbar">
-        <input class="input" id="support-input" type="text" maxlength="1000" autocomplete="off" placeholder="Describe your issue">
-        <button class="btn sm" type="button" id="support-send">Send</button>
+      <div class="sup-bar">
+        <input class="input sup-pill" id="support-input" type="text" maxlength="1000" autocomplete="off" placeholder="Message...">
+        <button class="sup-ic" type="button" id="support-attach" aria-label="Attach"><svg class="i" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+        <button class="sup-ic" type="button" id="support-camera" aria-label="Camera"><svg class="i" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
+        <button class="btn sm" type="button" id="support-send" style="display:none">Send</button>
+        <input type="file" id="support-file" accept="image/*,application/pdf" hidden>
+        <input type="file" id="support-cam" accept="image/*" capture="environment" hidden>
       </div>
     </div>
     <div class="empty" id="chat-empty"><div class="big">No conversations yet</div></div>
     <div id="chat-room" style="display:contents"><div id="chat-root" style="display:none">
       <div class="chat-head" id="chat-head">
         <button class="back-btn" type="button" id="chat-back" aria-label="Back to chats">‹</button>
-        <svg class="chat-head-logo" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        <div class="fx-avwrap" id="chat-head-av"></div>
         <div class="chat-head-txt">
           <div class="chat-head-name">PayLock <svg width="16" height="16" viewBox="0 0 24 24" aria-label="Verified"><circle cx="12" cy="12" r="12" fill="currentColor"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="chat-head-sub">Escrow protected • Online</div>
         </div>
+        <button class="fx-dots" type="button" id="chat-head-dots" aria-label="Menu"></button>
       </div>
       <div id="chat-product"></div>
       <div id="chat-messages"></div>
@@ -858,12 +922,6 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
       <button class="row-link" type="button" id="support-btn"><span>Support Chat</span><span class="muted">›</span></button>
     </div>
 
-    <div class="danger-zone">
-      <div class="card-title">Danger zone</div>
-      <p class="muted small" style="margin-bottom:10px">Deleting your account is permanent and cannot be undone.</p>
-      <button class="btn danger" type="button" id="delete-account-btn" onclick="PayLock.openDeleteSheet()">Delete Account</button>
-    </div>
-
     <div class="footer-links">
       <button type="button" onclick="PayLock.goPage('pg-privacy')">Privacy</button>
       <button type="button" onclick="PayLock.goPage('pg-terms')">Terms</button>
@@ -898,6 +956,7 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
       <button class="chip" type="button" data-filter="purchase" onclick="PayLock.setTxFilter('purchase')">Purchase</button>
       <button class="chip" type="button" data-filter="sale" onclick="PayLock.setTxFilter('sale')">Sale</button>
     </div>
+    <button class="btn secondary sm" type="button" id="tx-download" style="margin-bottom:12px">Download CSV</button>
     <div class="card" style="padding:4px 16px">
       <div id="tx-list"></div>
       <div class="empty" id="tx-empty" style="display:none">No transactions</div>
@@ -1268,6 +1327,21 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
     </div>
     <p class="thint" id="bt-hint">Scroll to the bottom to enable Accept.</p>
     <button class="btn" type="button" id="bt-accept" disabled>Accept</button>
+
+    <div class="card" id="boost-auto-card" style="margin-top:14px">
+      <div class="card-title">Boost duration</div>
+      <div class="seg" id="boost-dur">
+        <button type="button" data-d="1" class="active">1 Day</button>
+        <button type="button" data-d="2">2 Days</button>
+        <button type="button" data-d="3">3 Days</button>
+      </div>
+    </div>
+    <div class="card tg-card" id="boost-auto-row">
+      <div class="tg-t">Auto-Reboost</div>
+      <button class="toggle" type="button" id="boost-auto-toggle" aria-label="Auto-Reboost"></button>
+    </div>
+    <div class="small" id="boost-status" style="margin-bottom:6px"></div>
+    <div class="small muted">Max 3 active boosts - 5 boosts/week</div>
   </section>
 
   <!-- ============ ADMIN PANEL (new; needs backend support) ============ -->
@@ -1513,7 +1587,7 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
     <button class="btn" type="button" id="listed-view">View Preview</button>
   </div>
 </div>
-<script>
+  <script>
 const PayLock = (function(){
 'use strict';
 
@@ -3700,6 +3774,7 @@ async function loadOrderChats(){
 /* ----- Support Chat profile: in-app tickets (POST/GET /api/support) ----- */
 const supportState = { tickets: [], off: false };
 function renderSupport(){
+  try { fxSupSync(); } catch (e) {}
   const box = $('support-thread');
   if (!box) return;
   clearNode(box);
@@ -3719,25 +3794,38 @@ function renderSupport(){
     const v = (m.message !== undefined && m.message !== null) ? m.message : m.text;
     return (v === undefined || v === null) ? '' : String(v).trim();
   };
-  const addUser = function(text){
-    box.appendChild(el('div', 'chat-msg chat-msg-user', text));
-  };
-  const addStaff = function(text, ts){
-    const d = el('div', 'chat-msg chat-msg-paylock');
-    d.appendChild(el('div', 'chat-msg-label', 'Support'));
-    d.appendChild(document.createTextNode(text));
+  const supBubble = function(mine, text, ts, status, m){
+    const d = el('div', 'sup-b ' + (mine ? 'sup-me' : 'sup-them'));
+    const q = m && (m.reply_to || m.quote);
+    if (q && typeof q === 'object' && (q.text || q.message)) {
+      const role = String(q.role || q.sender || '').toLowerCase();
+      const gold = /staff|support|paylock|admin/.test(role);
+      const qb = el('div', 'sup-q ' + (gold ? 'gold' : 'purple'));
+      qb.appendChild(el('div', 'sup-q-n', String(q.name || (gold ? 'PayLock' : 'You'))));
+      qb.appendChild(el('div', 'sup-q-t', String(q.text || q.message)));
+      d.appendChild(qb);
+    }
+    const img = m && (m.image_url || m.image);
+    if (typeof img === 'string' && img.indexOf('https://') === 0) {
+      const im = document.createElement('img');
+      im.className = 'sup-img'; im.alt = ''; im.loading = 'lazy'; im.src = img;
+      d.appendChild(im);
+    }
+    if (text) d.appendChild(el('div', 'sup-txt', text));
+    const meta = el('div', 'sup-meta');
+    meta.appendChild(el('span', 'sup-time', supTime(ts)));
+    if (mine) meta.appendChild(supTickEl(supTick(status)));
+    d.appendChild(meta);
     box.appendChild(d);
-    const meta = el('div', 'support-meta', fmtDate(ts));
-    meta.style.alignSelf = 'flex-start';
-    box.appendChild(meta);
   };
+  const addUser = function(text, ts, status, m){ supBubble(true, text, ts, status, m); };
+  const addStaff = function(text, ts, m){ supBubble(false, text, ts, '', m); };
   supportState.tickets.slice().reverse().forEach(function(t){
     try {
       if (!t || typeof t !== 'object') return;
       const own = textOf(t.message);
       const fallbackTs = t.reply_created_at || t.updated_at || t.created_at;
       const metaLine = function(){
-        box.appendChild(el('div', 'support-meta', String(t.status || 'pending') + ' · ' + fmtDate(t.created_at)));
       };
       // Shape: t.messages = both sides in order
       const thread = Array.isArray(t.messages) ? t.messages.filter(function(m){ return textOf(m); }) : [];
@@ -3747,16 +3835,15 @@ function renderSupport(){
           const role = String((m && (m.sender || m.role || m.sender_role)) || '').toLowerCase();
           const isUser = !!(m && m.is_mine === true) || !!USER_ROLES[role] || (!role && own && txt === own);
           if (isUser) {
-            addUser(txt);
-            box.appendChild(el('div', 'support-meta', (i === 0 ? String(t.status || 'pending') + ' · ' : '') + fmtDate((m && m.created_at) || t.created_at)));
+            addUser(txt, (m && m.created_at) || t.created_at, t.status, m);
           } else {
-            addStaff(txt, (m && m.created_at) || fallbackTs);
+            addStaff(txt, (m && m.created_at) || fallbackTs, m);
           }
         });
         return;
       }
       // Default: the user's own message + status + date (unchanged behaviour)
-      addUser(String(t.message || ''));
+      addUser(String(t.message || ''), t.created_at, (t.reply || t.admin_reply || t.response || (Array.isArray(t.replies) && t.replies.length)) ? 'read' : t.status, t);
       metaLine();
       // Staff replies: string fields and t.replies, de-duplicated, never an empty bubble
       const seen = {};
@@ -4516,14 +4603,20 @@ function renderBanBanner(){
   window.addEventListener('online', function(){
     hideOfflineBanner();
     const g = $('gate-offline');
-    if (g && g.classList.contains('show')) boot();   // came back while the offline gate was up
+    if (g && g.classList.contains('show')) { if (booted) hideGates(); else boot(); }   // back online: close the page
   });
   window.addEventListener('offline', function(){
-    if (!booted) showGate('offline');                // before boot: offline gate
-    else showOfflineBanner();                        // after boot: banner only, never a trap
+    showGate('offline');                             // premium offline page, before and after boot
   });
   const xs = $('xs-overlay');
   if (xs) xs.addEventListener('click', function(ev){ if (ev.target === xs) closeSheet(); });
+  // never raise a Telegram popup while offline
+  try {
+    if (tg) ['showPopup', 'showAlert', 'showConfirm'].forEach(function(k){
+      const f = tg[k];
+      if (typeof f === 'function') tg[k] = function(){ if (!navigator.onLine) return; return f.apply(tg, arguments); };
+    });
+  } catch (e) {}
 
   const sup = $('support-btn');
   if (sup) sup.addEventListener('click', goSupport);   // in-app Support Chat, no external link
@@ -4871,7 +4964,7 @@ function pcvClose(){ $('pcv-overlay').classList.remove('open'); pcvCb = null; }
 /* ===================== 1. SPLASH + APP LOCK ===================== */
 function b7Splash(){
   const s = $('splash');
-  if (!s) return;
+  if (!s || !(tg && tg.initData)) { if (s) s.classList.add('hide'); return; }
   setTimeout(function(){
     s.classList.add('open');                       // lock clicks open
     setTimeout(function(){
@@ -5263,21 +5356,22 @@ function b7ExpiryMs(){ return (Number(b7Load('chat_expiry_days', 3)) || 3) * 864
 function b7ChatAv(spec){
   if (spec.type === 'img') { const im = document.createElement('img'); im.className = 'chat-av'; im.alt = ''; im.loading = 'lazy'; im.src = spec.src; return im; }
   if (spec.type === 'init') return el('div', 'chat-av init', spec.text);
-  return el('div', 'chat-av blank');                      // PayLock Bot and Support: blank circle only
+  return fxAv('lock', 48);                                // PayLock Bot and Support: gold lock circle
 }
 function b7ChatRow(r){
   const row = el('div', 'chat-row');
   row.appendChild(b7ChatAv(r.av));
   const mid = el('div', 'mid');
-  const tl = el('div', 't-line');
-  tl.appendChild(el('div', 't', r.name));
-  tl.appendChild(el('div', 'chat-time', r.ts ? chatTime(r.ts) : ''));
-  mid.appendChild(tl);
-  const bl = el('div', 'b-line');
-  bl.appendChild(el('div', 's', r.preview));
-  if (r.unread > 0) bl.appendChild(el('div', 'chat-badge', String(r.unread > 99 ? '99+' : r.unread)));
-  mid.appendChild(bl);
+  mid.appendChild(el('div', 't', r.name));
+  mid.appendChild(el('div', 's', r.preview));
   row.appendChild(mid);
+  const meta = el('div', 'chat-meta');
+  const tl = el('div', 'fx-time-line');
+  tl.appendChild(el('div', 'chat-time', r.ts ? chatTime(r.ts) : ''));
+  if (r.tick) tl.appendChild(supTickEl(r.tick));
+  meta.appendChild(tl);
+  if (r.unread > 0) meta.appendChild(el('div', 'chat-badge', String(r.unread > 99 ? '99+' : r.unread)));
+  row.appendChild(meta);
   row.addEventListener('click', r.open);
   return row;
 }
@@ -5341,6 +5435,7 @@ function b7RenderChatList(){
     if (reply && sTs > Number(b7Load('support_seen', 0))) sUnread = 1;
   }
   rows.push({ name: 'Support Chat', av: { type: 'blank' }, ts: sTs, unread: sUnread, preview: sPrev,
+    tick: (t0 && !(t0.reply || t0.admin_reply || t0.response)) ? supTick(t0.status) : null,
     open: function(){ b7Save('support_seen', Date.now()); goSupport(); } });
   rows.sort(function(a, b){ return b.ts - a.ts; });       // last_message_at DESC: newest on top
   rows.forEach(function(r){ box.appendChild(b7ChatRow(r)); });
@@ -5710,6 +5805,7 @@ SD.language = { title: 'Language', sub: '', build: function(b){
 /* ---- B. SECURITY ---- */
 SD.passcode = { title: 'App Passcode', sub: 'Password only. One passcode locks the app, protects withdrawals and account actions.', build: function(b){
   const c = el('div', 'card');
+  c.className = 'card pc-card';
   c.appendChild(sdToggleRow('App Passcode', 'Ask for your passcode every time PayLock opens', pcOn(), function(v){
     sdRerender();                                   // keep the switch truthful until the action really succeeds
     if (v) { b7PasscodeStart('set'); return; }
@@ -5769,7 +5865,10 @@ SD.sessions = { title: 'Active Sessions', sub: 'Sign out of PayLock on every dev
 } };
 SD.twofa = { title: '2FA for Withdrawals', sub: 'Your passcode is asked again before every withdrawal.', build: function(b){
   const c = el('div', 'card');
-  c.appendChild(pvRow('Status', pcOn() ? 'On (passcode asked before withdraw)' : 'Off (turn on App Passcode)'));
+  const tw = el('div', 'twofa-txt');
+  tw.appendChild(el('div', null, 'Status: ' + (pcOn() ? 'ON' : 'OFF')));
+  tw.appendChild(el('div', 'small muted', pcOn() ? 'Passcode required before every withdrawal.' : 'Turn on App Passcode to require it before every withdrawal.'));
+  c.appendChild(tw);
   b.appendChild(c);
   if (!pcOn()) b.appendChild(sdBtn('Turn on App Passcode', function(){ b7PasscodeStart('set'); }));
 } };
@@ -6107,6 +6206,7 @@ function b7Init3(){
     copyText(String(state.telegram_id), 'UID copied');
   });
   $('bt-accept').addEventListener('click', b7BoostAccept);
+  fx8Init();
   // webhook logs: filters + search
   document.querySelectorAll('#wh-chips .chip').forEach(function(c){
     c.addEventListener('click', function(){
@@ -6386,6 +6486,156 @@ b7LoadSell = async function(){
     $('sell-an-revenue').textContent = nairaFmt(d.total_revenue_kobo || 0);
   } catch (e) {}
 };
+/* ===== PATCH: support bubbles, avatars, profile sheet, CSV, boost UI ===== */
+function supTime(ts){
+  const d = new Date(ts);
+  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+// Pending = clock, Sent = single tick, Delivered = double grey, Read = double gold. The word "pending" is never shown.
+function supTick(status){
+  const s = String(status || '').toLowerCase();
+  if (/read|resolved|closed|answered|replied/.test(s)) return 'read';
+  if (/deliver|open|seen|progress/.test(s)) return 'delivered';
+  if (/sent/.test(s)) return 'sent';
+  return 'pending';
+}
+function supTickEl(kind){
+  const dbl = (kind === 'delivered' || kind === 'read');
+  const s = b7Svg('svg', { viewBox: dbl ? '0 0 18 12' : '0 0 12 12', width: dbl ? '18' : '12', height: '12', fill: 'none',
+    stroke: 'currentColor', 'stroke-width': '1.6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+  s.setAttribute('class', 'sup-tick' + (kind === 'read' ? ' read' : ''));
+  if (kind === 'pending') {
+    s.appendChild(b7Svg('circle', { cx: '6', cy: '6', r: '4.8' }));
+    s.appendChild(b7Svg('path', { d: 'M6 3.5V6l1.8 1.1' }));
+  } else {
+    s.appendChild(b7Svg('path', { d: 'M2 6.5L5 9.5L10 2.5' }));
+    if (dbl) s.appendChild(b7Svg('path', { d: 'M7 6.5L10 9.5L15 2.5' }));
+  }
+  return s;
+}
+function fxAv(kind, size, text){
+  const d = el('div', 'fx-av fx-' + kind);
+  d.style.width = size + 'px';
+  d.style.height = size + 'px';
+  const ic = Math.round(size * 0.5);
+  if (kind === 'lock') d.appendChild(svgIcon(['M6 11h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z', 'M8 11V7a4 4 0 0 1 8 0v4'], ic));
+  else if (kind === 'system') d.appendChild(svgIcon(['M20 6L9 17l-5-5'], ic));
+  else d.textContent = String(text || '?').charAt(0).toUpperCase();
+  return d;
+}
+function fxSupSync(){
+  const i = $('support-input'), s = $('support-send');
+  if (i && s) s.style.display = i.value.trim() ? '' : 'none';
+}
+function fxProfile(kind){
+  const P = kind === 'support'
+    ? { name: 'Support Chat', sub: 'Official PayLock support', about: 'Describe your issue and our team will reply. Include your order reference if it is about an order.' }
+    : { name: 'PayLock', sub: 'Escrow protected', about: 'Official PayLock account. Your payment is held in escrow until delivery is confirmed.' };
+  openSheet(function(b){
+    const top = el('div');
+    top.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;margin-bottom:14px';
+    top.appendChild(fxAv('lock', 72));
+    top.appendChild(el('h3', null, P.name));
+    top.appendChild(el('div', 'small muted', P.sub));
+    const ab = el('p', 'small muted', P.about);
+    ab.style.marginTop = '8px';
+    top.appendChild(ab);
+    b.appendChild(top);
+    const c = el('button', 'btn secondary', 'Close');
+    c.type = 'button';
+    c.addEventListener('click', closeSheet);
+    b.appendChild(c);
+  });
+}
+
+/* 10: client-side CSV from the already-loaded list */
+function downloadTxCsv(){
+  const rows = Array.isArray(state.transactions) ? state.transactions : [];
+  if (!rows.length) { showToast('No transactions to download'); return; }
+  const q = function(v){
+    let s = String(v === undefined || v === null ? '' : v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;          // spreadsheet formula guard
+    return '"' + s.replace(/"/g, '""') + '"';
+  };
+  const lines = [['Date', 'Reference', 'Description', 'Direction', 'Amount (NGN)', 'Status'].map(q).join(',')];
+  rows.forEach(function(t){
+    const credit = t.type === 'credit';
+    const amt = (credit ? '' : '-') + ((Number(t.amount_kobo) || 0) / 100).toFixed(2);
+    lines.push([q(t.created_at || ''), q(t.reference || ''), q(b7TxLabel(t)), q(credit ? 'Credit' : 'Debit'), amt, q(b7TxStatus(t))].join(','));
+  });
+  const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const name = 'paylock-transactions.csv';
+  try {
+    // Telegram phone WebViews often ignore blob downloads: hand the file to the share sheet first
+    const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+    if (mobile && typeof File === 'function' && navigator.canShare) {
+      const f = new File([blob], name, { type: 'text/csv' });
+      if (navigator.canShare({ files: [f] })) {
+        navigator.share({ files: [f], title: name }).catch(function(err){ if (!err || err.name !== 'AbortError') _saveBlob(blob, name); });
+        return;
+      }
+    }
+  } catch (e) {}
+  _saveBlob(blob, name);                                 // a.download = "paylock-transactions.csv"
+}
+
+/* 11: Auto-Boost UI (display + local preference only) */
+const fxB = { days: 1, auto: false };
+function fxBoostRender(){
+  const seg = $('boost-dur');
+  if (!seg) return;
+  seg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', Number(b.getAttribute('data-d')) === fxB.days); });
+  const t = $('boost-auto-toggle'); if (t) t.classList.toggle('on', fxB.auto);
+  let until = 0;
+  (state.myProducts || []).concat(state.products.filter(isOwnProduct)).forEach(function(p){
+    if (pBoosted(p)) { const u = boostUntilMs(p); if (u > until) until = u; }
+  });
+  const st = $('boost-status');
+  if (!st) return;
+  clearNode(st);
+  const auto = ' - Auto-Reboost ' + (fxB.auto ? 'ON' : 'OFF');
+  if (until) {
+    st.appendChild(document.createTextNode('Boosted until ' + new Date(until).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' - '));
+    const ex = el('button', 'link-btn', 'Extend');
+    ex.type = 'button';
+    ex.addEventListener('click', function(){ goPage('pg-myproducts'); });
+    st.appendChild(ex);
+    st.appendChild(document.createTextNode(auto));
+  } else {
+    st.textContent = 'No active boost' + auto;
+  }
+}
+function fx8Init(){
+  // avatars + 3-dot icons
+  ['chat-head-av', 'sup-head-av'].forEach(function(id){ const n = $(id); if (n) { clearNode(n); n.appendChild(fxAv('lock', 40)); } });
+  ['chat-head-dots', 'sup-head-dots'].forEach(function(id){ const n = $(id); if (n) { clearNode(n); n.appendChild(sxDotsIcon()); } });
+  // tap avatar / name / menu -> Profile Details sheet
+  [['#chat-head-av', 'bot'], ['#chat-head .chat-head-txt', 'bot'], ['#chat-head-dots', 'bot'],
+   ['#sup-head-av', 'support'], ['#sup-head-txt', 'support'], ['#sup-head-dots', 'support']].forEach(function(x){
+    const n = document.querySelector(x[0]);
+    if (n) n.addEventListener('click', function(){ fxProfile(x[1]); });
+  });
+  // support input bar
+  const si = $('support-input'); if (si) si.addEventListener('input', fxSupSync);
+  const sf = $('support-file'), sc = $('support-cam');
+  $('support-attach').addEventListener('click', function(){ sf.click(); });
+  $('support-camera').addEventListener('click', function(){ sc.click(); });
+  [sf, sc].forEach(function(i){ i.addEventListener('change', function(){ i.value = ''; showToast('Attachments coming in backend update'); }); });
+  fxSupSync();
+  // transactions CSV
+  $('tx-download').addEventListener('click', downloadTxCsv);
+  // boost UI
+  const s = b7Load('boost_ui', { days: 1, auto: false });
+  fxB.days = [1, 2, 3].indexOf(Number(s.days)) >= 0 ? Number(s.days) : 1;
+  fxB.auto = !!s.auto;
+  $('boost-dur').querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click', function(){ fxB.days = Number(b.getAttribute('data-d')) || 1; b7Save('boost_ui', fxB); fxBoostRender(); });
+  });
+  $('boost-auto-toggle').addEventListener('click', function(){ fxB.auto = !fxB.auto; b7Save('boost_ui', fxB); fxBoostRender(); });
+  try { new MutationObserver(fxBoostRender).observe($('pg-boost-terms'), { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
+  fxBoostRender();
+}
+
 function init(){
   loadTheme();   // always follows Telegram: colorScheme + themeParams, re-applied on themeChanged
   if (tg) {
