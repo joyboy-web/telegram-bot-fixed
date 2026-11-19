@@ -5182,6 +5182,7 @@ def _app_link(startapp=None):
     return InlineKeyboardMarkup([[
         InlineKeyboardButton(text="Open PayLock", web_app=WebAppInfo(url=MINI_APP_URL))
     ]])
+   
 
 
 def _product_button(product):
