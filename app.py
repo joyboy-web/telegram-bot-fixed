@@ -83,6 +83,7 @@ PAYSTACK_PUBLIC_KEY = os.environ.get("PAYSTACK_PUBLIC_KEY")
 BOT_TOKEN = (os.environ.get("BOT_TOKEN") or "").strip()
 PAYSTACK_BASE = os.environ.get("PAYSTACK_BASE", "https://api.paystack.co")
 WEBAPP_URL = os.environ.get("WEBAPP_URL", "").rstrip("/")
+MINI_APP_URL = "https://telegram-bot-fixed-uqmt.onrender.com"
 
 logging.basicConfig(level=logging.INFO)
 
