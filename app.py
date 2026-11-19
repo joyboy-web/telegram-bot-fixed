@@ -5178,7 +5178,6 @@ def _app_link(startapp=None):
     return f"{link}?startapp={startapp}" if startapp else link
 
 
-def _open_button(startapp=None):
     def _open_button(startapp=None):
     return InlineKeyboardMarkup([[
         InlineKeyboardButton(text="Open PayLock", web_app=WebAppInfo(url=MINI_APP_URL))
