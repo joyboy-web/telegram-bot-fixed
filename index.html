@@ -201,7 +201,6 @@ h1,h2,h3,p{margin:0}
 #chat-send{flex:none}
 
 /* ===== BLOCK E - RATING ===== */
-.rate-box { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); font-size: 14px; font-weight: 600; }
 .rate-star { background: none; border: 0; padding: 0 4px; line-height: 1; cursor: pointer; color: var(--ink); }
 .rate-star svg { display:block; fill: none; }
 .rate-star.on svg { fill: currentColor; }
@@ -544,6 +543,29 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
 .chat-av.init{background:var(--gold-dk);color:#FFE08A}
 .chat-row .chat-badge{background:var(--gold);color:#000}
 .fx-time-line{display:flex;align-items:center;gap:4px}
+
+/* ===== PATCH 2 ===== */
+.chat-head-name svg circle{fill:#1D9BF0}
+.chat-head-name svg path{stroke:#FFFFFF}
+.fx-av.fx-bot{background:#000;color:#fff;flex-direction:column;gap:2px}
+.fx-bot-lbl{font-size:10px;font-weight:800;color:#fff;line-height:1}
+body.kb-open .tabbar{display:none}
+#offline-banner{display:none!important}
+.pv-rate{display:flex;align-items:center;gap:8px;margin:0 0 14px}
+.pv-rate b{font-size:22px}
+.dl-card{display:flex;align-items:center;gap:12px;align-self:flex-start;max-width:85%;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--card);cursor:pointer}
+.dl-ic{width:44px;height:44px;flex:none;border-radius:12px;background:var(--chip);display:flex;align-items:center;justify-content:center}
+.dl-meta{min-width:0;flex:1}
+.dl-name{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-sub{font-size:12px;color:var(--muted)}
+.dl-act{position:relative;width:40px;height:40px;flex:none;border-radius:50%;background:#000;color:#fff;display:flex;align-items:center;justify-content:center}
+.dl-ring{position:absolute;inset:0;transform:rotate(-90deg)}
+.dl-ring circle{fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round}
+.dl-glyph.ok{color:#16A34A}
+@keyframes dlarrow{0%{transform:translateY(-3px);opacity:.5}60%{transform:translateY(3px);opacity:1}100%{transform:translateY(3px);opacity:1}}
+.dl-act.busy .dl-arrow{animation:dlarrow .9s ease-in-out infinite}
+.rp-box{align-self:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--card);font-size:14px;font-weight:600}
+.rp-stars{display:flex;margin:4px 0}
 </style>
 </head>
 <body>
@@ -593,8 +615,8 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
 </div>
 <div class="gate" id="gate-offline">
   <h2>You are offline</h2>
-  <p>Check your internet connection and reload.</p>
-  <button class="btn" type="button" onclick="location.reload()">Reload</button>
+  <p>Check your internet connection and reconnect.</p>
+  <button class="btn" type="button" onclick="PayLock.reconnect()">Reconnect</button>
 </div>
 <div class="gate" id="gate-deleted">
   <h2>Account deleted</h2>
@@ -767,8 +789,7 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
     </div>
     <div class="empty" id="an-empty" style="display:none"><div class="big">No data yet</div>Your numbers will appear here.</div>
   </section>
-
-  <!-- ============ CHAT (Batch 7: vertical WhatsApp-style list; horizontal pills removed) ============ -->
+    <!-- ============ CHAT (Batch 7: vertical WhatsApp-style list; horizontal pills removed) ============ -->
   <section class="page" id="pg-chat">
     <h2 class="page-title">Chat</h2>
     <!-- BATCH 7 (approved replacement). OLD: <div class="chat-profiles" id="chat-profiles"> [PayLock Bot] [Seller ID] [Support Chat] </div> -->
@@ -800,8 +821,8 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
         <button class="back-btn" type="button" id="chat-back" aria-label="Back to chats">‹</button>
         <div class="fx-avwrap" id="chat-head-av"></div>
         <div class="chat-head-txt">
-          <div class="chat-head-name">PayLock <svg width="16" height="16" viewBox="0 0 24 24" aria-label="Verified"><circle cx="12" cy="12" r="12" fill="currentColor"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <div class="chat-head-sub">Escrow protected • Online</div>
+          <div class="chat-head-name"><span id="chat-head-title">PayLock Bot</span> <svg class="vbadge" width="16" height="16" viewBox="0 0 24 24" aria-label="Verified"><circle cx="12" cy="12" r="12" fill="currentColor"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="chat-head-sub">Escrow protected</div>
         </div>
         <button class="fx-dots" type="button" id="chat-head-dots" aria-label="Menu"></button>
       </div>
@@ -809,16 +830,6 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
       <div id="chat-messages"></div>
       <!-- BATCH 7: typing animation (black circle, white dancing dots, rotating white glow); shown 5s before PayLock replies -->
       <div id="chat-typing" role="status" aria-label="PayLock is typing"><div class="typing-orb"><div class="dots3"><span></span><span></span><span></span></div></div></div>
-      <div id="ratingBox" class="rate-box" style="display:none">
-        <div id="rating-label">Rate this seller:</div>
-        <div id="rate-stars">
-          <button type="button" class="rate-star" id="star-1" aria-label="1 star"></button>
-          <button type="button" class="rate-star" id="star-2" aria-label="2 stars"></button>
-          <button type="button" class="rate-star" id="star-3" aria-label="3 stars"></button>
-          <button type="button" class="rate-star" id="star-4" aria-label="4 stars"></button>
-          <button type="button" class="rate-star" id="star-5" aria-label="5 stars"></button>
-        </div>
-      </div>
       <div class="chat-actions" id="chat-refund-row" style="display:none">
         <button class="btn secondary" type="button" id="chat-refund-yes">Yes, Refund Me</button>
         <button class="btn" type="button" id="chat-refund-no">No, Release Payment</button>
@@ -918,7 +929,6 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
 
     <div class="card" id="account-links">
       <div class="card-title">Account</div>
-      <button class="row-link" type="button" onclick="PayLock.goPage('pg-myproducts')"><span>My Products</span><span class="muted">›</span></button>
       <button class="row-link" type="button" id="support-btn"><span>Support Chat</span><span class="muted">›</span></button>
     </div>
 
@@ -1138,7 +1148,7 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
       </button>
       <button class="srow" type="button" data-sd="language">
         <span class="srow-ic"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
-        <span class="srow-mid"><span class="srow-t">Language</span><span class="srow-s">English</span></span>
+        <span class="srow-mid"><span class="srow-t">Language</span><span class="srow-s" id="ss-lang">Nigerian English</span></span>
         <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
       </button>
     </div>
@@ -1356,6 +1366,11 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
         <span class="srow-mid"><span class="srow-t">Disputes / Violations</span><span class="srow-s">Disputes, reports and scam products</span></span>
         <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
       </button>
+      <button class="srow" type="button" id="adm-support-row" data-go="pg-adm-support">
+        <span class="srow-ic"><svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+        <span class="srow-mid"><span class="srow-t">Support Inbox</span><span class="srow-s">User tickets and replies</span></span>
+        <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
     </div>
 
     <div class="sec-label"><svg class="i" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>MONITORING</div>
@@ -1363,6 +1378,11 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
       <button class="srow" type="button" id="adm-webhook-row" data-go="pg-wh">
         <span class="srow-ic"><svg class="i" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
         <span class="srow-mid"><span class="srow-t">PayLock Webhook Logs</span><span class="srow-s">Paystack events and failed payments</span></span>
+        <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+      <button class="srow" type="button" id="adm-analytics-row" data-go="pg-adm-analytics">
+        <span class="srow-ic"><svg class="i" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>
+        <span class="srow-mid"><span class="srow-t">Analytics</span><span class="srow-s">Platform summary</span></span>
         <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
       </button>
     </div>
@@ -1374,6 +1394,38 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
     <div class="card" style="padding:4px 16px">
       <div id="admd-list"></div>
       <div class="empty" id="admd-empty" style="display:none">Nothing to review</div>
+    </div>
+  </section>
+
+  <section class="page" id="pg-adm-analytics">
+    <button class="back-btn" type="button" onclick="PayLock.navBack('pg-admin')">‹ Back</button>
+    <h2 class="page-title">Analytics</h2>
+    <div class="card" id="adma-body"></div>
+    <div class="empty" id="adma-empty" style="display:none"></div>
+  </section>
+
+  <section class="page" id="pg-adm-support">
+    <button class="back-btn" type="button" id="adms-back">‹ Back</button>
+    <h2 class="page-title">Support Inbox</h2>
+    <div id="adms-listview">
+      <div class="mk-search"><input class="input" id="adms-search" type="text" autocomplete="off" placeholder="Search by username or Telegram ID"></div>
+      <div class="chips" id="adms-chips">
+        <button class="chip active" type="button" data-sf="all">All</button>
+        <button class="chip" type="button" data-sf="open">Open</button>
+        <button class="chip" type="button" data-sf="resolved">Resolved</button>
+      </div>
+      <div class="card" style="padding:4px 16px">
+        <div id="adms-list"></div>
+        <div class="empty" id="adms-empty" style="display:none">No tickets</div>
+      </div>
+    </div>
+    <div id="adms-thread" style="display:none">
+      <div id="adms-msgs" style="display:flex;flex-direction:column;gap:4px;max-height:50vh;overflow-y:auto;margin-bottom:12px"></div>
+      <div class="sup-bar">
+        <input class="input sup-pill" id="adms-input" type="text" maxlength="1000" autocomplete="off" placeholder="Reply...">
+        <button class="btn sm" type="button" id="adms-send">Send</button>
+      </div>
+      <button class="btn secondary" type="button" id="adms-resolve" style="margin-top:10px">Mark as resolved</button>
     </div>
   </section>
 
@@ -1645,6 +1697,8 @@ let chatMode = 'list';            // 'list' = Chat List, 'room' = open chat room
 let chatProfile = 'bot';          // 'bot' | 'seller' | 'support'
 let previewPrev = 'pg-buy';       // page to return to from product preview
 let referralNoted = false;
+const L = { key: 'paylock_lang', cur: 'en-NG', loc: 'en-NG', orig: new WeakMap() };
+(function(){ try { const v = localStorage.getItem('paylock_lang'); if (v === 'en-GB' || v === 'en-US' || v === 'pcm') { L.cur = v; L.loc = (v === 'pcm') ? 'en-NG' : v; } } catch (e) {} })();
 
 /* ---------- Helpers ---------- */
 function $(id){ return document.getElementById(id); }
@@ -1703,17 +1757,18 @@ const ICON_CLOSE = ['M18 6L6 18', 'M6 6l12 12'];
 
 function nairaFmt(kobo){
   const n = (Number(kobo) || 0) / 100;
-  return '₦' + n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return '₦' + n.toLocaleString(L.loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtDate(iso){
   if (!iso) return '-';
   try {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return String(iso);
-    return d.toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' });
+    return d.toLocaleString(L.loc, { dateStyle: 'medium', timeStyle: 'short' });
   } catch (e) { return String(iso); }
 }
 function showToast(msg){
+  if (!navigator.onLine) return;
   const old = document.querySelectorAll('.toast');
   old.forEach(function(o){ if (o.parentNode) o.parentNode.removeChild(o); });
   const t = document.createElement('div');
@@ -1758,11 +1813,11 @@ function pdfNaira(kobo){
   return 'NGN ' + ((Number(kobo) || 0) / 100).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function buildPdf(title, rows){
-  const ops = ['BT /F2 20 Tf 50 790 Td (' + pdfText(title) + ') Tj ET'];
+  const ops = ['BT /F2 20 Tf 50 790 Td (' + pdfText(trExact(title)) + ') Tj ET'];
   let y = 750;
   rows.forEach(function(r){
-    ops.push('BT /F2 11 Tf 50 ' + y + ' Td (' + pdfText(r[0]) + ') Tj ET');
-    ops.push('BT /F1 11 Tf 210 ' + y + ' Td (' + pdfText(r[1]) + ') Tj ET');
+    ops.push('BT /F2 11 Tf 50 ' + y + ' Td (' + pdfText(trExact(r[0])) + ') Tj ET');
+    ops.push('BT /F1 11 Tf 210 ' + y + ' Td (' + pdfText(trExact(r[1])) + ') Tj ET');
     y -= 22;
   });
   const stream = ops.join('\n');
@@ -1829,12 +1884,13 @@ function jsonHeaders(){
 async function api(path, opts){
   let res;
   lastApi = { path: path, opts: opts };
+  if (!initDataOk()) { showGate('error'); throw new Error('initdata'); }   // no fake data without valid Telegram session
+  const o = Object.assign({}, opts || {});
+  o.headers = Object.assign({}, getAuthHeader(), (opts && opts.headers) || {});   // initData on EVERY fetch
   try {
-    res = await fetch(path, opts || {});
+    res = await fetch(path, o);
   } catch (err) {
-    // The offline GATE is only for boot. After boot a failure only shows the retry banner.
-    if (!booted && !navigator.onLine) showGate('offline');
-    showOfflineBanner();
+    if (!navigator.onLine) showGate('offline');   // full-screen offline only, no banner
     throw err;
   }
   hideOfflineBanner();
@@ -1856,6 +1912,68 @@ function showGate(name){
 function hideGates(){ GATES.forEach(function(g){ const n = $('gate-' + g); if (n) n.classList.remove('show'); }); }
 function showDeletedGate(){ showGate('deleted'); }
 function closeApp(){ if (tg && tg.close) tg.close(); }
+function initDataOk(){ const d = tg && tg.initData; return typeof d === 'string' && d.indexOf('hash=') >= 0 && d.indexOf('auth_date=') >= 0; }
+function reconnect(){ if (!navigator.onLine) return; if (booted) hideGates(); else boot(); }
+const ADMIN_TG_ID = '7638015119';
+function isAdminUi(){ return String(state.telegram_id) === ADMIN_TG_ID; }
+function userLabel(u, id){
+  u = u || {};
+  const n = u.username || u.telegram_username || u.first_name || '';
+  if (n) return String(n);
+  const tid = (id !== undefined && id !== null) ? id : (u.telegram_id || u.id);
+  return tid ? '@user_' + String(tid).slice(-4) : '@user';
+}
+function sellerLabel(p){
+  const s = (p && typeof p.seller === 'object' && p.seller) || {};
+  return userLabel({
+    username: s.username || p.seller_username,
+    telegram_username: s.telegram_username || p.seller_telegram_username,
+    first_name: s.first_name || p.seller_first_name || p.seller_name
+  }, (p.seller_id !== undefined && p.seller_id !== null) ? p.seller_id : p.owner_id);
+}
+function verifiedBadge(sz){
+  const s = b7Svg('svg', { viewBox: '0 0 24 24', width: String(sz || 16), height: String(sz || 16), 'aria-label': 'Verified', 'class': 'vbadge' });
+  s.appendChild(b7Svg('circle', { cx: '12', cy: '12', r: '12', fill: '#1D9BF0' }));
+  s.appendChild(b7Svg('path', { d: 'M7 12.5l3.2 3.2L17 9', fill: 'none', stroke: '#FFFFFF', 'stroke-width': '2.6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  return s;
+}
+const photoCache = {};
+async function loadPhoto(id){
+  const k = String(id);
+  if (photoCache[k] !== undefined) return photoCache[k];
+  photoCache[k] = null;
+  try {
+    const res = await fetch('/api/users/' + encodeURIComponent(k) + '/photo', { headers: getAuthHeader() });
+    if (res.ok) { const b = await res.blob(); if (b && b.type.indexOf('image') === 0) photoCache[k] = URL.createObjectURL(b); }
+  } catch (e) {}
+  return photoCache[k];
+}
+function userAv(id, name, size){
+  const holder = el('div'); holder.style.cssText = 'display:flex;flex:none';
+  holder.appendChild(fxAv('init', size, name));          // first-letter fallback
+  if (id !== undefined && id !== null) loadPhoto(id).then(function(u){
+    if (!u) return;
+    const im = document.createElement('img');
+    im.className = 'chat-av'; im.alt = ''; im.src = u; im.style.width = size + 'px'; im.style.height = size + 'px';
+    clearNode(holder); holder.appendChild(im);
+  });
+  return holder;
+}
+function adminCmd(text){
+  if (!isAdminUi()) return false;
+  const c = String(text || '').trim().toLowerCase();
+  if (c === '/admin') { goPage('pg-admin'); return true; }
+  if (c === '/summary') { goPage('pg-adm-analytics'); return true; }
+  return false;
+}
+const botMsgs = {};
+async function loadBotMsgs(){ try { const r = await api('/api/bot/messages', { headers: getAuthHeader() }); if (r.res.ok && r.data && r.data.messages) Object.assign(botMsgs, r.data.messages); } catch (e) {} }
+function bm(key, fallback){ const v = botMsgs[key]; return (typeof v === 'string' && v) ? v : fallback; }
+(function kbWire(){
+  const isIn = function(e){ const t = e.target; return !!(t && /^(INPUT|TEXTAREA)$/.test(t.nodeName) && t.type !== 'file' && t.type !== 'checkbox'); };
+  document.addEventListener('focusin', function(e){ if (!isIn(e)) return; document.body.classList.add('kb-open'); setTimeout(function(){ try { e.target.scrollIntoView({ block: 'center' }); } catch (x) {} }, 300); });
+  document.addEventListener('focusout', function(e){ if (!isIn(e)) return; setTimeout(function(){ const a = document.activeElement; if (!a || !/^(INPUT|TEXTAREA)$/.test(a.nodeName)) document.body.classList.remove('kb-open'); }, 120); });
+})();
 
 /* ---------- Theme: ALWAYS follows Telegram (colorScheme + themeParams + themeChanged) ---------- */
 function setThemeIcon(){
@@ -3003,8 +3121,7 @@ async function boot(){
     bootBusy = false;
   }
 }
-
-/* ===================== CHAT ===================== */
+  /* ===================== CHAT ===================== */
 const chatState = {
   product:null, messages:[], stage:'ask', orderId:null, busy:false,
   waitingComplaint:false, waitingOrderId:null, pendingStars:0, complaintText:null, ratingBusy:false,
@@ -3031,6 +3148,7 @@ function chatResetRemote(){
 
 function openChat(product){
   // product == null: no message pushed, no state reset, just render + navigate
+  chatState.peer = null;
   if(!product){ renderChatMessages(); goPage('pg-chat'); return; }
 
   // seller never enters the buy flow: send to product preview instead
@@ -3078,7 +3196,7 @@ function openChat(product){
   chatState.busy = false;
   chatResetRemote();
 
-  chatPush('paylock', "Do you want to continue the purchase of this product? Reply with 'yes' to continue.");
+  chatPush('paylock', bm('ask', "Do you want to continue the purchase of this product? Reply with 'yes' to continue."));
   renderChatMessages();
   goPage('pg-chat');
 }
@@ -3102,6 +3220,8 @@ function openOrderChat(o){
   chatState.product = p;
   chatState.orderId = o.id;
   chatState.busy = false;
+  chatState.peer = { id: isSeller ? o.buyer_id : o.seller_id,
+    label: userLabel({ username: isSeller ? o.buyer_username : o.seller_username, first_name: isSeller ? o.buyer_name : o.seller_name }, isSeller ? o.buyer_id : o.seller_id) };
   chatState.stage = (String(o.status) === 'held') ? 'paid' : 'done';
   chatState.messages = (!isSeller && sameOrder && Array.isArray(saved.messages))
     ? saved.messages.filter(function(m){ return m && okRoles[m.role] && typeof m.text === 'string'; })
@@ -3126,6 +3246,7 @@ function renderChatMessages(){
   }
   if(emptyEl) emptyEl.style.display = 'none';
   if(rootEl) rootEl.style.display = '';
+  chatHeadSync();
 
   const p = chatState.product;
   const own = isOwnProduct(p);
@@ -3142,6 +3263,8 @@ function renderChatMessages(){
 
   const box = document.getElementById('chat-messages');
   while(box.firstChild) box.removeChild(box.firstChild);
+  const rateOn = ratingCanShow();
+  let ratePlaced = false;
   chatState.messages.forEach(function(m){
     const d = document.createElement('div');
     d.className = 'chat-msg chat-msg-' + m.role;
@@ -3159,6 +3282,11 @@ function renderChatMessages(){
       d.textContent = m.text;
     }
     box.appendChild(d);
+    if (m.role === 'paylock' && chatState.orderId && !own && m.text === bm('file', 'Here is your file')) {
+      const dc = dlCard(p, chatState.orderId);
+      if (dc) box.appendChild(dc);
+      if (rateOn && !ratePlaced) { box.appendChild(rateInline(p, chatState.orderId)); ratePlaced = true; }   // directly under the delivered product
+    }
   });
   // real seller <-> buyer messages from the API
   chatState.remote.forEach(function(m){
@@ -3172,8 +3300,15 @@ function renderChatMessages(){
       d.appendChild(lb);
     }
     d.appendChild(document.createTextNode(String(m.text || '')));
+    if (mine) {
+      const st = String(m.status || (m._tmp ? 'sending' : 'sent')).toLowerCase();
+      const mt = el('div'); mt.style.cssText = 'display:flex;justify-content:flex-end;margin-top:2px';
+      mt.appendChild(supTickEl(/seen|read/.test(st) ? 'read' : /deliver/.test(st) ? 'delivered' : /sending|pending/.test(st) ? 'pending' : 'sent'));
+      d.appendChild(mt);
+    }
     box.appendChild(d);
   });
+  if (rateOn && !ratePlaced) box.appendChild(rateInline(p, chatState.orderId));   // room has no file message (order chat)
 
   document.getElementById('pay-in-chat').style.display = (chatState.stage === 'ask') ? '' : 'none';
   document.getElementById('chat-confirm-btn').style.display = (chatState.stage === 'paid' && !own) ? '' : 'none';
@@ -3183,8 +3318,17 @@ function renderChatMessages(){
 
   chatSave();
   chatPoll();
-  renderRatingBox();
   chatExtrasRender();
+}
+
+function chatHeadSync(){
+  const t = $('chat-head-title'), av = $('chat-head-av'), sub = document.querySelector('#chat-head .chat-head-sub');
+  if (!t || !av) return;
+  const peer = chatState.peer;
+  t.textContent = peer ? peer.label : 'PayLock Bot';
+  const key = peer ? 'p' + peer.id : 'bot';
+  if (av.getAttribute('data-k') !== key) { clearNode(av); av.appendChild(peer ? userAv(peer.id, peer.label, 40) : fxAv('bot', 40)); av.setAttribute('data-k', key); }
+  if (sub) sub.style.display = peer ? 'none' : '';
 }
 
 function chatSave(){
@@ -3210,34 +3354,40 @@ async function chatLoadRemote(){
     if(r.res.status === 403){ chatState.remoteOff = true; showToast('Chat is only for the buyer and seller of this order'); return; }
     if(!r.res.ok) return;
     const rows = Array.isArray(r.data.messages) ? r.data.messages : [];
-    const last = rows.length ? rows[rows.length - 1] : null;
-    const sig = rows.length + ':' + (last ? String(last.id || last.created_at || '') : '');
+    const sig = rows.length + ':' + rows.map(function(x){ return String(x.id || x.created_at || '') + (x.status || ''); }).join(',');
     if(sig === chatState.remoteSig) return;
     chatState.remoteSig = sig;
-    chatState.remote = rows;
+    const keep = chatState.remote.filter(function(x){ return x._tmp && !rows.some(function(r){ return r.client_id && r.client_id === x.client_id; }); });
+    chatState.remote = rows.concat(keep);
     renderChatMessages();
   } catch(e){ /* silent: next poll retries */ }
 }
 
 async function chatSendRemote(text){
   const input = document.getElementById('chat-input');
+  const cid = 'c' + Date.now() + Math.random().toString(36).slice(2, 7);
+  const tmp = { id: cid, client_id: cid, text: text, is_mine: true, status: 'sending', created_at: new Date().toISOString(), _tmp: true };
+  chatState.remote.push(tmp);
+  renderChatMessages();
+  const oid = chatState.orderId;
+  const send = function(){ return api('/api/chat/send', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ order_id: oid, text: text, client_id: cid }) }); };
+  const timer = setTimeout(function(){                       // pending > 5s: retry once (server dedupes by client_id)
+    if (tmp.status === 'sending' && !tmp._retried) { tmp._retried = true; send().then(function(r){ if (r.res.ok) { tmp.status = 'sent'; chatLoadRemote(); } }).catch(function(){}); }
+  }, 5000);
+  const drop = function(){ chatState.remote = chatState.remote.filter(function(x){ return x !== tmp; }); renderChatMessages(); };
   try {
-    const r = await api('/api/chat/send', {
-      method: 'POST', headers: jsonHeaders(),
-      body: JSON.stringify({ order_id: chatState.orderId, text: text })
-    });
-    if(r.res.ok){ chatLoadRemote(); return; }
-    if(r.res.status === 501 || r.res.status === 404){
-      chatState.remoteOff = true;          // table not ready: keep the message locally
-      chatPush('user', text);
-      return;
-    }
-    if(r.res.status === 403) showToast('Chat is only for the buyer and seller of this order');
+    const r = await send();
+    clearTimeout(timer);
+    if (r.res.ok) { tmp.status = 'sent'; renderChatMessages(); chatLoadRemote(); return; }
+    drop();
+    if (r.res.status === 501 || r.res.status === 404) { chatState.remoteOff = true; chatPush('user', text); return; }
+    if (r.res.status === 403) showToast('Chat is only for the buyer and seller of this order');
     else showToast(r.data.error || 'Message not sent');
-  } catch(e){
+  } catch (e) {
+    clearTimeout(timer); drop();
     showToast('Network error. Try again.');
   }
-  if(input && !input.value) input.value = text;   // give the text back so nothing is lost
+  if (input && !input.value) input.value = text;
 }
 
 let chatPollTimer = null;
@@ -3250,12 +3400,14 @@ function chatPoll(){
   }
   if(chatPollTimer) return;
 
+  let pollTick = 0;
   chatPollTimer = setInterval(async function(){
     const pg = document.getElementById('pg-chat');
     if(!pg || !pg.classList.contains('active') || chatMode !== 'room' || !chatState.orderId){
       clearInterval(chatPollTimer); chatPollTimer = null; return;
     }
-    chatLoadRemote();                      // every 10s while the room is open
+    chatLoadRemote();                      // every 3s while the room is open
+    pollTick++; if (pollTick % 3 !== 0) return;
     if(chatState.busy || chatState.stage === 'done') return;
 
     const watchedId = chatState.orderId;
@@ -3275,100 +3427,37 @@ function chatPoll(){
       chatPush('system', "Dispute opened - escrow frozen");
       renderChatMessages();
     }
-  }, 10000);
+  }, 3000);
 }
 
 /* ===================== BLOCK E - RATING ALONE ===================== */
 const ratingReleased = {};   // orderId -> true/false (cache of the "is released" check)
 const ratingChecking = {};   // orderId -> true while a check is in flight
-let ratingWired = false;
-
-// private helper: fill SVG stars up to n
-const ratingFill = function(n){
-  const btns = document.querySelectorAll('#rate-stars .rate-star');
-  btns.forEach(function(b, i){ b.classList.toggle('on', i < n); });
-};
-
-function renderRatingBox(){
-  const box = document.getElementById('ratingBox');
-  if(!box) return;
-  const label = document.getElementById('rating-label');
-  const wrap = document.getElementById('rate-stars');
+// ONE rating flow: rateInline() is the only rating UI. This only decides whether it may show.
+function ratingCanShow(){
   const p = chatState.product;
-  box.style.display = 'none';
-
-  // only: a product, an order, stage 'paid' (delivered) or 'done'
-  if(!p || !chatState.orderId || (chatState.stage !== 'done' && chatState.stage !== 'paid')) return;
-
-  // buyer only
-  const sid = (p.seller_id !== undefined && p.seller_id !== null) ? p.seller_id : p.owner_id;
-  const isSeller = (sid !== undefined && sid !== null && state.telegram_id !== undefined && state.telegram_id !== null)
-                   && String(sid) === String(state.telegram_id);
-  if(isSeller) return;
-
-  // only when the order is 'released' (stage 'done' is also used for disputed)
+  if(!p || !chatState.orderId || (chatState.stage !== 'done' && chatState.stage !== 'paid')) return false;
+  if(isOwnProduct(p)) return false;                                   // buyer only
   const oid = String(chatState.orderId);
-  if(chatState.stage !== 'paid' && ratingReleased[oid] !== true){
+  if(chatState.stage !== 'paid' && ratingReleased[oid] !== true){     // stage 'done' is also used for disputed
     if(ratingReleased[oid] === undefined && !ratingChecking[oid]){
       ratingChecking[oid] = true;
       chatFetchOrders().then(function(list){
         ratingChecking[oid] = false;
-        if(!list || list.length === 0) return;   // network blip: retry on a later render, no loop
+        if(!list || list.length === 0) return;                        // network blip: retried on a later render
         const o = list.filter(function(x){ return String(x.id) === oid; })[0];
         ratingReleased[oid] = !!(o && o.status === 'released');
-        renderRatingBox();
+        renderChatMessages();
       }).catch(function(){ ratingChecking[oid] = false; });
     }
-    return;
+    return false;
   }
-
-  // wire the stars once
-  if(!ratingWired){
-    ratingWired = true;
-    wrap.querySelectorAll('.rate-star').forEach(function(b, i){
-      const n = i + 1;
-      b.addEventListener('mouseover', function(){ if(!b.disabled) ratingFill(n); });
-      b.addEventListener('mouseout', function(){
-        if(!b.disabled) ratingFill(chatState.waitingComplaint ? (chatState.pendingStars || 0) : 0);
-      });
-      b.addEventListener('click', function(){
-        if(b.disabled) return;
-        ratingFill(n);
-        wrap.querySelectorAll('.rate-star').forEach(function(x){ x.disabled = true; });
-        submitRating(n);
-      });
-    });
+  let rated = null, pending = null;
+  try { rated = localStorage.getItem('rated_' + oid); pending = localStorage.getItem('rate_pending_' + oid); } catch(e){}
+  if(!rated && pending && !(chatState.waitingComplaint && String(chatState.waitingOrderId) === oid)){   // restore a pending complaint after reload
+    chatState.waitingComplaint = true; chatState.waitingOrderId = oid; chatState.pendingStars = parseInt(pending, 10) || 1;
   }
-
-  box.style.display = '';
-
-  // already rated: text only, no stars
-  let rated = null, complaintSaved = false;
-  try {
-    rated = localStorage.getItem('rated_' + oid);
-    complaintSaved = localStorage.getItem('rated_complaint_' + oid) === '1';
-  } catch(e){}
-  if(rated){
-    const n = Math.max(1, Math.min(5, parseInt(rated, 10) || 1));
-    label.textContent = 'You rated ' + n + ' out of 5' + (complaintSaved ? ' + complaint saved' : '');
-    wrap.style.display = 'none';
-    return;
-  }
-
-  label.textContent = 'Rate this seller:';
-  wrap.style.display = '';
-
-  // restore a pending complaint after reload (chatSave does not store it)
-  let pending = null;
-  try { pending = localStorage.getItem('rate_pending_' + oid); } catch(e){}
-  if(pending && !(chatState.waitingComplaint && String(chatState.waitingOrderId) === oid)){
-    chatState.waitingComplaint = true;
-    chatState.waitingOrderId = oid;
-    chatState.pendingStars = parseInt(pending, 10) || 1;
-  }
-  const waiting = !!(chatState.waitingComplaint && String(chatState.waitingOrderId) === oid);
-  wrap.querySelectorAll('.rate-star').forEach(function(b){ b.disabled = waiting || !!chatState.ratingBusy || !!chatState.refundPrompt; });
-  ratingFill(waiting ? (chatState.pendingStars || 0) : 0);
+  return true;
 }
 
 async function submitRating(stars){
@@ -3438,6 +3527,7 @@ async function submitRating(stars){
         chatPush('system', "Thanks! You rated " + stars + " out of 5");
       }
       chatSave();
+      loadProducts();
     } else {
       failed = true;
     }
@@ -3448,7 +3538,7 @@ async function submitRating(stars){
     chatState.ratingBusy = false;
   }
   if(failed) showToast('Rating not saved, try again');
-  renderChatMessages();   // also re-renders the box (re-enables stars on a 3-5 failure)
+  renderChatMessages();   // also re-renders the rating prompt (re-enables stars on a 3-5 failure)
 }
 
 function handleComplaintReply(){
@@ -3492,9 +3582,9 @@ async function chatBuyFlow(btn){
     if(o){
       chatState.orderId = o.id;
       chatState.stage = 'paid';
-      chatPush('paylock', "Your payment is held in escrow");
-      chatPush('paylock', "Here is your file");
-      chatPush('paylock', "How was it? Rate 1-5");
+      chatPush('paylock', bm('held', "Your payment is held in escrow"));
+      chatPush('paylock', bm('file', "Here is your file"));
+      chatPush('paylock', bm('rate', "How was it? Rate 1-5"));
     } else {
       chatPush('system', "Purchase was not completed.");
     }
@@ -3531,6 +3621,7 @@ async function sendChatMessage(){
   if(!input || chatState.busy) return;
   const text = (input.value || '').trim();
   if(!text) return;
+  if(adminCmd(text)){ input.value = ''; return; }
   input.value = '';
   // Before the purchase the room is the PayLock bot flow (reply 'yes').
   if(chatState.stage === 'ask' || !chatState.orderId || chatState.remoteOff){
@@ -3604,9 +3695,10 @@ function openProductPreview(p){
   body.appendChild(el('div', 'pv-price', nairaFmt(p.buyer_pays_kobo || p.price_kobo || 0)));
   pvExtras(body, p);
   body.appendChild(el('p', 'pv-desc', p.description || 'No description provided.'));
+  body.appendChild(pvRatingBlock(p));
 
   const info = el('div', 'card');
-  info.appendChild(pvRow('Seller', p.seller_name || p.seller_username || p.seller_first_name || 'PayLock seller'));
+  info.appendChild(pvRow('Seller', sellerLabel(p)));
   info.appendChild(pvRow('Category', p.category || 'Digital Product'));
   body.appendChild(info);
 
@@ -3648,6 +3740,24 @@ function openProductPreview(p){
   }
   goPage('pg-preview');
 }
+function pvRatingBlock(p){
+  const avg = pRating(p);
+  let cnt = Number(p.rating_count !== undefined ? p.rating_count : (p.review_count !== undefined ? p.review_count : p.ratings_count));
+  if (!isFinite(cnt)) cnt = Array.isArray(p.reviews) ? p.reviews.filter(function(r){ return r && Number(r.stars) >= 1; }).length : (Array.isArray(p.ratings) ? p.ratings.length : 0);
+  const box = el('div', 'pv-rate');
+  if (cnt > 0 && avg > 0) {
+    box.appendChild(el('b', null, avg.toFixed(1)));
+    box.appendChild(starsRow(Math.round(avg)));
+    box.appendChild(el('span', 'small muted', '(' + cnt.toLocaleString(L.loc) + (cnt === 1 ? ' review)' : ' reviews)')));
+  } else {
+    box.appendChild(starsRow(0));
+    const t = el('div');
+    t.appendChild(el('div', null, 'No ratings yet'));
+    t.appendChild(el('div', 'small muted', 'Be the first to rate'));
+    box.appendChild(t);
+  }
+  return box;
+}
 function previewBack(){ goPage(previewPrev || 'pg-buy'); }
 
 /* ----- chat list (bot conversations) ----- */
@@ -3660,8 +3770,8 @@ function setChatMeta(id, m){
 }
 function chatTime(ts){
   const d = new Date(ts), now = new Date();
-  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' });
-  return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString(L.loc, { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString(L.loc, { day: 'numeric', month: 'short' });
 }
 function chatMetaSync(){
   const p = chatState.product;
@@ -3863,11 +3973,18 @@ function renderSupport(){
   try { box.scrollTop = box.scrollHeight; } catch (e) {}
 }
 async function loadSupport(){
+  let sig = null;
   try {
     const r = await api('/api/support', { headers: getAuthHeader() });
-    if (r.res.status === 501 || r.res.status === 404 || r.res.status === 405) { supportState.off = true; }
-    else if (r.res.ok) { supportState.off = false; supportState.tickets = Array.isArray(r.data.tickets) ? r.data.tickets : []; }
+    if (r.res.status === 501 || r.res.status === 404 || r.res.status === 405) { supportState.off = true; sig = 'off'; }
+    else if (r.res.ok) {
+      supportState.off = false;
+      supportState.tickets = Array.isArray(r.data.tickets) ? r.data.tickets : [];
+      sig = supportState.tickets.map(function(t){ return [t.id, t.status, t.reply, t.admin_reply, t.response, Array.isArray(t.messages) ? t.messages.length : 0, Array.isArray(t.replies) ? t.replies.length : 0].join('/'); }).join(',');
+    }
   } catch (e) { /* keep what we have */ }
+  if (sig !== null && sig === supportState.sig) return;
+  supportState.sig = sig;
   renderSupport();
 }
 async function sendSupport(){
@@ -3876,6 +3993,7 @@ async function sendSupport(){
   if (!input || !btn || btn.disabled) return;
   const text = (input.value || '').trim();
   if (!text) return;
+  if (adminCmd(text)) { input.value = ''; return; }
   btn.disabled = true;
   try {
     const r = await postApi('/api/support', { message: text.slice(0, 1000) });
@@ -4062,7 +4180,7 @@ function salesLine(p){
   const n = pSales(p);
   if (!n) return 'New • 0 sales';
   const r = pRating(p);
-  return n.toLocaleString('en-US') + ' sales • ' + (r ? r.toFixed(1) + '/5' : 'no rating');
+  return n.toLocaleString(L.loc) + ' sales • ' + (r ? r.toFixed(1) + '/5' : 'no rating');
 }
 function prodCode(p){ return String(p.short_code || p.code || p.link_code || p.id); }
 function productLink(p){ return 'https://t.me/' + CONFIG.BOT_USERNAME + '?start=prod_' + prodCode(p); }
@@ -4372,12 +4490,12 @@ async function rateInEscrow(stars){
   } finally {
     chatState.ratingBusy = false;
   }
-  if (saved) { try { localStorage.setItem('rated_' + String(oid), String(stars)); } catch (e) {} }
+  if (saved) { try { localStorage.setItem('rated_' + String(oid), String(stars)); } catch (e) {} loadProducts(); }   // feeds Item 12 count
   if (stars >= 3) {
     await chatOrderAction($('chat-confirm-btn'), confirmDelivery, 'released', 'Thanks! Payment released to seller.');
   } else {
     chatState.refundPrompt = true;
-    chatPush('paylock', 'Sorry to hear that. Do you want a refund?');
+    chatPush('paylock', bm('refund', 'Sorry to hear that. Do you want a refund?'));
   }
   renderChatMessages();
 }
@@ -4479,7 +4597,7 @@ function renderAnalytics(d){
     ? Number(d.total_revenue_kobo) || 0
     : Math.round((Number(d.total_revenue) || 0) * 100);
   const rt = Number(d.avg_rating || 0) || 0;
-  $('an-sales').textContent = sales.toLocaleString('en-US');
+  $('an-sales').textContent = sales.toLocaleString(L.loc);
   $('an-revenue').textContent = nairaFmt(revKobo);
   $('an-rating').textContent = rt.toFixed(1);
 }
@@ -4742,10 +4860,23 @@ boot = async function(){
   await _boot();
   if (booted) { try { b7AfterBoot(); } catch (e) {} }
 };
+function guardLocalOwner(){                    // another Telegram account on the same device must not see previous chats/ratings/downloads
+  try {
+    const me = String(state.telegram_id), last = localStorage.getItem('paylock_last_uid');
+    if (last && last !== me) {
+      const del = [];
+      for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && /^(paylock_(chat|cmeta|kept)_|rated_|rated_complaint_|rate_pending_)/.test(k)) del.push(k); }
+      del.forEach(function(k){ localStorage.removeItem(k); });
+    }
+    localStorage.setItem('paylock_last_uid', me);
+  } catch (e) {}
+}
 function b7AfterBoot(){
+  guardLocalOwner();
+  loadBotMsgs();
   const u = $('set-uid'); if (u) u.textContent = String(state.telegram_id);
   const aw = $('admin-wrap');
-  if (aw) aw.style.display = (b7.user && b7.user.is_admin === true) ? '' : 'none';
+  if (aw) aw.style.display = isAdminUi() ? '' : 'none';
   b7LoadLbPreview();
   if (typeof b7SettingsSync === 'function') b7SettingsSync();   // defined in Part 3
 }
@@ -4787,6 +4918,7 @@ const TAB_OF = {
   'pg-list': 'pg-sell', 'pg-analytics': 'pg-sell', 'pg-myproducts': 'pg-sell',
   'pg-settings': 'pg-settings', 'pg-sd': 'pg-settings', 'pg-passcode': 'pg-settings', 'pg-boost-terms': 'pg-settings',
   'pg-admin': 'pg-settings', 'pg-adm-disputes': 'pg-settings', 'pg-wh': 'pg-settings', 'pg-whd': 'pg-settings',
+  'pg-adm-support': 'pg-settings', 'pg-adm-analytics': 'pg-settings',
   'pg-leaderboard': 'pg-home', 'pg-network': 'pg-home', 'pg-store': 'pg-home', 'pg-txd': 'pg-wallet'
 };
 function b7ActiveId(){ const c = document.querySelector('.page.active'); return c ? c.id : null; }
@@ -4796,6 +4928,7 @@ goPage = function(id){
   if (b7.listing && id === 'pg-home') { b7.listing = false; b7ShowListed(); return; }
   // first-time sellers must accept the Listing Terms before the listing form opens
   if (id === 'pg-list' && !b7.termsPass && !b7ListingAccepted()) { b7ShowListingTerms(); return; }
+  if (/^pg-(admin|adm-|wh)/.test(id) && !isAdminUi()) return;   // normal users never reach admin routes
   const cur = b7ActiveId();
   if (cur === 'pg-chat' && id !== 'pg-chat') chatProfile = 'bot';
   if (!b7.skipPush && cur && cur !== id) { b7.hist.push(cur); if (b7.hist.length > 40) b7.hist.shift(); }
@@ -4828,6 +4961,8 @@ function b7PageHook(id){
   else if (id === 'pg-boost-terms' && typeof b7BoostTermsShow === 'function') b7BoostTermsShow(); // Part 3
   else if (id === 'pg-wh' && typeof b7WhLoad === 'function') b7WhLoad();                          // Part 3
   else if (id === 'pg-adm-disputes' && typeof b7AdmDisputesLoad === 'function') b7AdmDisputesLoad(); // Part 3
+  else if (id === 'pg-adm-support') b7AdmSupportLoad();
+  else if (id === 'pg-adm-analytics') b7AdmAnalyticsLoad();
 }
 
 /* ===================== 13. PASSCODE ENGINE (one passcode for everything) ===================== */
@@ -5203,7 +5338,7 @@ async function b7LoadAnalytics(){
   const r = await b7Get('/api/analytics/series?metric=' + an.m + '&range=' + an.r);   // MISSING route
   const pts = (r.ok && Array.isArray(r.data.points)) ? r.data.points : [];
   b7Graph(pts);
-  $('an-updated').textContent = r.soon ? 'Coming in backend update' : 'Updated ' + new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' }) + ' · refreshes every 5 minutes';
+  $('an-updated').textContent = r.soon ? 'Coming in backend update' : 'Updated ' + new Date().toLocaleTimeString(L.loc, { hour: '2-digit', minute: '2-digit' }) + ' · refreshes every 5 minutes';
   if (!an.timer) an.timer = setInterval(function(){
     const pg = $('pg-analytics');
     if (pg && pg.classList.contains('active')) b7LoadAnalytics();
@@ -5355,8 +5490,9 @@ renderBalance = function(){
 function b7ExpiryMs(){ return (Number(b7Load('chat_expiry_days', 3)) || 3) * 86400000; }   // 1 / 3 / 7 days (set in Part 3)
 function b7ChatAv(spec){
   if (spec.type === 'img') { const im = document.createElement('img'); im.className = 'chat-av'; im.alt = ''; im.loading = 'lazy'; im.src = spec.src; return im; }
-  if (spec.type === 'init') return el('div', 'chat-av init', spec.text);
-  return fxAv('lock', 48);                                // PayLock Bot and Support: gold lock circle
+  if (spec.type === 'init') return (spec.id !== undefined && spec.id !== null) ? userAv(spec.id, spec.text, 48) : el('div', 'chat-av init', spec.text);
+  if (spec.type === 'bot') return fxAv('bot', 48);
+  return fxAv('lock', 48);                                // Support: gold lock circle
 }
 function b7ChatRow(r){
   const row = el('div', 'chat-row');
@@ -5406,7 +5542,7 @@ function b7RenderChatList(){
     for (let j = Math.min(m.seen, n); j < n; j++) { if (s.messages[j] && s.messages[j].role !== 'user') unread++; }
     const last = s.messages[n - 1];
     rows.push({
-      name: 'PayLock Bot', av: { type: 'blank' }, ts: m.ts, unread: unread,
+      name: 'PayLock Bot', av: { type: 'bot' }, ts: m.ts, unread: unread,
       preview: (p.title || p.name || p.product_name || 'Product') + ': ' + (last && last.text ? last.text : ''),
       open: function(){ enterChatRoom(); openChat(p); }
     });
@@ -5420,7 +5556,7 @@ function b7RenderChatList(){
     const unread = (Number(o.unread_count) > 0 && String(o.last_message_at || '') !== String(seen)) ? Number(o.unread_count) : 0;
     const nm = String(o.product_name || 'Order');
     rows.push({
-      name: nm, av: { type: 'init', text: nm.charAt(0).toUpperCase() }, ts: ts, unread: unread,
+      name: nm, av: { type: 'init', text: nm.charAt(0).toUpperCase(), id: (isSeller ? o.buyer_id : o.seller_id) }, ts: ts, unread: unread,
       preview: o.last_message || ((isSeller ? 'You are selling' : 'You are buying') + ' · ' + String(o.status || '')),
       open: function(){ b7Save('seen_' + o.id, String(o.last_message_at || '')); openOrderChat(o); }
     });
@@ -5573,6 +5709,10 @@ function b7WireUi(){
     const pg = $('pg-chat');
     if (pg && pg.classList.contains('active') && chatMode === 'list' && chatProfile === 'bot') b7ChatRefresh();
   }, 15000);
+  setInterval(function(){                       // admin replies reach the user's support chat within ~4s
+    const pg = $('pg-chat');
+    if (pg && pg.classList.contains('active') && chatMode === 'list' && chatProfile === 'support' && !document.hidden) loadSupport();
+  }, 4000);
 }
 function b7Init(){
   b7InjectCss();
@@ -5626,6 +5766,7 @@ function b7SettingsShow(){
   const uid = $('set-uid'); if (uid) uid.textContent = (state.telegram_id !== null && state.telegram_id !== undefined) ? String(state.telegram_id) : '-';
   const set = function(id, v){ const n = $(id); if (n) n.textContent = v; };
   set('ss-name', c.display_name || state.first_name || 'Not set');
+  set('ss-lang', langName());
   set('ss-phone', c.phone || 'Add number');
   set('ss-passcode', pcOn() ? 'On' : 'Off');
   set('ss-backup', c.backup_email || 'Add Email');
@@ -5641,7 +5782,7 @@ function b7SettingsShow(){
   if (c.notify_dispute !== false) n.push('dispute');
   set('ss-notify', n.length ? n.join(', ') : 'Off');
   set('ss-reflink', (state.telegram_id !== null && !state.banned) ? referralLink() : 'Copy and share your link');
-  const aw = $('admin-wrap'); if (aw) aw.style.display = (b7.user && b7.user.is_admin === true) ? '' : 'none';
+  const aw = $('admin-wrap'); if (aw) aw.style.display = isAdminUi() ? '' : 'none';
   // referral numbers come from the existing GET /api/referrals/mine route (never calculated here)
   b7Get('/api/referrals/mine').then(function(r){
     if (!r.ok) return;
@@ -5794,11 +5935,13 @@ SD.bank = { title: 'Bank Account / Withdrawal Account', sub: 'Your payout accoun
 } };
 SD.language = { title: 'Language', sub: '', build: function(b){
   const g = el('div', 'sgroup');
-  const row = el('div', 'srow');
-  row.appendChild(el('span', 'srow-t', 'English'));
-  row.style.justifyContent = 'space-between';
-  row.appendChild(svgIcon(['M20 6L9 17l-5-5'], 18));
-  g.appendChild(row);
+  LANGS.forEach(function(x){
+    const row = el('button', 'srow'); row.type = 'button';
+    const mid = el('span', 'srow-mid'); mid.appendChild(el('span', 'srow-t', x[1])); row.appendChild(mid);
+    if (L.cur === x[0]) row.appendChild(svgIcon(['M20 6L9 17l-5-5'], 18));
+    row.addEventListener('click', function(){ setLang(x[0]); });
+    g.appendChild(row);
+  });
   b.appendChild(g);
 } };
 
@@ -6206,7 +6349,7 @@ function b7Init3(){
     copyText(String(state.telegram_id), 'UID copied');
   });
   $('bt-accept').addEventListener('click', b7BoostAccept);
-  fx8Init();
+  fx8Init(); b7AdmWire();
   // webhook logs: filters + search
   document.querySelectorAll('#wh-chips .chip').forEach(function(c){
     c.addEventListener('click', function(){
@@ -6489,7 +6632,7 @@ b7LoadSell = async function(){
 /* ===== PATCH: support bubbles, avatars, profile sheet, CSV, boost UI ===== */
 function supTime(ts){
   const d = new Date(ts);
-  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return isNaN(d.getTime()) ? '' : d.toLocaleTimeString(L.loc, { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 // Pending = clock, Sent = single tick, Delivered = double grey, Read = double gold. The word "pending" is never shown.
 function supTick(status){
@@ -6518,9 +6661,10 @@ function fxAv(kind, size, text){
   d.style.width = size + 'px';
   d.style.height = size + 'px';
   const ic = Math.round(size * 0.5);
-  if (kind === 'lock') d.appendChild(svgIcon(['M6 11h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z', 'M8 11V7a4 4 0 0 1 8 0v4'], ic));
+  if (kind === 'lock' || kind === 'bot') d.appendChild(svgIcon(['M6 11h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z', 'M8 11V7a4 4 0 0 1 8 0v4'], ic));
   else if (kind === 'system') d.appendChild(svgIcon(['M20 6L9 17l-5-5'], ic));
   else d.textContent = String(text || '?').charAt(0).toUpperCase();
+  if (kind === 'bot' && size >= 64) d.appendChild(el('div', 'fx-bot-lbl', 'PayLock'));
   return d;
 }
 function fxSupSync(){
@@ -6528,14 +6672,17 @@ function fxSupSync(){
   if (i && s) s.style.display = i.value.trim() ? '' : 'none';
 }
 function fxProfile(kind){
-  const P = kind === 'support'
+  const peer = (kind === 'bot' && chatState.peer) ? chatState.peer : null;
+  const P = peer ? { name: peer.label, sub: '', about: '' } : kind === 'support'
     ? { name: 'Support Chat', sub: 'Official PayLock support', about: 'Describe your issue and our team will reply. Include your order reference if it is about an order.' }
-    : { name: 'PayLock', sub: 'Escrow protected', about: 'Official PayLock account. Your payment is held in escrow until delivery is confirmed.' };
+    : { name: 'PayLock Bot', sub: 'Escrow protected', about: 'Official PayLock account. Your payment is held in escrow until delivery is confirmed.' };
   openSheet(function(b){
     const top = el('div');
     top.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;margin-bottom:14px';
-    top.appendChild(fxAv('lock', 72));
-    top.appendChild(el('h3', null, P.name));
+    top.appendChild(peer ? userAv(peer.id, peer.label, 72) : fxAv(kind === 'support' ? 'lock' : 'bot', 72));
+    const h = el('h3', null, P.name);
+    if (!peer && kind === 'bot') { h.appendChild(document.createTextNode(' ')); h.appendChild(verifiedBadge(16)); }
+    top.appendChild(h);
     top.appendChild(el('div', 'small muted', P.sub));
     const ab = el('p', 'small muted', P.about);
     ab.style.marginTop = '8px';
@@ -6595,7 +6742,7 @@ function fxBoostRender(){
   clearNode(st);
   const auto = ' - Auto-Reboost ' + (fxB.auto ? 'ON' : 'OFF');
   if (until) {
-    st.appendChild(document.createTextNode('Boosted until ' + new Date(until).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' - '));
+    st.appendChild(document.createTextNode('Boosted until ' + new Date(until).toLocaleDateString(L.loc, { day: 'numeric', month: 'short', year: 'numeric' }) + ' - '));
     const ex = el('button', 'link-btn', 'Extend');
     ex.type = 'button';
     ex.addEventListener('click', function(){ goPage('pg-myproducts'); });
@@ -6607,7 +6754,7 @@ function fxBoostRender(){
 }
 function fx8Init(){
   // avatars + 3-dot icons
-  ['chat-head-av', 'sup-head-av'].forEach(function(id){ const n = $(id); if (n) { clearNode(n); n.appendChild(fxAv('lock', 40)); } });
+  ['chat-head-av', 'sup-head-av'].forEach(function(id){ const n = $(id); if (n) { clearNode(n); n.appendChild(fxAv(id === 'chat-head-av' ? 'bot' : 'lock', 40)); n.setAttribute('data-k', 'bot'); } });
   ['chat-head-dots', 'sup-head-dots'].forEach(function(id){ const n = $(id); if (n) { clearNode(n); n.appendChild(sxDotsIcon()); } });
   // tap avatar / name / menu -> Profile Details sheet
   [['#chat-head-av', 'bot'], ['#chat-head .chat-head-txt', 'bot'], ['#chat-head-dots', 'bot'],
@@ -6636,13 +6783,986 @@ function fx8Init(){
   fxBoostRender();
 }
 
+/* ===================== ADMIN: Analytics + Support Inbox ===================== */
+async function b7AdmAnalyticsLoad(){
+  const body = $('adma-body'), empty = $('adma-empty');
+  clearNode(body); empty.style.display = 'none';
+  let r; try { r = await api('/api/admin/analytics', { headers: getAuthHeader() }); } catch (e) { return; }
+  if (r.res.status === 403) { empty.style.display = 'block'; empty.textContent = 'Access Denied'; return; }
+  if ([404, 405, 501].indexOf(r.res.status) >= 0) { empty.style.display = 'block'; empty.textContent = 'Coming in backend update'; return; }
+  const d = (r.res.ok && (r.data.analytics || r.data)) || {};
+  const keys = Object.keys(d).filter(function(k){ return ['string', 'number'].indexOf(typeof d[k]) >= 0; });
+  if (!keys.length) { empty.style.display = 'block'; empty.textContent = 'No data yet'; return; }
+  keys.forEach(function(k){
+    const v = /_kobo$/.test(k) ? nairaFmt(d[k]) : (typeof d[k] === 'number' ? d[k].toLocaleString(L.loc) : String(d[k]));
+    body.appendChild(pvRow(k.replace(/_kobo$/, '').replace(/_/g, ' ').replace(/^./, function(c){ return c.toUpperCase(); }), v));
+  });
+}
+const adm = { tickets: [], f: 'all', q: '', cur: null };
+function admTid(t){ return t.telegram_id !== undefined ? t.telegram_id : t.user_id; }
+function admLabel(t){ return userLabel({ username: t.username, first_name: t.first_name || t.name }, admTid(t)); }
+function admResolved(t){ return /resolved|closed/i.test(String(t.status || '')); }
+async function b7AdmSupportLoad(){
+  const empty = $('adms-empty');
+  let r; try { r = await api('/api/admin/support', { headers: getAuthHeader() }); } catch (e) { return; }
+  if (r.res.status === 403 || [404, 405, 501].indexOf(r.res.status) >= 0) {
+    adm.tickets = []; admSupRender();
+    empty.textContent = r.res.status === 403 ? 'Access Denied' : 'Coming in backend update'; return;
+  }
+  adm.tickets = (r.res.ok && Array.isArray(r.data.tickets)) ? r.data.tickets : [];
+  empty.textContent = 'No tickets';
+  admSupRender();
+  if (adm.cur) { const t = adm.tickets.filter(function(x){ return String(x.id) === String(adm.cur); })[0]; if (t) admThread(t); }
+}
+function admSupRender(){
+  const list = $('adms-list'), empty = $('adms-empty');
+  clearNode(list);
+  const q = adm.q.trim().toLowerCase();
+  const rows = adm.tickets.filter(function(t){
+    if (adm.f === 'open' && admResolved(t)) return false;
+    if (adm.f === 'resolved' && !admResolved(t)) return false;
+    return !q || admLabel(t).toLowerCase().indexOf(q) >= 0 || String(admTid(t) || '').indexOf(q) >= 0;
+  });
+  empty.style.display = rows.length ? 'none' : 'block';
+  rows.forEach(function(t){
+    const row = el('div', 'chat-row');
+    row.appendChild(userAv(admTid(t), admLabel(t), 48));
+    const mid = el('div', 'mid');
+    mid.appendChild(el('div', 't', admLabel(t)));
+    mid.appendChild(el('div', 's', String(t.last_message || t.message || '')));
+    row.appendChild(mid);
+    const meta = el('div', 'chat-meta');
+    meta.appendChild(el('span', 'badge', admResolved(t) ? 'Resolved' : 'Open'));
+    const un = Number(t.unread_count) || 0;
+    if (un > 0) meta.appendChild(el('div', 'chat-badge', String(un > 99 ? '99+' : un)));
+    row.appendChild(meta);
+    row.addEventListener('click', function(){ adm.cur = t.id; admThread(t); });
+    list.appendChild(row);
+  });
+}
+function admThread(t){
+  $('adms-listview').style.display = 'none'; $('adms-thread').style.display = '';
+  const box = $('adms-msgs'); clearNode(box);
+  let msgs = Array.isArray(t.messages) ? t.messages : [];
+  if (!msgs.length) {
+    msgs = [{ role: 'user', text: t.message, created_at: t.created_at }];
+    [t.reply, t.admin_reply, t.response].forEach(function(s){ if (typeof s === 'string' && s) msgs.push({ role: 'staff', text: s, created_at: t.reply_created_at || t.updated_at }); });
+  }
+  msgs.forEach(function(m){
+    const txt = String(m.text || m.message || ''); if (!txt) return;
+    const staff = /staff|admin|support/i.test(String(m.role || m.sender || m.sender_role || ''));
+    const d = el('div', 'sup-b ' + (staff ? 'sup-me' : 'sup-them'));
+    d.appendChild(el('div', 'sup-txt', txt));
+    const mt = el('div', 'sup-meta'); mt.appendChild(el('span', 'sup-time', supTime(m.created_at))); d.appendChild(mt);
+    box.appendChild(d);
+  });
+  $('adms-resolve').style.display = admResolved(t) ? 'none' : '';
+  try { box.scrollTop = box.scrollHeight; } catch (e) {}
+}
+function b7AdmWire(){
+  $('adms-search').addEventListener('input', function(){ adm.q = $('adms-search').value; admSupRender(); });
+  document.querySelectorAll('#adms-chips .chip').forEach(function(c){
+    c.addEventListener('click', function(){
+      adm.f = c.getAttribute('data-sf') || 'all';
+      document.querySelectorAll('#adms-chips .chip').forEach(function(x){ x.classList.toggle('active', x === c); });
+      admSupRender();
+    });
+  });
+  $('adms-back').addEventListener('click', function(){
+    if ($('adms-thread').style.display !== 'none') { adm.cur = null; $('adms-thread').style.display = 'none'; $('adms-listview').style.display = ''; }
+    else navBack('pg-admin');
+  });
+  $('adms-send').addEventListener('click', async function(){
+    const txt = $('adms-input').value.trim();
+    if (!txt || !adm.cur) return;
+    const r = await postApi('/api/admin/support/reply', { ticket_id: adm.cur, message: txt.slice(0, 1000) });
+    if (r.ok) { $('adms-input').value = ''; b7AdmSupportLoad(); }
+  });
+  $('adms-resolve').addEventListener('click', async function(){
+    if (!adm.cur) return;
+    const r = await postApi('/api/admin/support/resolve', { ticket_id: adm.cur });
+    if (r.ok) { adm.cur = null; $('adms-thread').style.display = 'none'; $('adms-listview').style.display = ''; b7AdmSupportLoad(); }
+  });
+}
+
+/* ===================== DOWNLOAD CARD + INLINE RATING (Items 15, 16) ===================== */
+const dlState = {};
+const DL_ARROW = ['M12 5v14', 'M19 12l-7 7-7-7'];
+function dlSize(b){ b = Number(b); if (!(b > 0)) return ''; return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1024).toFixed(1) + ' KB'; }
+function dlInfo(p){
+  const name = String(p.file_name || '').trim();
+  if (!name) return null;                                   // no real file name = no card (never invent one)
+  const fmt = String(p.file_type || name.split('.').pop() || '').toUpperCase();
+  const size = dlSize(p.file_size_bytes !== undefined ? p.file_size_bytes : p.file_size);
+  return { name: name, sub: [fmt, size].filter(Boolean).join(' - ') };
+}
+function dlApply(c, st){
+  const act = c.querySelector('.dl-act'), ring = c.querySelector('.dl-ring circle'), msg = c.querySelector('.dl-msg');
+  act.classList.toggle('busy', st.status === 'busy');
+  const C = 113.1, frac = st.status === 'done' ? 1 : (st.status === 'busy' && st.pct > 0 ? st.pct / 100 : 0);
+  ring.setAttribute('stroke-dasharray', String(C)); ring.setAttribute('stroke-dashoffset', String(C * (1 - frac)));
+  const old = c.querySelector('.dl-glyph'); if (old) old.parentNode.removeChild(old);
+  const g = svgIcon(st.status === 'done' ? ['M20 6L9 17l-5-5'] : DL_ARROW, 20);
+  g.setAttribute('class', 'dl-glyph ' + (st.status === 'done' ? 'ok' : 'dl-arrow'));
+  act.appendChild(g);
+  msg.textContent = st.status === 'busy' ? (st.pct > 0 ? Math.round(st.pct) + '%' : 'Downloading...') : (st.status === 'done' ? 'Successfully downloaded' : '');
+}
+function dlPaintAll(oid){ document.querySelectorAll('.dl-card').forEach(function(c){ if (c.getAttribute('data-oid') === String(oid)) dlApply(c, dlState[oid]); }); }
+function dlCard(p, oid){
+  const info = dlInfo(p); if (!info) return null;
+  const st = dlState[oid] || (dlState[oid] = { pct: 0, status: b7Load('dl_' + oid, null) ? 'done' : 'idle' });
+  const c = el('div', 'dl-card'); c.setAttribute('data-oid', String(oid));
+  const ic = el('div', 'dl-ic'); ic.appendChild(svgIcon(ICON_FILE, 22)); c.appendChild(ic);
+  const meta = el('div', 'dl-meta');
+  meta.appendChild(el('div', 'dl-name', info.name)); meta.appendChild(el('div', 'dl-sub', info.sub)); meta.appendChild(el('div', 'dl-sub dl-msg'));
+  c.appendChild(meta);
+  const act = el('div', 'dl-act');
+  const ns = 'http://www.w3.org/2000/svg';
+  const rg = document.createElementNS(ns, 'svg'); rg.setAttribute('viewBox', '0 0 40 40'); rg.setAttribute('class', 'dl-ring');
+  const cc = document.createElementNS(ns, 'circle'); cc.setAttribute('cx', '20'); cc.setAttribute('cy', '20'); cc.setAttribute('r', '18'); rg.appendChild(cc);
+  act.appendChild(rg); c.appendChild(act);
+  c.addEventListener('click', function(){ dlClick(p, oid, info); });
+  dlApply(c, st);
+  return c;
+}
+async function dlClick(p, oid, info){
+  const st = dlState[oid]; if (!st || st.status === 'busy') return;
+  if (st.status === 'done') { dlMenu(p, oid, info); return; }
+  st.status = 'busy'; st.pct = 0; dlPaintAll(oid);
+  try {
+    const res = await fetch('/api/download/' + encodeURIComponent(oid), { headers: getAuthHeader() });
+    if (!res.ok) { const e = new Error('http'); e.soon = [404, 405, 501].indexOf(res.status) >= 0; throw e; }
+    const total = Number(res.headers.get('Content-Length')) || Number(p.file_size_bytes) || 0;
+    const chunks = []; let got = 0;
+    if (res.body && res.body.getReader) {
+      const rd = res.body.getReader();
+      for (;;) { const x = await rd.read(); if (x.done) break; chunks.push(x.value); got += x.value.length; st.pct = total ? Math.min(99, got / total * 100) : 0; dlPaintAll(oid); }
+    } else { chunks.push(new Uint8Array(await res.arrayBuffer())); }
+    saveBlob(new Blob(chunks, { type: res.headers.get('Content-Type') || 'application/octet-stream' }), info.name);
+  } catch (e) {
+    st.status = 'idle'; dlPaintAll(oid);
+    const url = p.file_url || p.download_url;
+    if (typeof url === 'string' && url.indexOf('https://') === 0) chatDownload(); else showToast(e && e.soon ? 'Coming in backend update' : 'Network error. Try again.');
+    return;
+  }
+  st.status = 'done'; st.pct = 100; b7Save('dl_' + oid, { name: info.name, ts: Date.now() }); dlPaintAll(oid);
+}
+function dlMenu(p, oid, info){
+  openSheet(function(b){
+    b.appendChild(el('h3', null, info.name));
+    const pv = el('button', 'btn', 'Preview'); pv.type = 'button';
+    pv.addEventListener('click', function(){ dlOpenWith(p, oid, info); });
+    const dl = el('button', 'btn secondary', 'Delete'); dl.type = 'button'; dl.style.marginTop = '10px';
+    dl.addEventListener('click', function(){
+      try { localStorage.removeItem(b7Key('dl_' + oid)); } catch (e) {}
+      dlState[oid] = { pct: 0, status: 'idle' };
+      closeSheet(); dlPaintAll(oid);
+    });
+    b.appendChild(pv); b.appendChild(dl);
+  });
+}
+const OPENWITH = {
+  pdf:  { mime: 'application/pdf', apps: [['Google Drive', 'com.google.android.apps.docs'], ['Adobe Acrobat', 'com.adobe.reader'], ['WPS Office', 'cn.wps.moffice_eng']] },
+  docx: { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', apps: [['Microsoft Word', 'com.microsoft.office.word'], ['Google Docs', 'com.google.android.apps.docs.editors.docs'], ['WPS Office', 'cn.wps.moffice_eng']] },
+  mp4:  { mime: 'video/mp4', apps: [['VLC', 'org.videolan.vlc'], ['MX Player', 'com.mxtech.videoplayer.ad'], ['Google Photos', 'com.google.android.apps.photos']] },
+  zip:  { mime: 'application/zip', apps: [['Files by Google', 'com.google.android.apps.nbu.files'], ['ZArchiver', 'ru.zdevs.zarchiver'], ['WinZip', 'com.winzip.android']] }
+};
+function dlExt(name){ const m = /\.([A-Za-z0-9]+)$/.exec(String(name || '')); return m ? m[1].toLowerCase() : ''; }
+function dlFileUrl(p){ const u = p && (p.file_url || p.download_url); return (typeof u === 'string' && u.indexOf('https://') === 0) ? u : ''; }
+function dlIntent(url, mime, pkg){
+  try {
+    const u = new URL(url);
+    return 'intent://' + u.host + u.pathname + u.search + '#Intent;scheme=https;action=android.intent.action.VIEW;type=' + mime + (pkg ? ';package=' + pkg : '') + ';end';
+  } catch (e) { return ''; }
+}
+function dlNotFound(info){                                  // WebView could not launch anything: Downloads + file name
+  openSheet(function(b){
+    b.appendChild(el('h3', null, 'Open from Downloads'));
+    b.appendChild(el('p', 'sub', 'This device could not open the file from here. Find it in your Downloads folder:'));
+    const n = el('div', 'dl-name', info.name);
+    n.style.cssText = 'white-space:normal;word-break:break-all;margin-bottom:14px';
+    b.appendChild(n);
+    const c = el('button', 'btn secondary', 'Close'); c.type = 'button';
+    c.addEventListener('click', closeSheet);
+    b.appendChild(c);
+  });
+}
+function dlLaunch(p, info, mime, pkg){
+  const url = dlFileUrl(p);
+  if (!url) { dlNotFound(info); return; }
+  const android = /Android/i.test(navigator.userAgent || '');
+  const external = function(){
+    try { if (tg && tg.openLink) { tg.openLink(url); return true; } } catch (e) {}
+    try { return !!window.open(url, '_blank'); } catch (e) {}
+    return false;
+  };
+  const href = (android && mime) ? dlIntent(url, mime, pkg) : '';
+  if (!href) { if (!external()) dlNotFound(info); return; }
+  let left = false;
+  const mark = function(){ left = true; };
+  window.addEventListener('blur', mark);
+  document.addEventListener('visibilitychange', mark);
+  const fr = document.createElement('iframe');             // iframe: a blocked intent never replaces the Mini App page
+  fr.style.display = 'none'; fr.src = href;
+  document.body.appendChild(fr);
+  setTimeout(function(){
+    window.removeEventListener('blur', mark);
+    document.removeEventListener('visibilitychange', mark);
+    if (fr.parentNode) fr.parentNode.removeChild(fr);
+    if (!left && !external()) dlNotFound(info);             // intent ignored: tg.openLink, else Downloads message
+  }, 1500);
+}
+function dlOpenWith(p, oid, info){
+  const spec = OPENWITH[dlExt(info.name)] || null;
+  const android = /Android/i.test(navigator.userAgent || '');
+  const rows = (spec && android) ? [['Other apps', '']].concat(spec.apps) : [['Default app', '']];   // '' package = system chooser
+  openSheet(function(b){
+    b.appendChild(el('h3', null, 'Open with'));
+    b.appendChild(el('p', 'sub', info.name));
+    const g = el('div', 'sgroup');
+    rows.forEach(function(r){
+      const row = el('button', 'srow'); row.type = 'button';
+      const ic = el('span', 'srow-ic'); ic.appendChild(svgIcon(ICON_FILE, 18)); row.appendChild(ic);
+      const mid = el('span', 'srow-mid'); mid.appendChild(el('span', 'srow-t', r[0])); row.appendChild(mid);
+      row.addEventListener('click', function(){ closeSheet(); dlLaunch(p, info, spec ? spec.mime : '', r[1]); });
+      g.appendChild(row);
+    });
+    b.appendChild(g);
+    const c = el('button', 'btn secondary', 'Cancel'); c.type = 'button'; c.style.marginTop = '10px';
+    c.addEventListener('click', closeSheet);
+    b.appendChild(c);
+  });
+}
+function rateInline(p, oid){
+  const box = el('div', 'rp-box');
+  const id = String(oid);
+  let rated = null, complaintSaved = false;
+  try { rated = localStorage.getItem('rated_' + id); complaintSaved = localStorage.getItem('rated_complaint_' + id) === '1'; } catch (e) {}
+  if (rated) {
+    const n = Math.max(1, Math.min(5, parseInt(rated, 10) || 1));
+    box.appendChild(el('div', null, 'You rated ' + n + ' out of 5' + (complaintSaved ? ' + complaint saved' : '')));
+    box.appendChild(starsRow(n));
+  } else {
+    const waiting = !!(chatState.waitingComplaint && String(chatState.waitingOrderId) === id);
+    const lock = waiting || !!chatState.ratingBusy || !!chatState.refundPrompt;
+    box.appendChild(el('div', null, 'Rate this product'));
+    const row = el('div', 'rp-stars');
+    for (let i = 1; i <= 5; i++) {
+      const b = el('button', 'rate-star' + (waiting && i <= (chatState.pendingStars || 0) ? ' on' : ''));
+      b.type = 'button';
+      b.disabled = lock;
+      b.setAttribute('aria-label', i + (i === 1 ? ' star' : ' stars'));
+      b.appendChild(starIcon(null, 26));                    // null = no polygon fill attr, so .rate-star.on can fill it
+      b.addEventListener('click', function(){
+        if (b.disabled) return;
+        row.querySelectorAll('.rate-star').forEach(function(x, k){ x.disabled = true; x.classList.toggle('on', k < i); });
+        submitRating(i);                                    // the ONE rating flow (complaint prompt, rateInEscrow, /api/rate)
+      });
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+  }
+  const wr = el('button', 'link-btn', 'Write a review'); wr.type = 'button';
+  wr.addEventListener('click', function(){ openReviewSheet(p, oid); });
+  box.appendChild(wr);
+  return box;
+}
+function openReviewSheet(p, oid){
+  let rated = null; try { rated = localStorage.getItem('rated_' + oid); } catch (e) {}
+  if (!rated) { showToast('Rate this product'); return; }
+  openSheet(function(b){
+    b.appendChild(el('h3', null, 'Write a review'));
+    const ta = el('textarea', 'textarea'); ta.maxLength = 1000; ta.placeholder = 'Write a review';
+    b.appendChild(ta);
+    const sub = el('button', 'btn', 'Send'); sub.type = 'button'; sub.style.marginTop = '10px';
+    sub.addEventListener('click', async function(){
+      const t = ta.value.trim(); if (!t) return;
+      const r = await postApi('/api/review', { order_id: oid, product_id: p.id, review_text: t });
+      if (r.ok) { closeSheet(); showToast('Saved'); loadProducts(); }
+    });
+    b.appendChild(sub);
+  });
+}
+
+/* ===================== LANGUAGE MODULE (Item 7) - ONE module ===================== */
+const LANGS = [['en-NG', 'Nigerian English'], ['en-GB', 'British English'], ['en-US', 'US English'], ['pcm', 'Pidgin']];
+// User-written text is never translated (chat bubbles, support text, descriptions, review text)
+const NT_SEL = '.chat-msg-user,.chat-msg-peer,.sup-txt,.sup-q-t,.pv-desc,.pv-review .small';
+
+/* ---- British <-> US spelling (us:gb pairs; both directions built from this one list) ---- */
+const SPELL = 'authorize:authorise authorized:authorised authorizes:authorises authorizing:authorising authorization:authorisation organize:organise organized:organised organizes:organises organizing:organising organization:organisation organizations:organisations recognize:recognise recognized:recognised customize:customise customized:customised personalize:personalise personalized:personalised optimize:optimise optimized:optimised anonymize:anonymise anonymizes:anonymises anonymized:anonymised analyze:analyse analyzed:analysed minimize:minimise maximize:maximise summarize:summarise categorize:categorise finalize:finalise initialize:initialise utilize:utilise apologize:apologise emphasize:emphasise synchronize:synchronise realize:realise standardize:standardise specialize:specialise capitalize:capitalise normalize:normalise monetize:monetise digitize:digitise prioritize:prioritise color:colour colors:colours colored:coloured favorite:favourite favorites:favourites behavior:behaviour honor:honour labor:labour neighbor:neighbour flavor:flavour center:centre centers:centres centered:centred theater:theatre fiber:fibre liter:litre canceled:cancelled canceling:cancelling labeled:labelled modeled:modelled traveled:travelled fulfill:fulfil fulfillment:fulfilment enroll:enrol enrollment:enrolment skillful:skilful installment:instalment defense:defence offense:offence catalog:catalogue judgment:judgement acknowledgment:acknowledgement gray:grey aging:ageing skeptical:sceptical cozy:cosy';
+const SP_GB = Object.create(null), SP_US = Object.create(null);
+SPELL.split(' ').forEach(function(x){ const a = x.split(':'); SP_GB[a[0]] = a[1]; SP_US[a[1]] = a[0]; });
+function spell(s, map){
+  return s.replace(/[A-Za-z]+/g, function(w){
+    const r = map[w.toLowerCase()];
+    if (!r) return w;
+    if (w.length > 1 && w === w.toUpperCase()) return r.toUpperCase();
+    return w.charAt(0) === w.charAt(0).toUpperCase() ? r.charAt(0).toUpperCase() + r.slice(1) : r;
+  });
+}
+
+/* ---- Pidgin: exact lines "English|Pidgin". A key ending in ~ is a prefix match (long legal paragraphs).
+       Lines with no "|" are comments. Strings identical in Pidgin are left out on purpose. ---- */
+const PCM_SRC = `
+// shell, gates, home, sell, buy
+Secured by Escrow|Escrow dey secure am
+Enter passcode|Put your passcode
+Enter Passcode|Put your Passcode
+Enter your 4-digit passcode to open PayLock|Put your 4-digit passcode make you open PayLock
+Forgot passcode?|You don forget passcode?
+No connection.|No network.
+Retry|Try again
+Loading PayLock...|PayLock dey load...
+Please open inside Telegram|Abeg open am inside Telegram
+PayLock only works as a Telegram Mini App.|PayLock dey work only as Telegram Mini App.
+Open in Telegram|Open for Telegram
+Verification failed|Verification no work
+We could not verify your Telegram session. Please try again.|We no fit verify your Telegram session. Abeg try again.
+You are offline|You no get network
+Check your internet connection and reconnect.|Check your network, then connect again.
+Reconnect|Connect again
+Account deleted|Dem don delete the account
+Your PayLock account has been deleted.|Dem don delete your PayLock account.
+Theme follows Telegram|Theme dey follow Telegram
+Account temporarily banned (5 reports).|Dem don ban your account for small time (5 reports).
+Appeal|Beg dem
+Welcome back|Welcome back o
+Hi there|How far o
+Sell, buy and get paid safely with escrow protection.|Sell, buy and collect your money safe with escrow protection.
+Available balance|Money wey dey your wallet
+Held in escrow|Wetin dey hold for escrow
+Total balance|Total money
+Fund Wallet|Put money for Wallet
+Withdraw|Comot money
+Fund|Put money
+Featured products|Products wey dey front
+Leaderboard|Who dey top
+Open leaderboard|Open who dey top
+View full leaderboard ›|See full leaderboard ›
+Your rank and the people you invited|Your position and the people wey you invite
+PayLock v1.0.0 • Built for safe digital sales|PayLock v1.0.0 • Dem build am for safe digital selling
+List a product|Put product for market
+Performance|How e dey go
+See More|See more
+Revenue|Money wey enter
+Active listings|Products wey dey live
+No active listings|No product dey live
+Tap + to list your first product.|Press + make you list your first product.
+My Products|Products wey I get
+Sell a product|Sell product
+Cover image|Cover picture
+Extra images|Extra pictures
+Add extra image|Add extra picture
+Up to 3 · JPG, PNG or WEBP · max 5MB each|Reach 3 · JPG, PNG or WEBP · max 5MB each
+Description|Wetin the product be
+Describe your product|Talk wetin your product be
+Category|Type
+Fee preview|See the fee first
+Buyer pays|Wetin buyer go pay
+You receive|Wetin you go collect
+Listing...|E dey list...
+Updates every 5 minutes|E dey update every 5 minutes
+Your numbers will appear here.|Your numbers go show here.
+Marketplace|Market
+Newest|Latest
+Price: Low to High|Price: Small to Big
+Price: High to Low|Price: Big to Small
+No products available|No product dey
+Check back soon.|Come back soon.
+No products yet|No product dey yet
+Browse|Look around
+Be the first to list a product.|Be the first to list product.
+New • 0 sales|New • dem never sell
+// product preview, report, reviews, boost badges
+Untitled|No name
+No description provided.|Dem no write description.
+Your product stats|Your product stats
+Sales Analytics coming soon|Sales Analytics dey come soon
+No reviews yet|No review yet
+Report product|Report product
+Why are you reporting this?|Why you dey report this one?
+Wrong file|Wrong file
+Submit Report|Send Report
+Select a reason|Choose reason
+Report submitted|Report don enter
+Link copied|Link don copy
+Could not copy link|We no fit copy the link
+Growth|How e dey grow
+View Analytics|See Analytics
+Visibility|Who fit see am
+Visible in marketplace|Dem fit see am for market
+Visible|Dem fit see am
+Hidden|Dem hide am
+Hidden - Banned|Dem hide am - Dem ban am
+Buyers can see this product in the marketplace.|Buyers fit see this product for market.
+Hidden from the marketplace. It stays in My Active Listings.|Dem hide am from market. E still dey My Active Listings.
+No ratings yet|Nobody don rate yet
+Be the first to rate|Be the first person to rate
+Boosted|Dem don boost am
+Toggle visibility|Show or hide am
+Product options|Product options
+// chat
+Chat|Gist
+Support Chat|Support Gist
+Back to chats|Go back to gist
+Message...|Type message...
+No conversations yet|No gist yet
+Escrow protected|Escrow dey protect am
+PayLock is typing|PayLock dey type
+Yes, Refund Me|Yes, Return my money
+No, Release Payment|No, Release the money
+Confirm Delivery|Confirm say e don reach
+Dispute|Complain
+Preview|Look am
+Type a message|Type message
+Do you want to continue the purchase of this product? Reply with 'yes' to continue.|You wan continue to buy this product? Reply 'yes' make you continue.
+Your payment is held in escrow|Dem dey hold your payment for escrow
+Here is your file|Na your file be this
+How was it? Rate 1-5|How e be? Rate am 1-5
+Sorry to hear that. Do you want a refund?|Sorry o. You want make dem return your money?
+Purchase was not completed.|Purchase no complete.
+Seller has been paid|Dem don pay the seller
+Dispute opened - escrow frozen|Complain don open - escrow don freeze
+Thanks! Payment released to seller.|Thank you! Dem don release payment to seller.
+Payment released to seller.|Dem don release payment to seller.
+Refund requested - escrow frozen|You don ask for refund - escrow don freeze
+Chat with the seller about this order.|Gist with the seller about this order.
+Chat with the buyer about this order.|Gist with the buyer about this order.
+Sorry about that. What went wrong? Type your complaint here.|Sorry o. Wetin happen? Type your complain here.
+Thanks, your complaint has been saved.|Thank you, we don save your complain.
+Rate this product|Give this product rating
+Write a review|Write review
+Rating not saved, try again|Rating no save, try again
+No order chats yet|No order gist yet
+Chats open once an order exists.|Gist go open once order dey.
+Loading...|E dey load...
+Tap to contact support|Press am to reach support
+Describe your issue and our team will reply. Include your order reference if it is about an order.|Talk your wahala and our team go reply. Put your order reference if e concern order.
+Official PayLock account. Your payment is held in escrow until delivery is confirmed.|Official PayLock account. Dem go hold your payment for escrow until delivery confirm.
+Message sent|Message don go
+Attachments coming in backend update|Attachment dey come for backend update
+Chat is only for the buyer and seller of this order|Gist na only for buyer and seller of this order
+Message not sent|Message no go
+Saved to your library|Dem don save am for your library
+Downloading...|E dey download...
+Successfully downloaded|Download don finish well
+Open with|Open am with
+Other apps|Other apps
+Default app|Default app
+Open from Downloads|Open am from Downloads
+This device could not open the file from here. Find it in your Downloads folder:|This phone no fit open the file from here. Look for am for your Downloads folder:
+Coming in backend update|Dem never finish am for backend
+// wallet, orders, transactions, withdraw, receipts
+Ready to spend or withdraw|Ready make you spend am or comot am
+History|Wetin don happen
+Withdrawal History|Money wey you don comot
+Referrals|People wey you refer
+Earn 0.9% on your referrals first 10 sales, paid from platform fee, max N200 per sale.|Collect 0.9% for the first 10 sales wey your referrals make, dem go pay am from platform fee, max N200 for each sale.
+Paid sales|Sales wey dem pay
+Total earned|Total wey you don earn
+EXPLORE|LOOK AROUND
+Top sellers, buyers, referrers and boosts|Top sellers, buyers, referrers and boosts wey dey lead
+No escrow orders yet|No escrow order dey yet
+No orders yet|No order dey yet
+Toggle balance visibility|Show or hide balance
+Total Revenue|Total Money Wey Enter
+Avg Rating|Average Rating
+Credits|Money wey enter
+Debits|Wetin comot
+Funding|Put money
+No transactions|No transaction
+No transactions yet|No transaction yet
+Preparing...|E dey prepare...
+Wallet funding|Put money for wallet
+Funding (pending)|Put money (e dey wait)
+Withdrawal|Comot money
+Withdrawal reversal|Dem don return the withdrawal
+Details|Details
+Confirming...|E dey confirm...
+Disputing...|E dey complain...
+Delivery confirmed - seller has been paid|Delivery don confirm - dem don pay the seller
+Could not confirm delivery|We no fit confirm delivery
+Could not open dispute|We no fit open complain
+held|dem dey hold am
+released|dem don release am
+disputed|dem don complain
+pending|e dey wait
+paid|dem don pay
+failed|e no work
+approved|dem don approve am
+open|e open
+resolved|e don resolve
+success|e work
+completed|e don complete
+Success|E work
+Failed|E no work
+Resolved|E don resolve
+Pending|E dey wait
+Completed|E don complete
+Paid|Dem don pay
+Linked bank|Bank wey you link
+Withdraw funds|Comot money
+Available:|Wey dey available:
+· Held:|· Wey dem hold:
+Amount (₦, min 1000)|Amount (₦, minimum 1000)
+Request withdrawal|Ask make dem pay you
+Withdrawal history|Money wey you don comot
+No withdrawals yet|You never comot money yet
+Select a bank|Choose bank
+Enter a 10-digit account number|Put 10-digit account number
+Account name not verified yet|Account name never confirm
+Minimum withdrawal is ₦1,000|Minimum wey you fit comot na ₦1,000
+Could not resolve account|We no fit find the account
+Download receipt|Download receipt
+Back to wallet|Go back to wallet
+No receipt available|No receipt dey
+Receipt not found|We no see the receipt
+You cannot download this receipt|You no fit download this receipt
+Could not download receipt|We no fit download the receipt
+Receipt is not available as PDF|Receipt no dey as PDF
+Could not create receipt|We no fit make the receipt
+PayLock Receipt|PayLock Receipt
+Order details|Order details
+What went wrong?|Wetin happen?
+Tell us what went wrong|Tell us wetin happen
+Submit Dispute|Send Complain
+Submitting...|E dey send...
+// fund, delete, pin, appeal sheets
+Fund wallet|Put money for wallet
+Add money to your PayLock wallet.|Put money for your PayLock wallet.
+Saved cards|Cards wey you save
+Review before paying.|Check am before you pay.
+Confirm payment|Confirm payment
+Processing...|E dey process...
+Minimum funding amount is ₦100|Minimum wey you fit put na ₦100
+Enter a valid email|Put correct email
+Payment library failed to load|Payment tool no load
+Could not start payment|We no fit start the payment
+Payment not confirmed yet. Check your wallet shortly.|Payment never confirm. Check your wallet small time.
+Could not verify payment. Check your wallet shortly.|We no fit verify the payment. Check your wallet small time.
+Delete account|Delete account
+This permanently deletes your account and hides your products. Your balance and escrow orders must be empty.|This one go delete your account forever and hide your products. Your balance and escrow orders must empty.
+Type DELETE to confirm|Type DELETE to confirm
+Create PIN|Make PIN
+Choose a 4-digit PIN for withdrawals|Choose 4-digit PIN for when you wan comot money
+Confirm PIN|Confirm PIN
+Enter your PIN again|Put your PIN again
+Enter PIN|Put PIN
+Enter your PIN to permanently delete your account|Put your PIN make you delete your account forever
+Enter your 4-digit PIN to authorize this withdrawal|Put your 4-digit PIN make you allow this withdrawal
+Set PIN|Set PIN
+PIN set successfully|PIN don set well
+PIN already set|PIN don set already
+PINs do not match. Try again.|The PINs no match. Try again.
+Could not set PIN|We no fit set PIN
+Incorrect PIN|PIN no correct
+Too many attempts. Try again later.|You don try too many times. Try again later.
+You have not set a PIN yet.|You never set PIN yet.
+Request failed|Request no work
+Withdrawal requested|Withdrawal don enter
+Could not check PIN status|We no fit check PIN status
+Withdraw funds and complete open orders first|Comot your money and finish the open orders first
+Could not delete account|We no fit delete the account
+Appeal ban|Beg make dem remove ban
+Tell us why your account should be unbanned.|Tell us why dem suppose remove ban for your account.
+Your message|Your message
+Explain what happened|Explain wetin happen
+Submit Appeal|Send Appeal
+Write a short message|Write short message
+Appeal submitted|Appeal don enter
+// purchase, listing, uploads, network errors
+Insufficient balance - fund your wallet first|Money no reach - put money for your wallet first
+Buying...|E dey buy...
+Purchase successful - funds held in escrow|Purchase don work - money dey hold for escrow
+This product is no longer available|This product no dey again
+Purchase failed|Purchase no work
+Network error. Try again.|Network wahala. Try again.
+Still no connection|Network never come
+Cover must be JPG, PNG or WEBP|Cover must be JPG, PNG or WEBP
+Cover image must be 5MB or less|Cover picture must be 5MB or less
+File must be ZIP, PDF, MP4 or DOCX|File must be ZIP, PDF, MP4 or DOCX
+Product file must be 50MB or less|Product file must be 50MB or less
+This file was already uploaded|You don upload this file before
+Maximum 3 extra images|Maximum 3 extra pictures
+Extra images must be JPG, PNG or WEBP|Extra pictures must be JPG, PNG or WEBP
+Each image must be 5MB or less|Each picture must be 5MB or less
+Cover image is required - please re-select|Cover picture must dey - abeg choose am again
+Enter a product name|Put product name
+Enter a valid price|Put correct price
+Product listed|Product don enter market
+Could not list product|We no fit list the product
+Product not found|We no see the product
+You cannot use your own referral link|You no fit use your own referral link
+Referral accepted|Referral don enter
+Account banned - submit an appeal first|Dem don ban your account - send appeal first
+Make the product visible first|Make the product visible first
+No transactions to download|No transaction to download
+Print is not available on this device|Print no dey work for this phone
+Saved|E don save
+Saved on this device|E save for this phone
+Not available|E no dey
+// leaderboard, network, store
+Purchases|Wetin people buy
+No ranking yet|No ranking yet
+You rank|Your position
+Leaderboard coming soon|Leaderboard dey come soon
+Your rank|Your position
+Search people|Search people
+No one in your network yet|Nobody dey your network yet
+Share your referral link to grow it.|Share your referral link make am grow.
+// settings
+BOT SETTINGS (FOR SELLERS)|BOT SETTINGS (FOR PEOPLE WEY DEY SELL)
+REFERRAL & EARNINGS|REFERRAL & WETIN YOU DEY EARN
+DANGER ZONE|PLACE WEY DANGER DEY
+VISIBILITY|WHO FIT SEE AM
+Username / Display Name|Username / Name wey dem go see
+Not set|Never set
+Profile Photo|Profile Picture
+Add or change photo|Add or change picture
+Add number|Add number
+Bank Account / Withdrawal Account|Bank Account / Account wey you dey comot money go
+Where your payouts go|Where your money dey go
+Your current passcode is required|Dem go need your current passcode
+Add Email|Add Email
+Active Sessions|Where you don log in
+Log out all devices|Log out for all devices
+Passcode asked again before every withdrawal|Dem go ask passcode again before you comot money
+Appearance|How e dey look
+What PayLock Says to Customers|Wetin PayLock go tell customers
+Custom Auto-reply|Auto-reply wey you write
+Chat Expiration|When gist go expire
+Notify Me When|Tell me when
+New order|New order wey enter
+New message|Message wey enter
+Dispute|Complain
+Copy and share your link|Copy and share your link
+Total Earned|Total wey you don earn
+See where you rank|See where you dey
+Temporary, you can come back|E be for small time, you fit come back
+Delete Account Permanently|Delete Account Forever
+Passcode and DELETE confirmation required|Dem go need Passcode and DELETE confirmation
+Remove chats from this device|Remove gist from this phone
+Payments, disputes, violations, webhook logs|Payments, complains, violations, webhook logs
+// settings pages
+This name is shown in your store and in the Network.|Dem go show this name for your store and for Network.
+Display name|Name wey dem go see
+Enter at least 2 characters|Put at least 2 letters
+Saving...|E dey save...
+JPG, PNG or WEBP, max 5MB.|JPG, PNG or WEBP, max 5MB.
+Choose photo|Choose picture
+Upload|Upload
+Uploading...|E dey upload...
+Photo must be JPG, PNG or WEBP|Picture must be JPG, PNG or WEBP
+Photo must be 5MB or less|Picture must be 5MB or less
+Photo updated|Picture don update
+Could not upload photo|We no fit upload the picture
+Used for support and payout alerts.|Dem dey use am for support and payout alerts.
+Phone number|Phone number
+Enter a valid phone number|Put correct phone number
+Your payout account is linked and name-verified on the Withdraw page.|Dem don link your payout account and verify the name for Withdraw page.
+To link or change your bank, open Withdraw. The account name is always verified before any payout.|To link or change your bank, open Withdraw. Dem dey always verify the account name before dem pay.
+Open Withdraw|Open Withdraw
+Password only. One passcode locks the app, protects withdrawals and account actions.|Na passcode only. One passcode dey lock the app and protect withdrawals and account actions.
+Ask for your passcode every time PayLock opens|Ask for my passcode every time PayLock open
+Turn off passcode|Turn off passcode
+Enter your passcode to turn it off.|Put your passcode make you turn am off.
+Passcode off|Passcode don off
+Change Passcode|Change Passcode
+Set Passcode|Set Passcode
+Forgot your passcode? Use Log out all devices, sign in again through Telegram, then set a new one. There is no email reset.|You forget your passcode? Use Log out for all devices, sign in again through Telegram, then set new one. Email reset no dey.
+Backup email|Backup email
+Not added|Never add am
+Change backup email|Change backup email
+Add backup email|Add backup email
+Backup email is for account recovery only.|Backup email na only to recover account.
+Save changes|Save changes
+Remove backup email|Remove backup email
+Removing...|E dey remove...
+Sign out of PayLock on every device.|Sign out of PayLock for every phone.
+Use this if you lost a device or forgot your passcode. You will sign in again through Telegram.|Use this one if you lose phone or you forget your passcode. You go sign in again through Telegram.
+Logging out...|E dey log out...
+Enter your passcode to log out all devices.|Put your passcode make you log out for all devices.
+Logged out of all devices|You don log out for all devices
+Logged out. Set a new passcode in Settings.|You don log out. Set new passcode for Settings.
+Your passcode is asked again before every withdrawal.|Dem go ask your passcode again before every withdrawal.
+Status: ON|How e be: ON
+Status: OFF|How e be: OFF
+Passcode required before every withdrawal.|Dem go need passcode before every withdrawal.
+Turn on App Passcode to require it before every withdrawal.|Turn on App Passcode make dem dey ask am before every withdrawal.
+Turn on App Passcode|Turn on App Passcode
+System follows your phone and updates instantly, no restart needed.|System dey follow your phone and e dey update sharp sharp, no need to restart.
+Choose the default message or write your own.|Choose the default message or write your own.
+Custom message|Message wey you write
+Your custom message|Your own message
+Write your custom message|Write your own message
+Sent automatically when a buyer messages you.|E dey go by itself when buyer message you.
+Auto-reply|Auto-reply
+Reply instantly to new buyer messages|Reply sharp sharp to new buyer message
+Message|Message
+Write your auto-reply|Write your auto-reply
+After this time a chat disappears from the buyer's list automatically.|After this time, the gist go comot from buyer list by itself.
+Close the order automatically after delivery is confirmed.|Close the order by itself after delivery confirm.
+Auto-close after delivery confirmation|Auto-close after delivery confirm
+Choose which alerts PayLock sends you.|Choose which alert PayLock go send you.
+Referral & Earnings|Referral & Wetin You Dey Earn
+Your link|Your link
+Open Leaderboard|Open who dey top
+Referral link copied|Referral link don copy
+UID copied|UID don copy
+Temporary. Your listings are hidden until you come back.|E be for small time. Dem go hide your listings until you come back.
+Your wallet and orders are kept. Sign in again any time to reactivate.|Dem dey keep your wallet and orders. Sign in again anytime to wake am up.
+Deactivate Account|Deactivate Account
+Working...|E dey work...
+Account deactivated|Account don deactivate
+Enter your passcode to deactivate your account.|Put your passcode make you deactivate your account.
+Deactivate account|Deactivate account
+This cannot be undone. Your balance and open orders must be empty.|You no fit undo this one. Your balance and open orders must empty.
+Delete Account|Delete Account
+Removes chats saved on this device. Orders and payments are not affected.|E go remove gist wey dem save for this phone. Orders and payments no go change.
+Chat history cleared|Gist history don clear
+Enter Old Passcode|Put Old Passcode
+Confirm your current passcode to continue|Confirm your current passcode make you continue
+Create Passcode|Make Passcode
+New Passcode|New Passcode
+Enter a new 4-digit passcode|Put new 4-digit passcode
+Confirm Passcode|Confirm Passcode
+Enter the same passcode again|Put the same passcode again
+Passcode Set|Passcode don set
+Passcode Changed|Passcode don change
+Pins do not match, try again|The pins no match, try again
+1 attempt left|Na 1 chance remain
+Too many attempts|You don try too many times
+Confirm with your passcode to continue.|Confirm with your passcode make you continue.
+Confirm withdrawal|Confirm withdrawal
+Enter your passcode to continue with this withdrawal.|Put your passcode make you continue this withdrawal.
+Enter your passcode to permanently delete your account.|Put your passcode make you delete your account forever.
+Forgot passcode?|You don forget passcode?
+Log out of all devices, sign in again through Telegram, then set a new passcode in Settings. There is no email reset.|Log out for all devices, sign in again through Telegram, then set new passcode for Settings. Email reset no dey.
+Scroll to the bottom to enable Accept.|Scroll reach down make Accept work.
+Boost a product|Boost product
+Boost duration|How long to boost
+1 Day|1 Day
+Auto-Reboost|Auto-Reboost
+Max 3 active boosts - 5 boosts/week|Max 3 boosts wey dey active - 5 boosts for week
+Boosting unlocked|Boosting don open
+Accept the Boosting Terms first|Accept the Boosting Terms first
+Extend|Extend
+- Auto-Reboost ON|- Auto-Reboost ON
+- Auto-Reboost OFF|- Auto-Reboost OFF
+// admin
+MODERATION|MODERATION
+Disputes / Violations|Complains / Violations
+Disputes, reports and scam products|Complains, reports and scam products
+Support Inbox|Support Inbox
+User tickets and replies|User tickets and replies
+MONITORING|MONITORING
+PayLock Webhook Logs|PayLock Webhook Logs
+Paystack events and failed payments|Paystack events and payments wey no work
+Platform summary|Platform summary
+Nothing to review|Nothing to check
+Access Denied|Dem no allow you
+Failed Transactions|Transactions wey no work
+No failed transactions|No transaction fail
+Search by reference|Search by reference
+All Logs|All Logs
+No logs|No log
+Log Details|Log Details
+Paystack payload|Paystack payload
+Search by username or Telegram ID|Search by username or Telegram ID
+No tickets|No ticket
+Reply...|Reply...
+Mark as resolved|Mark say e don resolve
+Total users|Total people
+Total revenue|Total money wey enter
+Open disputes|Complains wey open
+Open tickets|Tickets wey open
+Active products|Products wey dey live
+// listing terms + boosting terms
+Product Listing Terms|Product Listing Terms
+No fake products|No fake products
+Only list digital products you own or have the right to sell.|List only digital products wey be your own or wey you get right to sell.
+No scam|No scam
+Deliver exactly what you list, every time.|Give exactly wetin you list, every time.
+No off-platform payment|No payment outside PayLock
+All payments must go through PayLock escrow.|Every payment must pass through PayLock escrow.
+No misleading price or photo|No lie-lie price or picture
+Your price, description and cover image must be honest.|Your price, description and cover picture must be true.
+VIOLATION|VIOLATION
+Warning|Warning
+Product removed|Dem remove the product
+Account suspended|Dem suspend the account
+Account banned|Dem ban the account
+Decline|Refuse
+Accept & Continue|Accept & Continue
+You must accept the Listing Terms to list a product|You must accept the Listing Terms before you list product
+Product Listed|Product don enter market
+Your product is live in the marketplace.|Your product don dey live for market.
+View Preview|Look the Preview
+Boosting Terms & Conditions|Boosting Terms & Conditions
+1. What boosting does|1. Wetin boosting dey do
+Boosting promotes one of your active listings~|Boosting dey push one of your active listings make more buyers see am for market. Boost no mean say people go see am or buy am for sure.
+2. Cost|2. Cost
+Boost costs 85 Naira on every purchase~|Boost dey cost 85 Naira for every purchase of your boosted product. Dem dey charge am per purchase, no be flat fee.
+3. Who can boost|3. Who fit boost
+Only visible, active listings that follow~|Na only listings wey dem fit see, wey dey active and follow the Product Listing Terms fit boost. Hidden, removed or banned listings no fit boost.
+4. Fair use|4. How to use am well
+Do not use boosting to promote fake products~|No use boosting to push fake products, scams, payment outside PayLock or lie-lie price and picture. If you abuse boosting, we go treat am as listing violation.
+5. Removal|5. Remove boost
+PayLock may remove a boost at any time~|PayLock fit remove boost anytime if listing break the rules or dem report am and confirm say na violation.
+6. Violations|6. Violations
+Violations lead to a warning~|Violation go bring warning, then dem go remove the product, then dem go suspend the account, then dem go ban the account.
+7. Changes|7. Changes
+We may update these Boosting Terms.~|We fit update these Boosting Terms. If you continue to use Boost, e mean say you accept the new terms.
+8. Acceptance|8. Say yes
+By tapping Accept you confirm~|If you press Accept, you confirm say you don read and agree to these Boosting Terms and the 85 Naira per purchase fee.
+// privacy policy
+1. Who we are|1. Who we be
+PayLock is an escrow marketplace~|PayLock na escrow market wey dey run as Telegram Mini App. This policy go explain the data wey we dey collect and how we dey use am.
+2. Data we collect|2. Data wey we dey collect
+Telegram account data:~|Telegram account data: your Telegram ID, first name, last name and username.
+Contact details you enter:~|Contact details wey you put: email address and phone number.
+Financial details:~|Money details: wallet balance, transactions, bank account wey you dey comot money go, and the last 4 digits and brand of cards wey you use put money for wallet. We no dey see or keep full card number at all.
+Content you upload:~|Wetin you upload: product names, descriptions, cover pictures and product files.
+3. How we use your data|3. How we dey use your data
+To verify your identity through Telegram~|We dey use am to verify who you be through Telegram, run your wallet, hold money for escrow, process withdrawals, stop fraud and give support.
+Payments are processed by Paystack.~|Paystack dey process payments. You go put card details for Paystack window, and Paystack dey handle am under their own privacy policy.
+5. Files and listings|5. Files and wetin you list
+Cover images and product files you upload~|Cover pictures and product files wey you upload dey stay with our storage provider. Anybody wey get product file link fit reach am, so no upload sensitive personal documents.
+6. Account deletion|6. How to delete account
+You can delete your account from the Wallet page.~|You fit delete your account from Wallet page. Delete go hide your products and remove your email, phone and account name from the record. We fit still keep transaction records as financial and legal rules require.
+We use encrypted connections~|We dey use encrypted connections, we dey verify every request with Telegram, and we dey keep your withdrawal PIN as one-way hash. No system fit be 100% safe, so abeg protect your Telegram account.
+Questions about your data?~|You get question about your data? Contact us through @PayLockOfficialBot for Telegram.
+// terms of service
+Terms of Service|Terms of Service
+1. Acceptance|1. Wetin you agree to
+By using PayLock you agree to these Terms.~|If you use PayLock, you don agree to these Terms. If you no agree, no use the service.
+You sign in through Telegram.~|You dey sign in through Telegram. Na you go answer for wetin happen for your account and you must keep your withdrawal PIN secret.
+3. Listings|3. Wetin you list
+Sellers may list digital products~|Sellers fit list digital products wey be their own or wey dem get right to sell. Listing must correct and e no go get illegal, infringing or harmful content. We fit hide listings wey break these rules.
+PayLock charges a flat platform fee~|PayLock dey charge flat platform fee of ₦200 plus the payment processor fee. Buyer and seller go share the total fee equally. Buyer go pay the price plus im own share, and seller go collect the price minus im own share.
+When you buy a product, your payment is held in escrow~|Wen you buy product, dem go hold your payment for escrow reach 48 hours (2 days). Buyer fit confirm delivery make dem release the money to seller early. If buyer do nothing, dem go release the money to seller by themselves wen the hold time finish, except dem open complain for the order.
+6. Wallet and withdrawals|6. Wallet and how to comot money
+Funds you add to your wallet can be used~|Money wey you put for your wallet, you fit use am buy product or comot am go your bank account. To comot money you go need your 4-digit PIN. If you put wrong PIN many times, dem go lock withdrawals for 15 minutes.
+7. Refunds & Disputes|7. Refunds & Complains
+Tap Dispute on any held order~|Press Complain for any order wey dem dey hold make escrow freeze. Support na @PayLockOfficialBot. If seller na fraud, dem go blacklist am, report am and refund the buyer.
+8. Prohibited use|8. Wetin dem no allow
+You may not use PayLock for fraud~|You no fit use PayLock for fraud, money laundering, stolen content or any illegal thing. We fit suspend accounts wey dey do am.
+9. Account deletion|9. How to delete account
+You can delete your account at any time once~|You fit delete your account anytime once your balance and open escrow orders don clear. Dem no fit undo delete.
+10. Liability|10. Who go carry blame
+PayLock is provided as is.~|Dem dey give PayLock as e dey. As law allow am, we no dey responsible for loss wey sellers, buyers, third-party payment providers or things wey no dey our hand cause.
+We may update these Terms.~|We fit update these Terms. If you continue to use PayLock, e mean say you accept the new Terms.
+`;
+const PCM = Object.create(null), PCM_PFX = [];
+PCM_SRC.split('\n').forEach(function(l){
+  const i = l.indexOf('|');
+  if (i < 1) return;                                         // blank or comment line
+  const k = l.slice(0, i), v = l.slice(i + 1);
+  if (k.charAt(k.length - 1) === '~') PCM_PFX.push([k.slice(0, -1), v]); else PCM[k] = v;
+});
+
+/* ---- Pidgin rules for strings that carry numbers, names or dates ---- */
+const PAT = [
+  [/^Hi (.+)$/, 'How far, $1'],
+  [/^Boosted - Expires in (\d+)h (\d+)m$/, 'Boosted - E go end in $1h $2m'],
+  [/^Held • Auto-release in (\d+)h$/, 'Dem dey hold am • E go auto-release in $1h'],
+  [/^Auto-release: (.+)$/, 'E go auto-release: $1'],
+  [/^Buying · (.+)$/, 'You dey buy · $1'],
+  [/^Selling · (.+)$/, 'You dey sell · $1'],
+  [/^\(optional, (\d+) \/ (\d+)\)$/, '(no be must, $1 / $2)'],
+  [/^Views (\d+) · Sales (\d+)$/, 'Dem see am $1 · Dem sell $2'],
+  [/^(.+) sales • no rating$/, '$1 don sell • nobody don rate am'],
+  [/^(.+) sales • (\d\.\d)\/5$/, '$1 don sell • $2/5'],
+  [/^(\d+) sales · Joined (.+)$/, '$1 sales · E join $2'],
+  [/^You rated (\d) out of 5 \+ complaint saved$/, 'You rate am $1 out of 5 + complain don save'],
+  [/^You rated (\d) out of 5$/, 'You rate am $1 out of 5'],
+  [/^Thanks! You rated (\d) out of 5$/, 'Thank you! You rate am $1 out of 5'],
+  [/^(\d+) active listings?$/, '$1 product dey live'],
+  [/^You are (selling|buying) · (.+)$/, function(m, w, s){ return (w === 'selling' ? 'You dey sell' : 'You dey buy') + ' · ' + pcmT(s); }],
+  [/^After delivery confirmation: (On|Off)$/, 'Wen delivery confirm: $1'],
+  [/^Updated (.+) · refreshes every 5 minutes$/, 'E update $1 · e dey refresh every 5 minutes'],
+  [/^Expires (.+)$/, 'E go expire $1'],
+  [/^Try again in (\d\d:\d\d)$/, 'Try again after $1'],
+  [/^(.+) \((\d+) attempts left\)$/, function(m, b, n){ return pcmT(b) + ' (' + n + ' chance remain)'; }],
+  [/^(\d+) \/ (\d+) completed$/, '$1 / $2 don finish'],
+  [/^Boosted until (.+) -$/, 'Boosted till $1 -'],
+  [/^No active boost - Auto-Reboost (ON|OFF)$/, 'No boost dey active - Auto-Reboost $1']
+];
+function pcmT(t){
+  const v = PCM[t];
+  if (v !== undefined) return v;
+  for (let i = 0; i < PCM_PFX.length; i++) if (t.indexOf(PCM_PFX[i][0]) === 0) return PCM_PFX[i][1];
+  for (let j = 0; j < PAT.length; j++) if (PAT[j][0].test(t)) return t.replace(PAT[j][0], PAT[j][1]);
+  if (t.indexOf(', ') > 0) {                                   // "New order, new message, dispute" style lists
+    const parts = t.split(', '), out = parts.map(function(x){ return pcmT(x.charAt(0).toUpperCase() + x.slice(1)); });
+    if (out.some(function(x, k){ return x !== parts[k].charAt(0).toUpperCase() + parts[k].slice(1); })) return out.join(', ');
+  }
+  return t;
+}
+function trExact(s){ if (L.cur !== 'pcm') return s; const v = PCM[String(s).trim()]; return v === undefined ? s : v; }
+function trText(s){
+  const t = s.trim();
+  if (!t) return s;
+  let out = t;
+  if (L.cur === 'pcm') out = pcmT(t);
+  else if (L.cur === 'en-GB') out = spell(t, SP_GB);
+  else if (L.cur === 'en-US') out = spell(t, SP_US);
+  return out === t ? s : s.replace(t, function(){ return out; });   // function form: "$" in a translation is never special
+}
+function langAttrs(n){
+  ['placeholder', 'aria-label', 'title'].forEach(function(a){
+    if (!n.hasAttribute(a)) return;
+    const store = n.__i18n || (n.__i18n = {});
+    const cur = n.getAttribute(a);
+    let o = store[a];
+    if (!o || cur !== o.out) { o = { src: cur, out: null }; store[a] = o; }   // the app set a new value: it becomes the new source
+    const out = trText(o.src); o.out = out;
+    if (cur !== out) n.setAttribute(a, out);
+  });
+}
+function langNode(n){
+  if (n.nodeType === 3) {
+    const p = n.parentNode;
+    if (!p || /^(SCRIPT|STYLE|TEXTAREA)$/.test(p.nodeName) || (p.closest && p.closest(NT_SEL))) return;
+    let o = L.orig.get(n);
+    if (!o || n.nodeValue !== o.out) { o = { src: n.nodeValue, out: null }; L.orig.set(n, o); }
+    const out = trText(o.src); o.out = out;
+    if (n.nodeValue !== out) n.nodeValue = out;
+  } else if (n.nodeType === 1) {
+    if (/^(SCRIPT|STYLE)$/.test(n.nodeName)) return;
+    langAttrs(n);
+    for (let c = n.firstChild; c; c = c.nextSibling) langNode(c);
+  }
+}
+function langName(){ return LANGS.filter(function(x){ return x[0] === L.cur; })[0][1]; }
+function setLang(code){
+  L.cur = code; L.loc = (code === 'pcm') ? 'en-NG' : code;
+  try { localStorage.setItem(L.key, code); } catch (e) {}
+  document.documentElement.lang = (code === 'pcm') ? 'pcm' : code;
+  b7Soft('/api/settings', { language: code });
+  langNode(document.body);
+  try { renderBalance(); b7SettingsShow(); } catch (e) {}
+  refreshCurrentPage();                                   // re-renders dates/numbers in the new locale
+}
+function langStart(){
+  document.documentElement.lang = (L.cur === 'pcm') ? 'pcm' : L.cur;
+  langNode(document.body);
+  new MutationObserver(function(ms){
+    ms.forEach(function(m){
+      if (m.type === 'childList') m.addedNodes.forEach(langNode);
+      else if (m.type === 'characterData') langNode(m.target);
+      else if (m.type === 'attributes') langAttrs(m.target);
+    });
+  }).observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['placeholder', 'aria-label', 'title'] });
+}
+
 function init(){
   loadTheme();   // always follows Telegram: colorScheme + themeParams, re-applied on themeChanged
   if (tg) {
     try { tg.ready(); tg.expand(); } catch (e) {}
     if (tg.onEvent) tg.onEvent('themeChanged', loadTheme);
   }
-  document.querySelectorAll('#rate-stars .rate-star').forEach(function(b){ b.appendChild(starIcon(null, 28)); });
   document.addEventListener('click', function(ev){
     if (!ev.target.closest('#bank-wrap')) $('bank-list').classList.remove('open');
   });
@@ -6653,7 +7773,7 @@ function init(){
   resetFeePreview();
   loadBalanceVisibility();
   updateEyeIcon();
-  b7Init(); b7Init3();   // BATCH 7: the only line added to the original init()
+  b7Init(); b7Init3(); langStart();   // language applied from saved choice before first paint of dynamic content
   boot();
 }
 
@@ -6675,7 +7795,7 @@ return {
   openDeleteSheet: openDeleteSheet, closeDeleteSheet: closeDeleteSheet, onDeleteInput: onDeleteInput,
   startDeleteFlow: startDeleteFlow, closePinModal: closePinModal, pinAction: pinAction,
   openProductPreview: openProductPreview, previewBack: previewBack, printReceipt: printReceipt,
-  navBack: navBack, setThemeMode: setThemeMode, openStore: openStore
+  navBack: navBack, setThemeMode: setThemeMode, openStore: openStore, reconnect: reconnect
 };
 })();
 </script>
