@@ -5179,19 +5179,10 @@ def _app_link(startapp=None):
 
 
 def _open_button(startapp=None):
-    """
-    'Open PayLock' keyboard. With a startapp param it is always a t.me Mini App link.
-    Plain (no param) uses the t.me link too, falling back to the plain WEBAPP_URL
-    WebApp button (no query string) only if APP_SHORT_NAME is not configured yet.
-    """
-    link = _app_link(startapp)
-    if link:
-        return InlineKeyboardMarkup([[InlineKeyboardButton("Open PayLock", url=link)]])
-    if not startapp and WEBAPP_URL:
-        return InlineKeyboardMarkup([[InlineKeyboardButton("Open PayLock", web_app=WebAppInfo(url=WEBAPP_URL))]])
-    if startapp:
-        logging.warning("_open_button: APP_SHORT_NAME is not set; deep link button omitted")
-    return None
+    def _open_button(startapp=None):
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(text="Open PayLock", web_app=WebAppInfo(url=MINI_APP_URL))
+    ]])
 
 
 def _product_button(product):
