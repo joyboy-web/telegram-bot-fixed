@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="color-scheme" content="light dark">
 <title>PayLock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -566,6 +566,20 @@ body.kb-open .tabbar{display:none}
 .dl-act.busy .dl-arrow{animation:dlarrow .9s ease-in-out infinite}
 .rp-box{align-self:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--card);font-size:14px;font-weight:600}
 .rp-stars{display:flex;margin:4px 0}
+
+/* ===== FIX 1 + D: chat room / Support = solid fixed full-height container, flush header ===== */
+html,body{overscroll-behavior-y:none}
+html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
+#pg-chat.chat-inview.active{position:fixed;top:var(--vvt,0px);left:50%;transform:translateX(-50%);width:100%;max-width:440px;height:calc(var(--vvh,100dvh) - var(--tabh,calc(64px + env(safe-area-inset-bottom,0px))));margin:0;padding:0;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);z-index:40}
+#pg-chat.chat-inview #chat-page-title{display:none}
+#pg-chat.chat-inview .chat-head{margin:0;border-radius:0;border-width:0 0 1px 0;box-shadow:none;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;flex:none}
+#pg-chat.chat-inview #chat-support,#pg-chat.chat-inview #chat-root{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+#chat-messages,#support-thread{overscroll-behavior:contain}
+#pg-chat.chat-inview #chat-messages,#pg-chat.chat-inview #support-thread{flex:1 1 auto;min-height:0;max-height:none;margin:0;padding:8px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#pg-chat.chat-inview #chat-product{margin:10px 16px 0;flex:none}
+#pg-chat.chat-inview #chat-typing{margin:0 16px 10px;flex:none}
+#pg-chat.chat-inview .chat-actions{margin:8px 0;padding:0 16px;flex:none}
+#pg-chat.chat-inview .chat-inputbar,#pg-chat.chat-inview .sup-bar{flex:none;padding:8px 16px;background:var(--bg)}
 </style>
 </head>
 <body>
@@ -791,7 +805,7 @@ body.kb-open .tabbar{display:none}
   </section>
     <!-- ============ CHAT (Batch 7: vertical WhatsApp-style list; horizontal pills removed) ============ -->
   <section class="page" id="pg-chat">
-    <h2 class="page-title">Chat</h2>
+    <h2 class="page-title" id="chat-page-title">Chat</h2>
     <!-- BATCH 7 (approved replacement). OLD: <div class="chat-profiles" id="chat-profiles"> [PayLock Bot] [Seller ID] [Support Chat] </div> -->
     <div id="chat-list"></div>
     <div id="chat-orders" style="display:none"></div>
@@ -1887,10 +1901,12 @@ async function api(path, opts){
   if (!initDataOk()) { showGate('error'); throw new Error('initdata'); }   // no fake data without valid Telegram session
   const o = Object.assign({}, opts || {});
   o.headers = Object.assign({}, getAuthHeader(), (opts && opts.headers) || {});   // initData on EVERY fetch
+  if (!navigator.onLine) { netDown(); throw new Error('offline'); }   // checked BEFORE every request
   try {
-    res = await fetch(path, o);
+    res = await fetchT(path, o, (o.body && typeof FormData !== 'undefined' && o.body instanceof FormData) ? 90000 : 20000);
   } catch (err) {
-    if (!navigator.onLine) showGate('offline');   // full-screen offline only, no banner
+    if (!navigator.onLine) netDown();
+    else netProbe().then(function(ok){ if (!ok) netDown(); });   // wifi on but no internet
     throw err;
   }
   hideOfflineBanner();
@@ -1913,7 +1929,11 @@ function hideGates(){ GATES.forEach(function(g){ const n = $('gate-' + g); if (n
 function showDeletedGate(){ showGate('deleted'); }
 function closeApp(){ if (tg && tg.close) tg.close(); }
 function initDataOk(){ const d = tg && tg.initData; return typeof d === 'string' && d.indexOf('hash=') >= 0 && d.indexOf('auth_date=') >= 0; }
-function reconnect(){ if (!navigator.onLine) return; if (booted) hideGates(); else boot(); }
+async function reconnect(){
+  if (!navigator.onLine) return;
+  if (!(await netProbe())) { netDown(); return; }   // wifi connected but no internet: stay on the offline screen
+  if (booted) hideGates(); else boot();
+}
 const ADMIN_TG_ID = '7638015119';
 function isAdminUi(){ return String(state.telegram_id) === ADMIN_TG_ID; }
 function userLabel(u, id){
@@ -1971,7 +1991,7 @@ async function loadBotMsgs(){ try { const r = await api('/api/bot/messages', { h
 function bm(key, fallback){ const v = botMsgs[key]; return (typeof v === 'string' && v) ? v : fallback; }
 (function kbWire(){
   const isIn = function(e){ const t = e.target; return !!(t && /^(INPUT|TEXTAREA)$/.test(t.nodeName) && t.type !== 'file' && t.type !== 'checkbox'); };
-  document.addEventListener('focusin', function(e){ if (!isIn(e)) return; document.body.classList.add('kb-open'); setTimeout(function(){ try { e.target.scrollIntoView({ block: 'center' }); } catch (x) {} }, 300); });
+  document.addEventListener('focusin', function(e){ if (!isIn(e)) return; document.body.classList.add('kb-open'); if (e.target.closest && e.target.closest('#pg-chat.chat-inview')) return; setTimeout(function(){ try { e.target.scrollIntoView({ block: 'center' }); } catch (x) {} }, 300); });
   document.addEventListener('focusout', function(e){ if (!isIn(e)) return; setTimeout(function(){ const a = document.activeElement; if (!a || !/^(INPUT|TEXTAREA)$/.test(a.nodeName)) document.body.classList.remove('kb-open'); }, 120); });
 })();
 
@@ -3364,6 +3384,7 @@ async function chatLoadRemote(){
 }
 
 async function chatSendRemote(text){
+  if (!navigator.onLine) { netDown(); const i0 = document.getElementById('chat-input'); if (i0 && !i0.value) i0.value = text; return; }
   const input = document.getElementById('chat-input');
   const cid = 'c' + Date.now() + Math.random().toString(36).slice(2, 7);
   const tmp = { id: cid, client_id: cid, text: text, is_mine: true, status: 'sending', created_at: new Date().toISOString(), _tmp: true };
@@ -3372,13 +3393,13 @@ async function chatSendRemote(text){
   const oid = chatState.orderId;
   const send = function(){ return api('/api/chat/send', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ order_id: oid, text: text, client_id: cid }) }); };
   const timer = setTimeout(function(){                       // pending > 5s: retry once (server dedupes by client_id)
-    if (tmp.status === 'sending' && !tmp._retried) { tmp._retried = true; send().then(function(r){ if (r.res.ok) { tmp.status = 'sent'; chatLoadRemote(); } }).catch(function(){}); }
+    if (tmp.status === 'sending' && !tmp._retried) { tmp._retried = true; send().then(function(r){ if (r.res.ok) { tmp.status = 'sent'; tmp._tmp = false; chatLoadRemote(); } }).catch(function(){}); }
   }, 5000);
   const drop = function(){ chatState.remote = chatState.remote.filter(function(x){ return x !== tmp; }); renderChatMessages(); };
   try {
     const r = await send();
     clearTimeout(timer);
-    if (r.res.ok) { tmp.status = 'sent'; renderChatMessages(); chatLoadRemote(); return; }
+    if (r.res.ok) { tmp.status = 'sent'; tmp._tmp = false; renderChatMessages(); chatLoadRemote(); return; }
     drop();
     if (r.res.status === 501 || r.res.status === 404) { chatState.remoteOff = true; chatPush('user', text); return; }
     if (r.res.status === 403) showToast('Chat is only for the buyer and seller of this order');
@@ -3996,6 +4017,7 @@ async function sendSupport(){
   if (adminCmd(text)) { input.value = ''; return; }
   btn.disabled = true;
   try {
+    if (!navigator.onLine) { netDown(); return; }
     const r = await postApi('/api/support', { message: text.slice(0, 1000) });
     if (r.ok) { input.value = ''; showToast('Message sent'); await loadSupport(); }
     else if (r.soon) { supportState.off = true; renderSupport(); }
@@ -4014,6 +4036,7 @@ function applyChatMode(){
   const pg = $('pg-chat');
   if (!pg) return;
   pg.classList.toggle('chat-list-mode', chatMode === 'list');
+  pg.classList.toggle('chat-inview', chatMode !== 'list' || chatProfile === 'support');   // chat room or Support view
   if (chatMode !== 'list') return;
   document.querySelectorAll('#chat-profiles .chip').forEach(function(c){
     c.classList.toggle('active', c.getAttribute('data-profile') === chatProfile);
@@ -4096,7 +4119,7 @@ function applyBuyFilter(){
 })();
 
 /* ===================== PAYLOCK ADDITIONS ===================== */
-const CONFIG = { BOT_USERNAME: 'PayLockOfficialBot', BAN_THRESHOLD: 5 };
+const CONFIG = { BOT_USERNAME: 'PayLockOfficialBot', APP_SHORT_NAME: 'app', BAN_THRESHOLD: 5 };
 const ICON_FLAG = ['M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z', 'M4 22v-7'];
 const ICON_LINK = ['M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71', 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'];
 const ICON_BOX = ['M21 8l-9-5-9 5v8l9 5 9-5z', 'M3 8l9 5 9-5', 'M12 13v8'];
@@ -4183,7 +4206,7 @@ function salesLine(p){
   return n.toLocaleString(L.loc) + ' sales • ' + (r ? r.toFixed(1) + '/5' : 'no rating');
 }
 function prodCode(p){ return String(p.short_code || p.code || p.link_code || p.id); }
-function productLink(p){ return 'https://t.me/' + CONFIG.BOT_USERNAME + '?start=prod_' + prodCode(p); }
+function productLink(p){ return 'https://t.me/' + CONFIG.BOT_USERNAME + '/' + CONFIG.APP_SHORT_NAME + '?startapp=prod_' + prodCode(p); }
 async function copyText(text, okMsg){
   let ok = false;
   try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); ok = true; } } catch (e) {}
@@ -4502,6 +4525,14 @@ async function rateInEscrow(stars){
 
 /* ----- deep link: prod_ / ref_ / inv_ from start_param (startapp) ----- */
 function getStartParam(){
+  let v = getStartParamRaw();
+  try {
+    if (v) sessionStorage.setItem('paylock_dl', v);          // remember the link across splash / passcode / retry boots
+    else v = sessionStorage.getItem('paylock_dl') || '';
+  } catch (e) {}
+  return /^[A-Za-z0-9_-]{1,64}$/.test(v) ? v : '';
+}
+function getStartParamRaw(){
   const ok = function(v){ return (typeof v === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(v)) ? v : ''; };
   let v = '';
   try { v = ok(tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param); } catch (e) {}   // 1. initDataUnsafe.start_param
@@ -4510,7 +4541,8 @@ function getStartParam(){
   if (v) return v;
   try {                                                                                      // 3. URL ?startapp= / ?start=
     const q = new URLSearchParams(window.location.search || '');
-    v = ok(q.get('startapp')) || ok(q.get('start')) || ok(q.get('tgWebAppStartParam'));
+    v = ok(q.get('startapp')) || ok(q.get('start')) || ok(q.get('tgWebAppStartParam'))
+      || (ok(q.get('product')) ? 'prod_' + q.get('product') : '') || (ok(q.get('ref')) ? 'ref_' + q.get('ref') : '');
   } catch (e) {}
   if (v) return v;
   try { v = ok(new URLSearchParams((window.location.hash || '').replace(/^#/, '')).get('tgWebAppStartParam')); } catch (e) {}
@@ -4519,13 +4551,14 @@ function getStartParam(){
 async function handleDeepLink(){
   const sp = getStartParam();
   if (!sp) return;
+  try { sessionStorage.removeItem('paylock_dl'); } catch (e) {}   // consumed once
 
   const mRef = /^(?:ref|inv)_(\d{1,15})$/.exec(sp);
   if (mRef) {
     if (!referralNoted) {
       referralNoted = true;
       if (String(mRef[1]) === String(state.telegram_id)) showToast('You cannot use your own referral link');
-      else showToast('Referral accepted');
+      else if (b7.user && (b7.user.referral_status === 'recorded' || b7.user.referral_status === 'already')) showToast('Referral accepted');   // only when the server really recorded it
     }
     return;
   }
@@ -4542,7 +4575,7 @@ async function handleDeepLink(){
       prod = d.product || (Array.isArray(d.products) ? (d.products.filter(match)[0] || null) : null);
     }
   } catch (e) {}
-  if (!prod) {
+  if (!prod && !/^[A-Z0-9]{6}$/i.test(code)) {   // a 6-char code is NEVER retried as an id (a deleted all-digit code must not open another product)
     try {
       const r2 = await api('/api/products/' + encodeURIComponent(code));
       if (r2.res.ok) prod = r2.data.product || (r2.data.id ? r2.data : null);
@@ -4553,7 +4586,7 @@ async function handleDeepLink(){
 }
 
 /* ----- referrals: shows ONLY what GET /api/referrals/mine returns (no local commission maths) ----- */
-function referralLink(){ return 'https://t.me/' + CONFIG.BOT_USERNAME + '?start=ref_' + state.telegram_id; }
+function referralLink(){ return 'https://t.me/' + CONFIG.BOT_USERNAME + '/' + CONFIG.APP_SHORT_NAME + '?startapp=ref_' + state.telegram_id; }
 async function loadReferrals(){
   const card = $('ref-card');
   if (!card) return;
@@ -5753,7 +5786,9 @@ async function b7SettingsSync(){
   if (d.has_accepted_listing_terms === true) b7Save('has_accepted_listing_terms', true);
   if (d.has_accepted_boosting_terms === true) b7Save('has_accepted_boosting_terms', true);
   if (d.theme_mode === 'dark' || d.theme_mode === 'light' || d.theme_mode === 'system') {
-    try { localStorage.setItem(THEME_KEY, d.theme_mode); } catch (e) {}
+    let lm = null;
+    try { lm = localStorage.getItem(THEME_KEY); } catch (e) {}
+    if (!lm) { try { localStorage.setItem(THEME_KEY, d.theme_mode); } catch (e) {} }   // this device's choice always wins; server value only seeds a fresh device
     loadTheme();
   }
   if (d.passcode_hash && !pcGet().hash) pcSet({ on: d.passcode_on !== false, hash: String(d.passcode_hash), fails: 0, level: 0, until: 0 });
@@ -6244,6 +6279,7 @@ async function b7AdmDisputesLoad(){
   catch (e) { showToast('Network error. Try again.'); return; }
   if (r.res.status === 403) { empty.style.display = 'block'; empty.textContent = 'Access Denied'; return; }
   if ([404, 405, 501].indexOf(r.res.status) >= 0) { empty.style.display = 'block'; empty.textContent = 'Coming in backend update'; return; }
+  if (!r.res.ok) { empty.style.display = 'block'; empty.textContent = 'Could not load. Try again.'; return; }   // a failed fetch is never shown as "Nothing to review"
   const rows = (r.res.ok && Array.isArray(r.data.disputes)) ? r.data.disputes : [];
   empty.style.display = rows.length ? 'none' : 'block';
   rows.forEach(function(d){
@@ -7736,6 +7772,42 @@ function langNode(n){
   }
 }
 function langName(){ return LANGS.filter(function(x){ return x[0] === L.cur; })[0][1]; }
+
+/* ---- FIX D: viewport / keyboard handling for the fixed chat container (called from init) ---- */
+let fxKbPrev = false;
+function fxLayout(){
+  try {
+    const root = document.documentElement, vv = window.visualViewport, tb = $('tabbar');
+    const kb = document.body.classList.contains('kb-open');
+    root.style.setProperty('--vvh', Math.round(vv ? vv.height : window.innerHeight) + 'px');
+    root.style.setProperty('--vvt', Math.round(vv ? vv.offsetTop : 0) + 'px');
+    root.style.setProperty('--tabh', (kb || !tb) ? '0px' : tb.offsetHeight + 'px');
+    const pg = $('pg-chat');
+    const lock = !!(pg && pg.classList.contains('active') && pg.classList.contains('chat-inview'));
+    if (root.classList.contains('chat-lock') !== lock) {
+      root.classList.toggle('chat-lock', lock);
+      document.body.classList.toggle('chat-lock', lock);
+    }
+    if (lock && kb !== fxKbPrev) {   // keyboard opened/closed: keep the newest message in view
+      ['chat-messages', 'support-thread'].forEach(function(id){ const b = $(id); if (b && b.offsetParent) b.scrollTop = b.scrollHeight; });
+    }
+    fxKbPrev = kb;
+  } catch (e) {}
+}
+function fxLayoutInit(){
+  fxLayout();
+  const vv = window.visualViewport;
+  if (vv) { vv.addEventListener('resize', fxLayout); vv.addEventListener('scroll', fxLayout); }
+  window.addEventListener('resize', fxLayout);
+  window.addEventListener('orientationchange', fxLayout);
+  try { if (tg && tg.onEvent) tg.onEvent('viewportChanged', fxLayout); } catch (e) {}
+  try {
+    const mo = new MutationObserver(fxLayout);
+    const pg = $('pg-chat');
+    if (pg) mo.observe(pg, { attributes: true, attributeFilter: ['class'] });
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  } catch (e) {}
+}
 function setLang(code){
   L.cur = code; L.loc = (code === 'pcm') ? 'en-NG' : code;
   try { localStorage.setItem(L.key, code); } catch (e) {}
@@ -7757,10 +7829,51 @@ function langStart(){
   }).observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['placeholder', 'aria-label', 'title'] });
 }
 
+/* ---- FIX 2: real connectivity (reuses the existing offline gate) ---- */
+let netProbing = null, netFails = 0;
+function fetchT(path, o, ms){
+  const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const opts = Object.assign({}, o);
+  if (ac) opts.signal = ac.signal;
+  const t = setTimeout(function(){ if (ac) ac.abort(); }, ms);
+  return fetch(path, opts).finally(function(){ clearTimeout(t); });
+}
+function netProbe(){
+  if (!navigator.onLine) return Promise.resolve(false);
+  if (netProbing) return netProbing;
+  netProbing = fetchT('/api/health?_=' + Date.now(), { cache: 'no-store' }, 5000)
+    .then(function(r){ return r.ok; })
+    .catch(function(){ return false; })
+    .then(function(ok){ netProbing = null; return ok; });
+  return netProbing;
+}
+function netDown(){
+  try { const d = $('gate-deleted'); if (d && d.classList.contains('show')) return; showGate('offline'); } catch (e) {}
+}
+function netWatch(){
+  const check = function(){
+    if (document.hidden) return;
+    netProbe().then(function(ok){
+      const g = $('gate-offline');
+      const shown = !!(g && g.classList.contains('show'));
+      if (!ok) { netFails++; if (netFails >= 2 && !shown) netDown(); }   // 2 misses in a row = really offline
+      else {
+        netFails = 0;
+        if (shown && booted) hideGates();
+        else if (shown && !booted && !bootBusy) boot();
+      }
+    });
+  };
+  setInterval(check, 8000);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) check(); });
+  window.addEventListener('focus', check);
+}
+
 function init(){
   loadTheme();   // always follows Telegram: colorScheme + themeParams, re-applied on themeChanged
   if (tg) {
     try { tg.ready(); tg.expand(); } catch (e) {}
+    try { if (tg.disableVerticalSwipes) tg.disableVerticalSwipes(); } catch (e) {}   // swipe-down can no longer slide the Mini App and reveal the bot sheet
     if (tg.onEvent) tg.onEvent('themeChanged', loadTheme);
   }
   document.addEventListener('click', function(ev){
@@ -7774,6 +7887,7 @@ function init(){
   loadBalanceVisibility();
   updateEyeIcon();
   b7Init(); b7Init3(); langStart();   // language applied from saved choice before first paint of dynamic content
+  netWatch(); fxLayoutInit();
   boot();
 }
 
