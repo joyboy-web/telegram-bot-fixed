@@ -53,6 +53,7 @@ import time
 import math
 import uuid
 import secrets
+import threading
 import hmac
 import hashlib
 import logging
@@ -160,7 +161,7 @@ BOT_USERNAME = os.environ.get("BOT_USERNAME", "PayLockOfficialBot")
 # REPLACE WITH REAL BOT USERNAME / APP SHORT NAME BEFORE DEPLOY
 # (set the BOT_USERNAME and APP_SHORT_NAME env vars on Render, or edit here).
 _APP_SHORT_NAME_PLACEHOLDER = "REPLACE_WITH_APP_SHORT_NAME"
-APP_SHORT_NAME = (os.environ.get("APP_SHORT_NAME") or "paylockapp").strip()
+APP_SHORT_NAME = (os.environ.get("APP_SHORT_NAME") or "app").strip()  # must equal the BotFather Mini App short name (index.html gate uses /app)
 # Leave empty until you fill it in (here or via the ADMIN_ID env var).
 # While empty, EVERY /api/admin/* route returns 403.
 ADMIN_ID = str(os.environ.get("ADMIN_ID", "") or "").strip()
@@ -667,16 +668,14 @@ PRODUCT_EXTRA_COLUMNS = "code,sales_count,avg_rating,is_boosted,boosted_until"
 
 def _new_product_code():
     """6 chars A-Z0-9, unique when the code column exists."""
-    code = ""
-    for _ in range(10):
-        code = "".join(secrets.choice(PRODUCT_CODE_ALPHABET) for _ in range(6))
+            code = "".join(secrets.choice(PRODUCT_CODE_ALPHABET) for _ in range(6))
         try:
             res = supabase.table("products").select("id").eq("code", code).limit(1).execute()
-            if not res.data:
+            if not res.data and not _code_tombstoned(code):  # never reuse a live OR a deleted code
                 return code
         except Exception:
             return code  # column missing: cannot check; insert fallback handles it
-    return code
+    return ""  # never hand back a colliding code (products_create then lists without one)
 
 
 def _ensure_code(row):
@@ -684,7 +683,9 @@ def _ensure_code(row):
     if "code" not in row or row.get("code") or row.get("id") is None:
         return
     try:
-        code = _new_product_code()
+                code = _new_product_code()
+        if not code:
+            return
         supabase.table("products").update({"code": code}).eq("id", row["id"]).execute()
         row["code"] = code
     except Exception:
@@ -730,6 +731,15 @@ def _normalize_product(row):
     return row
 
 
+def _code_tombstoned(code):
+    """True if this product code belonged to a product that was deleted. False if unknown."""
+    try:
+        res = supabase.table("deleted_product_codes").select("code").eq("code", str(code).upper()).limit(1).execute()
+        return bool(res.data)
+    except Exception:
+        return False
+
+
 def _find_product(key, mode="any", include_hidden=False):
     """
     Finds one PUBLIC product by code or id (hidden products return None unless
@@ -742,7 +752,9 @@ def _find_product(key, mode="any", include_hidden=False):
     code = (key[5:] if key.lower().startswith("prod_") else key).upper()
     code_ok = bool(re.fullmatch(r"[A-Z0-9]{6}", code))
 
-    if mode == "code" or key.lower().startswith("prod_"):
+        if mode == "code" or key.lower().startswith("prod_"):
+        if code_ok and _code_tombstoned(code):
+            return None  # deleted link: 404, never falls through to another product
         order = [("code", code)] if code_ok else []
     elif key.isdigit():
         order = [("id", key)] + ([("code", code)] if code_ok else [])
