@@ -668,7 +668,8 @@ PRODUCT_EXTRA_COLUMNS = "code,sales_count,avg_rating,is_boosted,boosted_until"
 
 def _new_product_code():
     """6 chars A-Z0-9, unique when the code column exists."""
-            code = "".join(secrets.choice(PRODUCT_CODE_ALPHABET) for _ in range(6))
+    for _ in range(10):
+        code = "".join(secrets.choice(PRODUCT_CODE_ALPHABET) for _ in range(6))
         try:
             res = supabase.table("products").select("id").eq("code", code).limit(1).execute()
             if not res.data and not _code_tombstoned(code):  # never reuse a live OR a deleted code
@@ -683,7 +684,7 @@ def _ensure_code(row):
     if "code" not in row or row.get("code") or row.get("id") is None:
         return
     try:
-                code = _new_product_code()
+        code = _new_product_code()
         if not code:
             return
         supabase.table("products").update({"code": code}).eq("id", row["id"]).execute()
@@ -752,7 +753,7 @@ def _find_product(key, mode="any", include_hidden=False):
     code = (key[5:] if key.lower().startswith("prod_") else key).upper()
     code_ok = bool(re.fullmatch(r"[A-Z0-9]{6}", code))
 
-        if mode == "code" or key.lower().startswith("prod_"):
+    if mode == "code" or key.lower().startswith("prod_"):
         if code_ok and _code_tombstoned(code):
             return None  # deleted link: 404, never falls through to another product
         order = [("code", code)] if code_ok else []
@@ -1399,14 +1400,16 @@ def _handle_referral(user, init_data):
             return
         inviter = int(m.group(1))
         me = int(user["telegram_id"])
-        if inviter == me or user.get("referred_by"):
-            return
+        if inviter == me:
+            return "self"
+        if user.get("referred_by"):
+            return "already"
         inv = supabase.table("users").select("telegram_id,deleted_at").eq("telegram_id", inviter).limit(1).execute()
         rows = inv.data or []
         if not rows or rows[0].get("deleted_at"):
-            return
+            return "invalid"
         if _is_seller(inviter) is True:  # Seller-Ban: buyer-only referral
-            return
+            return "blocked_seller"
         upd = (
             supabase.table("users")
             .update({"referred_by": inviter})
@@ -1415,7 +1418,7 @@ def _handle_referral(user, init_data):
             .execute()
         )
         if not upd.data:
-            return
+            return "already"
         user["referred_by"] = inviter
         supabase.table("referrals").insert({
             "referrer_id": inviter,
@@ -1423,8 +1426,10 @@ def _handle_referral(user, init_data):
             "created_at": _now_iso(),
             "rewarded": False,
         }).execute()
+        return "recorded"
     except Exception:
         logging.warning("_handle_referral: skipped", exc_info=True)
+        return "error"
 
 
 # ---- minimal PDF writer (no extra dependency) --------------------------------
@@ -1468,6 +1473,73 @@ def _build_simple_pdf(title, rows):
     return out.getvalue()
 
 
+# ---- Telegram delivery helpers (support + chat push) -------------------------
+
+def _async(fn, *args):
+    """Runs a notification in a daemon thread so the request never waits on Telegram."""
+    try:
+        threading.Thread(target=fn, args=args, daemon=True).start()
+    except Exception:
+        logging.warning("_async: could not start thread", exc_info=True)
+
+
+def _tg_send(chat_id, text):
+    """Bot API sendMessage with an Open PayLock button. True only if Telegram accepted it. Never raises."""
+    try:
+        if not BOT_TOKEN or not chat_id:
+            return False
+        res = requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={
+                "chat_id": int(chat_id),
+                "text": str(text)[:4000],
+                "reply_markup": {"inline_keyboard": [[{"text": "Open PayLock", "web_app": {"url": MINI_APP_URL}}]]},
+            },
+            timeout=8,
+        )
+        return bool(res.ok)
+    except Exception:
+        logging.warning("_tg_send: failed for chat_id=%s", chat_id, exc_info=True)
+        return False
+
+
+def _notify_admin_support(ticket):
+    """Tells the admin about a new ticket; on success the ticket becomes 'delivered'."""
+    try:
+        if not ADMIN_ID.isdigit() or not isinstance(ticket, dict):
+            return
+        text = (
+            f"New support ticket #{ticket.get('id', '')}\n"
+            f"From: {_user_label(ticket.get('user_id'))}\n\n{ticket.get('message', '')}\n\n"
+            "Reply in PayLock: Settings > Admin Panel > Support Inbox"
+        )
+        if _tg_send(ADMIN_ID, text) and ticket.get("id") is not None:
+            (
+                supabase.table("support_tickets").update({"status": "delivered"})
+                .eq("id", ticket["id"]).eq("status", "sent").execute()
+            )
+    except Exception:
+        logging.warning("_notify_admin_support: skipped", exc_info=True)
+
+
+def _notify_chat_recipient(order, sender_id, text):
+    """Pushes a seller<->buyer chat message to the other party (respects notify_message)."""
+    try:
+        buyer, seller = int(order.get("buyer_id") or 0), int(order.get("seller_id") or 0)
+        to = seller if int(sender_id) == buyer else buyer
+        if not to or to == int(sender_id):
+            return
+        try:
+            if _settings_get_row(to).get("notify_message") is False:
+                return
+        except Exception:
+            pass
+        role = "buyer" if int(sender_id) == buyer else "seller"
+        _tg_send(to, f"New message from the {role} on your PayLock order:\n\n{str(text)[:300]}")
+    except Exception:
+        logging.warning("_notify_chat_recipient: skipped", exc_info=True)
+
+
 # ---- support tickets (shared by POST /api/support and bot /support) ----------
 
 def _create_support_ticket(telegram_id, message, order_id=None):
@@ -1484,8 +1556,17 @@ def _create_support_ticket(telegram_id, message, order_id=None):
     }
     if order_id:
         payload["order_id"] = str(order_id)
-    rows = supabase.table("support_tickets").insert(payload).execute().data or []
-    return rows[0] if rows else payload
+    payload["status"] = "sent"  # saved on the server (single tick); 'delivered' once the admin is notified
+    try:
+        rows = supabase.table("support_tickets").insert(payload).execute().data or []
+    except Exception as exc:
+        if _is_schema_missing(exc):
+            raise
+        payload["status"] = "pending"  # a status check constraint refused 'sent'
+        rows = supabase.table("support_tickets").insert(payload).execute().data or []
+    ticket = rows[0] if rows else payload
+    _async(_notify_admin_support, ticket)
+    return ticket
 
 
 # ---- admin summary (shared by bot /admin; same tables as /api/admin/*) --------
@@ -1562,7 +1643,7 @@ def auth_validate():
     _sync_username(user["telegram_id"], tg_user.get("username"))
     user["username"] = tg_user.get("username") or ""
 
-    _handle_referral(user, init_data)
+    ref_status = _handle_referral(user, init_data)
 
     body = {
         "ok": True,
@@ -1576,6 +1657,7 @@ def auth_validate():
         },
     }
     body.update(_auth_extra_fields(user))  # is_admin, has_consented, accepted-terms flags
+    body["user"]["referral_status"] = ref_status
     return jsonify(body), 200
 
 
@@ -3572,10 +3654,7 @@ def _admin_list(table, key, default_status="pending"):
         except Exception:
             rows = build().limit(100).execute().data or []
     except Exception as exc:
-        if _is_schema_missing(exc):
-            return jsonify({key: []}), 200
-        logging.exception("_admin_list: %s lookup failed", table)
-        return jsonify({key: []}), 200
+        return _db_error(exc, f"_admin_list: {table} lookup failed")  # missing table = 501, real failure = 500, never a fake empty list
     return jsonify({key: rows}), 200
 
 
@@ -3844,6 +3923,152 @@ def support_list(user):
     return jsonify({"tickets": rows}), 200
 
 
+# ---- admin: support inbox + analytics (the routes the frontend already calls) ----
+
+@app.route("/api/admin/support", methods=["GET"])
+@require_auth
+@admin_only
+def admin_support_list(user):
+    def build():  # fresh builder each time (builders are mutable)
+        return supabase.table("support_tickets").select("*")
+
+    try:
+        try:
+            rows = build().order("created_at", desc=True).limit(200).execute().data or []
+        except Exception:
+            rows = build().limit(200).execute().data or []
+    except Exception as exc:
+        return _db_error(exc, "admin_support_list: lookup failed")  # missing table -> 501
+
+    try:  # the admin opening the inbox = delivered
+        supabase.table("support_tickets").update({"status": "delivered"}).in_("status", ["sent", "pending"]).execute()
+        for r in rows:
+            if r.get("status") in ("sent", "pending"):
+                r["status"] = "delivered"
+    except Exception:
+        logging.warning("admin_support_list: could not mark delivered", exc_info=True)
+
+    prof = {}
+    ids = list({int(r["user_id"]) for r in rows if r.get("user_id") is not None})
+    for chunk in _in_chunks(ids, 100):
+        try:
+            for u in (
+                supabase.table("users").select("telegram_id,first_name,username")
+                .in_("telegram_id", chunk).execute()
+            ).data or []:
+                prof[int(u["telegram_id"])] = u
+        except Exception:
+            logging.warning("admin_support_list: names unavailable", exc_info=True)
+
+    _attach_support_replies(rows)
+    out = []
+    for r in rows:
+        try:
+            uid = int(r.get("user_id"))
+            u = prof.get(uid, {})
+            reply = r.get("admin_reply")
+            resolved = str(r.get("status") or "").lower() in ("resolved", "closed")
+            msgs = [{"role": "user", "text": r.get("message"), "created_at": r.get("created_at")}]
+            if reply:
+                msgs.append({"role": "staff", "text": reply, "created_at": r.get("replied_at")})
+            r.update({
+                "telegram_id": uid,
+                "username": u.get("username") or "",
+                "first_name": u.get("first_name") or "",
+                "last_message": reply or r.get("message"),
+                "unread_count": 0 if (reply or resolved) else 1,
+                "messages": msgs,
+            })
+        except Exception:
+            logging.warning("admin_support_list: could not shape one ticket", exc_info=True)
+        out.append(r)
+    return jsonify({"tickets": out}), 200
+
+
+@app.route("/api/admin/support/reply", methods=["POST"])
+@require_auth
+@admin_only
+@limiter.limit("60 per minute")
+def admin_support_reply(user):
+    data = request.get_json(silent=True) or {}
+    ticket_id = str(data.get("ticket_id") or "").strip()
+    message = str(data.get("message") or "").strip()[:SUPPORT_MESSAGE_MAX]
+    if not ticket_id or not message:
+        return jsonify({"error": "ticket_id and message are required"}), 400
+    try:
+        rows = supabase.table("support_tickets").select("*").eq("id", ticket_id).limit(1).execute().data or []
+    except Exception as exc:
+        return _db_error(exc, "admin_support_reply: lookup failed")
+    if not rows:
+        return jsonify({"error": "Ticket not found"}), 404
+    t = rows[0]
+    prev = str(t.get("admin_reply") or "").strip()
+    combined = (prev + "\n\n" + message) if prev else message
+    try:
+        (
+            supabase.table("support_tickets")
+            .update({"admin_reply": combined[:4000], "replied_at": _now_iso(), "status": "answered"})
+            .eq("id", t["id"]).execute()
+        )
+    except Exception as exc:
+        return _db_error(exc, "admin_support_reply: save failed")  # admin_reply column missing -> 501
+    _async(_tg_send, t.get("user_id"), "PayLock Support replied:\n\n" + message)
+    return jsonify({"ok": True, "status": "answered"}), 200
+
+
+@app.route("/api/admin/support/resolve", methods=["POST"])
+@require_auth
+@admin_only
+@limiter.limit("60 per minute")
+def admin_support_resolve(user):
+    data = request.get_json(silent=True) or {}
+    ticket_id = str(data.get("ticket_id") or "").strip()
+    if not ticket_id:
+        return jsonify({"error": "ticket_id is required"}), 400
+    try:
+        upd = supabase.table("support_tickets").update({"status": "resolved"}).eq("id", ticket_id).execute()
+    except Exception as exc:
+        return _db_error(exc, "admin_support_resolve: failed")
+    if not upd.data:
+        return jsonify({"error": "Ticket not found"}), 404
+    return jsonify({"ok": True, "status": "resolved"}), 200
+
+
+@app.route("/api/admin/analytics", methods=["GET"])
+@require_auth
+@admin_only
+def admin_analytics(user):
+    s = _admin_stats()
+    out = {
+        "total_users": s["users"],
+        "orders_today": s["orders_today"],
+        "volume_today_kobo": s["volume_today_kobo"],
+        "open_disputes": s["open_disputes"],
+        "pending_reports": s["reports"],
+        "pending_appeals": s["appeals"],
+    }
+    try:
+        out["active_products"] = _count_rows("products", "id", is_hidden=False)
+    except Exception:
+        logging.warning("admin_analytics: products unavailable", exc_info=True)
+    try:
+        rel = _fetch_all(lambda a, b: (
+            supabase.table("escrow_orders").select("id,platform_fee_kobo")
+            .eq("status", "released").order("id").range(a, b)
+        ))
+        out["released_orders"] = len(rel)
+        out["platform_fees_kobo"] = sum(int(r.get("platform_fee_kobo") or 0) for r in rel)
+    except Exception:
+        logging.warning("admin_analytics: orders unavailable", exc_info=True)
+    try:
+        out["open_tickets"] = int(
+            supabase.table("support_tickets").select("id", count="exact").neq("status", "resolved").execute().count or 0
+        )
+    except Exception:
+        logging.warning("admin_analytics: tickets unavailable", exc_info=True)
+    return jsonify({"analytics": out}), 200
+
+
 # =============================================================================
 # Seller <-> buyer chat (additive — Prompt 5)
 # =============================================================================
@@ -3876,15 +4101,37 @@ def chat_send(user):
     if len(text) > CHAT_TEXT_MAX:
         return jsonify({"error": f"text must be {CHAT_TEXT_MAX} characters or less"}), 400
 
+    client_id = re.sub(r"[^A-Za-z0-9_-]", "", str(data.get("client_id") or ""))[:64] or None
+    payload = {
+        "order_id": str(order.get("id")),
+        "sender_id": int(user["telegram_id"]),
+        "text": text,
+        "created_at": _now_iso(),
+    }
+    if client_id:
+        try:  # same client_id twice (the app's 5s retry) = same message, never a second row
+            dup = (
+                supabase.table("chat_messages").select("*")
+                .eq("order_id", payload["order_id"]).eq("client_id", client_id).limit(1).execute()
+            ).data or []
+            if dup:
+                return jsonify({"ok": True, "message": dup[0], "duplicate": True}), 200
+            payload["client_id"] = client_id
+        except Exception:
+            pass  # chat_messages.client_id not migrated: send without it
     try:
-        rows = supabase.table("chat_messages").insert({
-            "order_id": str(order.get("id")),
-            "sender_id": int(user["telegram_id"]),
-            "text": text,
-            "created_at": _now_iso(),
-        }).execute().data or []
+        try:
+            rows = supabase.table("chat_messages").insert(payload).execute().data or []
+        except Exception as exc:
+            if "client_id" not in payload or not _is_schema_missing(exc):
+                raise
+            payload.pop("client_id", None)
+            rows = supabase.table("chat_messages").insert(payload).execute().data or []
     except Exception as exc:
+        if "duplicate" in str(exc).lower() or "23505" in str(exc):
+            return jsonify({"ok": True, "duplicate": True}), 200
         return _db_error(exc, "chat_send: save failed")  # missing table -> 501
+    _async(_notify_chat_recipient, order, int(user["telegram_id"]), text)  # real delivery to the other party
     return jsonify({"ok": True, "message": rows[0] if rows else {"text": text}}), 201
 
 
@@ -3907,9 +4154,22 @@ def chat_list(user, order_id):
     except Exception as exc:
         return _db_error(exc, "chat_list: lookup failed")  # missing table -> 501
 
+    other_read = None  # when the OTHER party last read this chat (read BEFORE we mark our own read)
+    try:
+        other_id = int(order.get("seller_id") if str(tid) == str(order.get("buyer_id")) else order.get("buyer_id"))
+        rr = (
+            supabase.table("chat_reads").select("last_read_at")
+            .eq("order_id", str(order.get("id"))).eq("user_id", other_id).limit(1).execute()
+        ).data or []
+        other_read = _parse_ts(rr[0].get("last_read_at")) if rr else None
+    except Exception:
+        other_read = None
     for r in rows:
         r["is_mine"] = str(r.get("sender_id")) == str(tid)
         r["sender_role"] = "buyer" if str(r.get("sender_id")) == str(order.get("buyer_id")) else "seller"
+        if r["is_mine"]:  # saved = 'sent' (single tick); read by the other party = 'read'
+            sent = _parse_ts(r.get("created_at"))
+            r["status"] = "read" if (other_read and sent and other_read >= sent) else "sent"
     _chat_mark_read(order.get("id"), tid)  # opening the chat marks it read (never raises)
     return jsonify({"messages": rows}), 200
 
@@ -4791,6 +5051,12 @@ def products_delete(user, product_id):
             "code": "PRODUCT_HAS_ORDERS",
         }), 409
 
+    dead_code = None  # read BEFORE the delete; the tombstone is written only after the delete succeeds
+    try:
+        crow = supabase.table("products").select("code").eq("id", prod["id"]).limit(1).execute().data or []
+        dead_code = crow[0].get("code") if crow else None
+    except Exception:
+        dead_code = None
     try:
         supabase.table("products").delete().eq("id", prod["id"]).execute()
     except Exception as exc:
@@ -4805,6 +5071,14 @@ def products_delete(user, product_id):
         logging.exception("products_delete: delete failed for product %s", pid)
         return jsonify({"error": "Could not delete the product. Please try again."}), 500
 
+    if dead_code:  # tombstone: this code can never point to another product
+        try:
+            supabase.table("deleted_product_codes").upsert(
+                {"code": str(dead_code).upper(), "product_id": str(prod["id"]), "deleted_at": _now_iso()},
+                on_conflict="code",
+            ).execute()
+        except Exception:
+            logging.warning("products_delete: tombstone not saved for product %s", pid, exc_info=True)
     # Best-effort cleanup of rows that belong only to this product. The delete already succeeded.
     for table in ("extra_images", "product_events"):
         try:
@@ -5191,6 +5465,9 @@ def _app_link(startapp=None):
 
 
 def _open_button(startapp=None):
+    link = _app_link(startapp) if startapp else None
+    if link:  # a t.me/<bot>/<app>?startapp= link is the only button type that delivers start_param
+        return InlineKeyboardMarkup([[InlineKeyboardButton(text="Open PayLock", url=link)]])
     return InlineKeyboardMarkup([[
         InlineKeyboardButton(text="Open PayLock", web_app=WebAppInfo(url=MINI_APP_URL))
     ]])
@@ -5203,11 +5480,14 @@ def _product_button(product):
     link when WEBAPP_URL is not set, then to the plain button.
     """
     pid = re.sub(r"[^A-Za-z0-9_-]", "", str((product or {}).get("id") or ""))
-    if WEBAPP_URL and pid:
-        url = f"{WEBAPP_URL}/?product={pid}"
-        return InlineKeyboardMarkup([[InlineKeyboardButton("Open PayLock", web_app=WebAppInfo(url=url))]])
     code = (product or {}).get("code")
-    return (_open_button(f"prod_{code}") if code else None) or _open_button()
+    key = code or pid
+    if key and _app_link(f"prod_{key}"):
+        return _open_button(f"prod_{key}")  # startapp link: product id survives the app opening
+    if WEBAPP_URL and pid:
+        url = f"{WEBAPP_URL}/?product={pid}"  # fallback; index.html now reads ?product=
+        return InlineKeyboardMarkup([[InlineKeyboardButton("Open PayLock", web_app=WebAppInfo(url=url))]])
+    return _open_button()
 
 
 async def _bot_start(update, context):
