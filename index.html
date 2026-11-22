@@ -1036,6 +1036,7 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
         <label for="acct-number">Account number</label>
         <input class="input" id="acct-number" type="text" inputmode="numeric" maxlength="10" placeholder="10-digit account number" oninput="PayLock.onAccountInput(this)">
       </div>
+      <div id="acct-status" class="small" style="display:none;margin:-4px 0 12px;font-weight:700"></div>
       <div class="acct-name" id="acct-name-row">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
         <span id="acct-name-text"></span>
@@ -1049,7 +1050,7 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
         <label for="wd-amount">Amount (₦, min 1000)</label>
         <input class="input" id="wd-amount" type="text" inputmode="numeric" placeholder="1000" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
       </div>
-      <button class="btn" type="button" id="wd-btn" onclick="PayLock.requestWithdrawal()">Request withdrawal</button>
+      <button class="btn" type="button" id="wd-btn" disabled onclick="PayLock.requestWithdrawal()">Request withdrawal</button>
     </div>
 
     <div class="card" style="padding:4px 16px">
@@ -2593,8 +2594,7 @@ function filterBanks(keepSelection){
   const q = input.value.trim().toLowerCase();
   if (keepSelection !== true && input.value !== state.selectedBankName) {
     state.selectedBankCode = null;
-    state.accountName = '';
-    $('acct-name-row').classList.remove('show');
+    resetAcctVerification();
   }
   const matches = state.banks.filter(function(b){ return String(b.name || '').toLowerCase().indexOf(q) >= 0; });
   renderBankList(matches);
@@ -2614,13 +2614,25 @@ function selectBank(b){
   state.selectedBankName = b.name;
   $('bank-search').value = b.name;
   $('bank-list').classList.remove('open');
+  resetAcctVerification();
   maybeResolveAccount();
 }
 function onAccountInput(inp){
   inp.value = inp.value.replace(/\D/g, '').slice(0, 10);
+  resetAcctVerification();
+  maybeResolveAccount();
+}
+function resetAcctVerification(){
   state.accountName = '';
   $('acct-name-row').classList.remove('show');
-  maybeResolveAccount();
+  setAcctStatus('', '');
+  $('wd-btn').disabled = true;
+}
+function setAcctStatus(kind, msg){
+  const box = $('acct-status');
+  box.textContent = msg;
+  box.style.color = kind === 'error' ? 'var(--red)' : '';
+  box.style.display = msg ? 'block' : 'none';
 }
 function maybeResolveAccount(){
   clearTimeout(resolveTimer);
@@ -2628,21 +2640,30 @@ function maybeResolveAccount(){
     const acct = $('acct-number').value;
     const code = state.selectedBankCode;
     if (acct.length !== 10 || !code) return;
+    setAcctStatus('loading', 'Checking...');
     try {
-      const r = await api('/api/banks/resolve', {
-        method: 'POST', headers: jsonHeaders(),
-        body: JSON.stringify({ account_number: acct, bank_code: code })
+      const r = await api('/api/resolve?account_number=' + encodeURIComponent(acct) + '&bank_code=' + encodeURIComponent(code), {
+        headers: getAuthHeader()
       });
       if ($('acct-number').value !== acct || state.selectedBankCode !== code) return; // stale
       if (r.res.ok && r.data.account_name) {
         state.accountName = r.data.account_name;
-        $('acct-name-text').textContent = r.data.account_name;
+        setAcctStatus('', '');
+        $('acct-name-text').textContent = 'Account Name: ' + r.data.account_name;
         $('acct-name-row').classList.add('show');
+        $('wd-btn').disabled = false;
       } else {
-        showToast(r.data.error || 'Could not resolve account');
+        state.accountName = '';
+        $('wd-btn').disabled = true;
+        setAcctStatus('error', 'Could not verify account. Check number and bank.');
       }
-    } catch (e) { showToast('Network error. Try again.'); }
-  }, 400);
+    } catch (e) {
+      if ($('acct-number').value !== acct || state.selectedBankCode !== code) return;
+      state.accountName = '';
+      $('wd-btn').disabled = true;
+      setAcctStatus('error', 'Could not verify account. Check number and bank.');
+    }
+  }, 600);
 }
 
 /* ---------- Fund ---------- */
