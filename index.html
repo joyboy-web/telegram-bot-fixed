@@ -211,8 +211,8 @@ h1,h2,h3,p{margin:0}
 .pcard{ min-width:0; overflow:hidden; cursor:pointer; }
 .pcard .ptitle{ overflow:hidden; max-width:100%; }
 .pcard .pprice{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-html,body{ overflow-x:hidden; }
-.app-shell{ overflow-x:hidden; }
+html,body{ height:auto; min-height:100vh; overflow-y:auto; touch-action:pan-y; position:relative; }
+.app-shell{ height:auto; overflow-y:auto; touch-action:pan-y; position:relative; }
 
 .gate h2,.gate p{text-align:center;line-height:1.35;overflow-wrap:anywhere}
 .gate p{line-height:1.5;margin:0 auto}
@@ -568,7 +568,7 @@ body.kb-open .tabbar{display:none}
 .rp-stars{display:flex;margin:4px 0}
 
 /* ===== FIX 1 + D: chat room / Support = solid fixed full-height container, flush header ===== */
-html,body{overscroll-behavior-y:none}
+/* scroll-chain blocker removed: overscroll-behavior:none on html+body stopped page scrolling */
 html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
 #pg-chat.chat-inview.active{position:fixed;top:var(--vvt,0px);left:50%;transform:translateX(-50%);width:100%;max-width:440px;height:calc(var(--vvh,100dvh) - var(--tabh,calc(64px + env(safe-area-inset-bottom,0px))));margin:0;padding:0;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);z-index:40}
 #pg-chat.chat-inview #chat-page-title{display:none}
@@ -580,6 +580,19 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
 #pg-chat.chat-inview #chat-typing{margin:0 16px 10px;flex:none}
 #pg-chat.chat-inview .chat-actions{margin:8px 0;padding:0 16px;flex:none}
 #pg-chat.chat-inview .chat-inputbar,#pg-chat.chat-inview .sup-bar{flex:none;padding:8px 16px;background:var(--bg)}
+
+/* ===== WHITE MODE (additional option; Black above is untouched) - Splash follows the same data-theme as the lock screen and in-app pages ===== */
+[data-theme="light"] #splash{background:#FFFFFF;color:#000000}
+[data-theme="light"] #splash svg{stroke:#000000}
+[data-theme="light"] #splash .sp-ring{border-color:rgba(0,0,0,.14);border-top-color:#000000}
+[data-theme="light"] #splash.open .sp-ring{border-top-color:rgba(0,0,0,.4)}
+[data-theme="light"] #splash .dots3 span{background:#000000}
+[data-theme="light"] #splash .sp-title{color:#000000}
+[data-theme="light"] #splash .sp-sub{color:#6B7280}
+
+/* ===== SEND BUTTON (SVG only): Black mode = white button + black icon, White mode = black button + white icon (from .btn theme vars) ===== */
+.btn.sm.send-ic{width:44px;height:44px;min-width:44px;padding:0;border-radius:22px;flex:none}
+.btn.sm.send-ic .i{width:20px;height:20px}
 </style>
 </head>
 <body>
@@ -696,6 +709,7 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
       <h2 class="page-title" style="margin:0">Sell</h2>
       <button class="add-btn" type="button" id="sell-add-btn" aria-label="List a product"><svg class="i" viewBox="0 0 24 24" style="width:22px;height:22px"><path d="M12 5v14M5 12h14"/></svg></button>
     </div>
+    <div id="sell-ban-card"></div>
 
     <div class="card" id="sell-an-card">
       <div class="hdr-row" style="margin-bottom:6px">
@@ -824,7 +838,7 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
         <input class="input sup-pill" id="support-input" type="text" maxlength="1000" autocomplete="off" placeholder="Message...">
         <button class="sup-ic" type="button" id="support-attach" aria-label="Attach"><svg class="i" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
         <button class="sup-ic" type="button" id="support-camera" aria-label="Camera"><svg class="i" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
-        <button class="btn sm" type="button" id="support-send" style="display:none">Send</button>
+        <button class="btn sm send-ic" type="button" id="support-send" aria-label="Send" style="display:none"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
         <input type="file" id="support-file" accept="image/*,application/pdf" hidden>
         <input type="file" id="support-cam" accept="image/*" capture="environment" hidden>
       </div>
@@ -860,7 +874,7 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
       </div>
       <div class="chat-inputbar">
         <input class="input" id="chat-input" type="text" maxlength="500" autocomplete="off" placeholder="Type a message">
-        <button class="btn sm" type="button" id="chat-send">Send</button>
+        <button class="btn sm send-ic" type="button" id="chat-send" aria-label="Send"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
       </div>
     </div></div>
   </section>
@@ -1399,7 +1413,19 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
         <span class="srow-mid"><span class="srow-t">Analytics</span><span class="srow-s">Platform summary</span></span>
         <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
       </button>
+      <button class="srow" type="button" id="adm-lowrate-row" data-go="pg-adm-lowrate">
+        <span class="srow-ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18.5 21 12 16.8 5.5 21l2-7.5L2 9h7z"/></svg></span>
+        <span class="srow-mid"><span class="srow-t">Seller Low Ratings</span><span class="srow-s">Temp bans, appeals and manual bans</span></span>
+        <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
     </div>
+  </section>
+
+  <section class="page" id="pg-adm-lowrate">
+    <button class="back-btn" type="button" onclick="PayLock.navBack('pg-admin')">‹ Back</button>
+    <h2 class="page-title">Seller Low Ratings</h2>
+    <div id="admlr-list"></div>
+    <div class="empty" id="admlr-empty" style="display:none">Nothing to review</div>
   </section>
 
   <section class="page" id="pg-adm-disputes">
@@ -3145,8 +3171,9 @@ async function boot(){
 const chatState = {
   product:null, messages:[], stage:'ask', orderId:null, busy:false,
   waitingComplaint:false, waitingOrderId:null, pendingStars:0, complaintText:null, ratingBusy:false,
-  remote:[], remoteSig:'', remoteOff:false
+  remote:[], remoteSig:'', remoteOff:false, reminder:false
 };
+const DECISION_REMINDER_TEXT = 'You have 1 day left to Confirm Delivery or request a Refund for this order. If you do nothing, the money will automatically go to the seller.';
 
 function chatPush(role, text){
   chatState.messages.push({ role: role, text: String(text) });
@@ -3202,7 +3229,9 @@ function openChat(product){
       chatState.messages = msgs;
       chatState.stage = okStages[saved.stage] ? saved.stage : 'ask';
       chatState.orderId = (saved.orderId !== undefined) ? saved.orderId : null;
+      chatState.refunded = !!saved.refunded;
       chatState.busy = false;
+      chatState.reminder = false;
       chatResetRemote();
       renderChatMessages(); goPage('pg-chat'); chatLoadRemote(); return;
     }
@@ -3213,7 +3242,9 @@ function openChat(product){
   chatState.messages = [];
   chatState.stage = 'ask';
   chatState.orderId = null;
+  chatState.refunded = false;
   chatState.busy = false;
+  chatState.reminder = false;
   chatResetRemote();
 
   chatPush('paylock', bm('ask', "Do you want to continue the purchase of this product? Reply with 'yes' to continue."));
@@ -3243,6 +3274,8 @@ function openOrderChat(o){
   chatState.peer = { id: isSeller ? o.buyer_id : o.seller_id,
     label: userLabel({ username: isSeller ? o.buyer_username : o.seller_username, first_name: isSeller ? o.buyer_name : o.seller_name }, isSeller ? o.buyer_id : o.seller_id) };
   chatState.stage = (String(o.status) === 'held') ? 'paid' : 'done';
+  chatState.refunded = (String(o.status) === 'refunded');
+  chatState.reminder = (!isSeller && String(o.status) === 'held' && !!o.reminder_sent_at);
   chatState.messages = (!isSeller && sameOrder && Array.isArray(saved.messages))
     ? saved.messages.filter(function(m){ return m && okRoles[m.role] && typeof m.text === 'string'; })
     : [];
@@ -3269,17 +3302,26 @@ function renderChatMessages(){
   chatHeadSync();
 
   const p = chatState.product;
+  delete p.file_url; delete p.download_url;          // the paid file is only reachable through /api/download/<order_id>
   const own = isOwnProduct(p);
+  const gone = !!chatState.refunded && !own;          // refunded order: product access is removed from this room
   const card = document.getElementById('chat-product');
   while(card.firstChild) card.removeChild(card.firstChild);
-  const nameEl = document.createElement('div');
-  nameEl.style.fontWeight = '700';
-  nameEl.textContent = p.title || p.name || p.product_name || 'Product';
-  const priceEl = document.createElement('div');
-  priceEl.style.color = 'var(--muted)';
-  priceEl.textContent = nairaFmt(p.buyer_pays_kobo || p.price_kobo || 0);
-  card.appendChild(nameEl);
-  card.appendChild(priceEl);
+  if(gone){
+    const goneEl = document.createElement('div');
+    goneEl.style.color = 'var(--muted)';
+    goneEl.textContent = 'Order refunded. The product is no longer available in this chat.';
+    card.appendChild(goneEl);
+  } else {
+    const nameEl = document.createElement('div');
+    nameEl.style.fontWeight = '700';
+    nameEl.textContent = p.title || p.name || p.product_name || 'Product';
+    const priceEl = document.createElement('div');
+    priceEl.style.color = 'var(--muted)';
+    priceEl.textContent = nairaFmt(p.buyer_pays_kobo || p.price_kobo || 0);
+    card.appendChild(nameEl);
+    card.appendChild(priceEl);
+  }
 
   const box = document.getElementById('chat-messages');
   while(box.firstChild) box.removeChild(box.firstChild);
@@ -3302,7 +3344,7 @@ function renderChatMessages(){
       d.textContent = m.text;
     }
     box.appendChild(d);
-    if (m.role === 'paylock' && chatState.orderId && !own && m.text === bm('file', 'Here is your file')) {
+    if (!gone && m.role === 'paylock' && chatState.orderId && !own && m.text === bm('file', 'Here is your file')) {
       const dc = dlCard(p, chatState.orderId);
       if (dc) box.appendChild(dc);
       if (rateOn && !ratePlaced) { box.appendChild(rateInline(p, chatState.orderId)); ratePlaced = true; }   // directly under the delivered product
@@ -3328,6 +3370,12 @@ function renderChatMessages(){
     }
     box.appendChild(d);
   });
+  if (chatState.reminder && chatState.stage === 'paid' && !chatState.refunded && !own) {   // 24h decision reminder (system notice)
+    const rm = document.createElement('div');
+    rm.className = 'chat-msg chat-msg-system';
+    rm.textContent = DECISION_REMINDER_TEXT;
+    box.appendChild(rm);
+  }
   if (rateOn && !ratePlaced) box.appendChild(rateInline(p, chatState.orderId));   // room has no file message (order chat)
 
   document.getElementById('pay-in-chat').style.display = (chatState.stage === 'ask') ? '' : 'none';
@@ -3358,7 +3406,8 @@ function chatSave(){
       product: chatState.product,
       messages: chatState.messages,
       stage: chatState.stage,
-      orderId: chatState.orderId
+      orderId: chatState.orderId,
+      refunded: !!chatState.refunded
     }));
   } catch(e){}
 }
@@ -3439,6 +3488,11 @@ function chatPoll(){
     const o = list.filter(function(x){ return String(x.id) === String(watchedId); })[0];
     if(!o) return;
 
+    if(o.status === 'held' && o.reminder_sent_at && !chatState.reminder && String(o.buyer_id) === String(state.telegram_id)){
+      chatState.reminder = true;
+      renderChatMessages();
+    }
+
     if(o.status === 'released'){
       chatState.stage = 'done';
       chatPush('system', "Seller has been paid");
@@ -3447,6 +3501,8 @@ function chatPoll(){
       chatState.stage = 'done';
       chatPush('system', "Dispute opened - escrow frozen");
       renderChatMessages();
+    } else if(o.status === 'refunded'){
+      chatApplyRefunded();
     }
   }, 3000);
 }
@@ -3602,6 +3658,7 @@ async function chatBuyFlow(btn){
               (fresh.every(function(x){ return x.product_id === undefined; }) ? fresh[0] : undefined);
     if(o){
       chatState.orderId = o.id;
+      chatState.refunded = false;
       chatState.stage = 'paid';
       chatPush('paylock', bm('held', "Your payment is held in escrow"));
       chatPush('paylock', bm('file', "Here is your file"));
@@ -4206,7 +4263,8 @@ function salesLine(p){
   return n.toLocaleString(L.loc) + ' sales • ' + (r ? r.toFixed(1) + '/5' : 'no rating');
 }
 function prodCode(p){ return String(p.short_code || p.code || p.link_code || p.id); }
-function productLink(p){ return 'https://t.me/' + CONFIG.BOT_USERNAME + '/' + CONFIG.APP_SHORT_NAME + '?startapp=prod_' + prodCode(p); }
+function stripProd(v){ let s = String(v === undefined || v === null ? '' : v); while (/^prod_/i.test(s)) s = s.slice(5); return s; }   // strip every prod_ prefix; callers add it once
+function productLink(p){ return 'https://t.me/' + CONFIG.BOT_USERNAME + '/' + CONFIG.APP_SHORT_NAME + '?startapp=prod_' + stripProd(prodCode(p)); }
 async function copyText(text, okMsg){
   let ok = false;
   try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); ok = true; } } catch (e) {}
@@ -4456,10 +4514,12 @@ async function submitDispute(o, text, btn){
 function chatExtrasRender(){
   const st = chatState.stage;
   const own = isOwnProduct(chatState.product);
-  const paid = (st === 'paid' || st === 'done') && !own;
-  const d = $('download-in-chat'), k = $('chat-keep-btn'), rr = $('chat-refund-row');
+  const gone = !!chatState.refunded && !own;
+  const paid = (st === 'paid' || st === 'done') && !own && !gone;
+  const d = $('download-in-chat'), k = $('chat-keep-btn'), rr = $('chat-refund-row'), pvb = $('chat-preview-btn');
   if (d) d.style.display = paid ? '' : 'none';
   if (k) k.style.display = paid ? '' : 'none';
+  if (pvb) pvb.style.display = gone ? 'none' : '';
   if (st !== 'paid') chatState.refundPrompt = false;
   if (rr) rr.style.display = (chatState.refundPrompt && st === 'paid') ? '' : 'none';
 }
@@ -4485,15 +4545,20 @@ function openChatPreview(){
     b.appendChild(c);
   });
 }
-function chatDownload(){
-  const p = chatState.product;
-  const url = p && (p.file_url || p.download_url);
-  if (typeof url === 'string' && url.indexOf('https://') === 0) {
-    try { if (tg && tg.openLink) tg.openLink(url); else window.open(url, '_blank'); }
-    catch (e) { window.open(url, '_blank'); }
-  } else {
-    showToast('Coming in backend update');
-  }
+async function chatDownload(){
+  const p = chatState.product, oid = chatState.orderId;
+  if (!p || !oid || chatState.refunded) { showToast('This file is not available'); return; }
+  try {
+    const res = await fetch('/api/download/' + encodeURIComponent(oid), { headers: getAuthHeader() });   // secure route, buyer only
+    if (!res.ok) {
+      let msg = ''; try { msg = (await res.json()).error || ''; } catch (e) {}
+      showToast(msg || 'This file is not available');
+      return;
+    }
+    const cd = res.headers.get('Content-Disposition') || '';
+    const mm = /filename="?([^";]+)"?/i.exec(cd);
+    saveBlob(await res.blob(), (mm && mm[1]) || String(p.name || p.title || 'download'));
+  } catch (e) { showToast('Network error. Try again.'); }
 }
 function chatKeep(){
   const p = chatState.product;
@@ -4505,22 +4570,94 @@ async function rateInEscrow(stars){
   const p = chatState.product, oid = chatState.orderId;
   if (!p || !oid || chatState.ratingBusy) return;
   chatState.ratingBusy = true;
-  let saved = false;
+  let saved = false, shown = stars;
   try {
     const sellerId = p.seller_id !== undefined ? p.seller_id : p.owner_id;
-    const r = await postApi('/api/rate', { order_id: oid, product_id: p.id, buyer_id: state.telegram_id, seller_id: sellerId, stars: stars });
-    saved = r.ok;
+    const r = await api('/api/rate', { method: 'POST', headers: jsonHeaders(),
+      body: JSON.stringify({ order_id: oid, product_id: p.id, buyer_id: state.telegram_id, seller_id: sellerId, stars: stars }) });
+    if (r.res.ok) saved = true;
+    else if (r.res.status === 409 || r.data.already_rated) {            // rated before (e.g. on another device): resume from the saved rating
+      saved = true;
+      shown = Math.max(1, Math.min(5, Math.round(Number(r.data.stars)) || stars));
+      if (r.data.has_reason) { try { localStorage.setItem('rated_reason_' + String(oid), '1'); } catch (e) {} }
+    } else showToast(r.data.error || 'Rating not saved, try again');
+  } catch (e) {
+    showToast('Rating not saved, try again');
   } finally {
     chatState.ratingBusy = false;
   }
-  if (saved) { try { localStorage.setItem('rated_' + String(oid), String(stars)); } catch (e) {} loadProducts(); }   // feeds Item 12 count
-  if (stars >= 3) {
-    await chatOrderAction($('chat-confirm-btn'), confirmDelivery, 'released', 'Thanks! Payment released to seller.');
-  } else {
-    chatState.refundPrompt = true;
-    chatPush('paylock', bm('refund', 'Sorry to hear that. Do you want a refund?'));
-  }
+  if (saved) { try { localStorage.setItem('rated_' + String(oid), String(shown)); } catch (e) {} loadProducts(); }   // feeds Item 12 count
+  // NO release and NO refund here. The buyer decides in rateDecision(); money stays locked until then.
   renderChatMessages();
+}
+async function rateSaveReason(oid, text){
+  const t = String(text || '').trim();
+  if (!t) { showToast('Please tell us why you gave a low rating'); return; }
+  if (chatState.decisionBusy) return;
+  chatState.decisionBusy = true; renderChatMessages();
+  try {
+    const r = await api('/api/rate/reason', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ order_id: oid, reason: t.slice(0, 500) }) });
+    if (r.res.ok) { try { localStorage.setItem('rated_reason_' + String(oid), '1'); } catch (e) {} }
+    else showToast(r.data.error || 'Could not save. Try again.');
+  } catch (e) { showToast('Network error. Try again.'); }
+  chatState.decisionBusy = false; renderChatMessages();
+}
+async function rateDoRefund(oid){
+  if (chatState.decisionBusy) return;
+  chatState.decisionBusy = true; renderChatMessages();
+  let ok = false;
+  try {
+    const r = await api('/api/escrow/refund', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ order_id: oid }) });
+    if (r.res.ok) ok = true; else showToast(r.data.error || 'Could not refund. Try again.');
+  } catch (e) { showToast('Network error. Try again.'); }
+  chatState.decisionBusy = false;
+  if (ok) { chatApplyRefunded(); loadBalance(); loadEscrowOrders(); } else renderChatMessages();
+}
+function chatApplyRefunded(){
+  const oid = String(chatState.orderId || '');
+  chatState.refunded = true; chatState.stage = 'done'; chatState.refundPrompt = false;
+  try { localStorage.removeItem(b7Key('dl_' + oid)); } catch (e) {}   // downloaded-file marker
+  if (oid) dlState[oid] = { pct: 0, status: 'idle' };
+  if (chatState.product) { delete chatState.product.file_url; delete chatState.product.download_url; }
+  chatPush('system', 'Order refunded. Your money is back in your wallet and the product has been removed from this chat.');
+  renderChatMessages();
+}
+function rateDecision(oid, n){
+  const wrap = el('div', 'rp-decide'); wrap.style.cssText = 'margin-top:12px;display:flex;flex-direction:column;gap:10px';
+  const busy = !!chatState.decisionBusy, id = String(oid), low = n <= 2;      // LOW = 1 - 2.5 stars (stars are whole numbers here)
+  const btn = function(label, cls, fn){ const b = el('button', 'btn' + (cls ? ' ' + cls : ''), label); b.type = 'button'; b.disabled = busy; b.addEventListener('click', fn); return b; };
+  const row = function(a, b){ const r = el('div'); r.style.cssText = 'display:flex;gap:10px'; a.style.flex = '1'; b.style.flex = '1'; r.appendChild(a); r.appendChild(b); return r; };
+  let reasonSaved = false; try { reasonSaved = !!localStorage.getItem('rated_reason_' + id); } catch (e) {}
+  chatState.rd = chatState.rd || {};
+  if (low && !reasonSaved) {                                                  // A1: why?
+    wrap.appendChild(el('div', null, 'Why did you give low rating?'));
+    const ta = el('textarea', 'textarea'); ta.maxLength = 500; ta.placeholder = 'Tell us what went wrong'; ta.disabled = busy;
+    wrap.appendChild(ta);
+    wrap.appendChild(btn('Submit', '', function(){ rateSaveReason(id, ta.value); }));
+  } else if (low && chatState.rd[id] === 'closed') {                          // said No twice: nothing released, nothing refunded
+    wrap.appendChild(el('div', 'sub', 'Your money stays locked in escrow until you Confirm Delivery or request a refund.'));
+    if (chatState.reminder) {                                                 // reminder active: keep the decision options visible
+      wrap.appendChild(row(
+        btn('Refund', 'secondary', function(){ rateDoRefund(id); }),
+        btn('Confirm Delivery', '', function(){ chatOrderAction($('chat-confirm-btn'), confirmDelivery, 'released', 'Thanks! Payment released to seller.'); })));
+    }
+  } else if (low && chatState.rd[id] === 'confirmq') {                        // A3: confirm instead?
+    wrap.appendChild(el('div', null, 'Do you want to Confirm Delivery instead?'));
+    wrap.appendChild(row(
+      btn('Yes, Confirm Delivery', '', function(){ chatOrderAction($('chat-confirm-btn'), confirmDelivery, 'released', 'Thanks! Payment released to seller.'); }),
+      btn('No', 'secondary', function(){ chatState.rd[id] = 'closed'; renderChatMessages(); })));
+  } else if (low) {                                                           // A2: refund?
+    wrap.appendChild(el('div', null, 'Do you want a refund?'));
+    wrap.appendChild(row(
+      btn('Yes', '', function(){ rateDoRefund(id); }),
+      btn('No', 'secondary', function(){ chatState.rd[id] = 'confirmq'; renderChatMessages(); })));
+  } else {                                                                    // B: high rating, ask ONLY this
+    wrap.appendChild(el('div', null, 'Do you want your money back, or Confirm Delivery?'));
+    wrap.appendChild(row(
+      btn('Refund', 'secondary', function(){ rateDoRefund(id); }),
+      btn('Confirm Delivery', '', function(){ chatOrderAction($('chat-confirm-btn'), confirmDelivery, 'released', 'Thanks! Payment released to seller.'); })));
+  }
+  return wrap;
 }
 
 /* ----- deep link: prod_ / ref_ / inv_ from start_param (startapp) ----- */
@@ -4564,7 +4701,7 @@ async function handleDeepLink(){
   }
 
   if (sp.indexOf('prod_') !== 0) return;
-  const code = sp.slice(5);
+  const code = stripProd(sp);   // legacy prod_prod_XXXXXX links: strip all prefixes, product lookup uses the bare code
   if (!code) return;
   const match = function(p){ return String(p.id) === code || prodCode(p) === code; };
   let prod = null;
@@ -4580,6 +4717,10 @@ async function handleDeepLink(){
       const r2 = await api('/api/products/' + encodeURIComponent(code));
       if (r2.res.ok) prod = r2.data.product || (r2.data.id ? r2.data : null);
     } catch (e) {}
+  }
+  if (!prod) {   // fallback: product already loaded in the marketplace list
+    const cu = code.toUpperCase();
+    prod = (state.products || []).filter(function(p){ return String(p.id) === code || stripProd(prodCode(p)).toUpperCase() === cu; })[0] || null;
   }
   if (!prod) { showToast('Product not found'); return; }
   openProductPreview(prod);
@@ -4919,10 +5060,12 @@ const THEME_KEY = 'paylock_theme_mode';
 function themeMode(){
   let m = 'system';
   try { m = localStorage.getItem(THEME_KEY) || 'system'; } catch (e) {}
-  return (m === 'dark' || m === 'light') ? m : 'system';
+  if (m === 'dark' || m === 'light') return m;
+  try { const t = localStorage.getItem('paylock_theme'); if (!localStorage.getItem(THEME_KEY) && (t === 'black' || t === 'white')) return t === 'black' ? 'dark' : 'light'; } catch (e) {}   // paylock_theme (black / white / auto) is honoured when no mode was saved yet
+  return 'system';
 }
 function setThemeMode(m){
-  try { localStorage.setItem(THEME_KEY, m); } catch (e) {}
+  try { localStorage.setItem(THEME_KEY, m); localStorage.setItem('paylock_theme', m === 'dark' ? 'black' : (m === 'light' ? 'white' : 'auto')); } catch (e) {}
   b7Soft('/api/settings', { theme_mode: m });
   loadTheme();
 }
@@ -4930,8 +5073,12 @@ function setThemeMode(m){
 detectScheme = function(){
   const m = themeMode();
   if (m !== 'system') return m;
+  try { if (tg && tg.colorScheme) return tg.colorScheme === 'dark' ? 'dark' : 'light'; } catch (e) {}   // Auto: Telegram colorScheme first
+  try {
+    const bg = tg && tg.themeParams && tg.themeParams.bg_color;
+    if (bg && /^#[0-9a-fA-F]{6}$/.test(bg)) { const r = parseInt(bg.slice(1, 3), 16), g = parseInt(bg.slice(3, 5), 16), b = parseInt(bg.slice(5, 7), 16); return (0.299 * r + 0.587 * g + 0.114 * b) < 128 ? 'dark' : 'light'; }
+  } catch (e) {}
   try { if (window.matchMedia) return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch (e) {}
-  try { if (tg && tg.colorScheme) return tg.colorScheme === 'dark' ? 'dark' : 'light'; } catch (e) {}
   return 'light';
 };
 function b7ThemeWire(){
@@ -4951,7 +5098,7 @@ const TAB_OF = {
   'pg-list': 'pg-sell', 'pg-analytics': 'pg-sell', 'pg-myproducts': 'pg-sell',
   'pg-settings': 'pg-settings', 'pg-sd': 'pg-settings', 'pg-passcode': 'pg-settings', 'pg-boost-terms': 'pg-settings',
   'pg-admin': 'pg-settings', 'pg-adm-disputes': 'pg-settings', 'pg-wh': 'pg-settings', 'pg-whd': 'pg-settings',
-  'pg-adm-support': 'pg-settings', 'pg-adm-analytics': 'pg-settings',
+  'pg-adm-support': 'pg-settings', 'pg-adm-analytics': 'pg-settings', 'pg-adm-lowrate': 'pg-settings',
   'pg-leaderboard': 'pg-home', 'pg-network': 'pg-home', 'pg-store': 'pg-home', 'pg-txd': 'pg-wallet'
 };
 function b7ActiveId(){ const c = document.querySelector('.page.active'); return c ? c.id : null; }
@@ -4996,6 +5143,7 @@ function b7PageHook(id){
   else if (id === 'pg-adm-disputes' && typeof b7AdmDisputesLoad === 'function') b7AdmDisputesLoad(); // Part 3
   else if (id === 'pg-adm-support') b7AdmSupportLoad();
   else if (id === 'pg-adm-analytics') b7AdmAnalyticsLoad();
+  else if (id === 'pg-adm-lowrate') admLowLoad();
 }
 
 /* ===================== 13. PASSCODE ENGINE (one passcode for everything) ===================== */
@@ -5307,8 +5455,98 @@ async function openStore(id, name){
 }
 
 /* ===================== 5. SELL = MY ACTIVE LISTINGS + ANALYTICS ===================== */
+/* ===================== LOW-RATING SELLER BAN: seller banner + appeal, admin list ===================== */
+async function lowBanLoad(){
+  const box = $('sell-ban-card'); if (!box) return;
+  let r; try { r = await api('/api/seller/low-rating-status', { headers: getAuthHeader() }); } catch (e) { return; }
+  clearNode(box);
+  if (!r.res.ok || !r.data.blocked) return;
+  const card = el('div', 'card');
+  card.appendChild(el('div', 'card-title', 'Seller account temporarily banned'));
+  const p = el('p', 'sub', 'Too many low ratings. You cannot list new products or receive new orders. Your existing orders are not affected.');
+  p.style.margin = '6px 0 12px'; card.appendChild(p);
+  if (r.data.appeal_status === 'pending') {
+    card.appendChild(el('span', 'badge', 'Appeal pending'));
+  } else {
+    const b = el('button', 'btn', 'Appeal'); b.type = 'button';
+    b.addEventListener('click', lowBanAppealSheet);
+    card.appendChild(b);
+  }
+  box.appendChild(card);
+}
+function lowBanAppealSheet(){
+  openSheet(function(b){
+    b.appendChild(el('h3', null, 'Appeal your temporary ban'));
+    const ta = el('textarea', 'textarea'); ta.maxLength = 1000; ta.placeholder = 'Write your appeal reason';
+    b.appendChild(ta);
+    const send = el('button', 'btn', 'Send appeal'); send.type = 'button'; send.style.marginTop = '10px';
+    send.addEventListener('click', async function(){
+      const t = ta.value.trim(); if (!t) { showToast('Write your appeal reason'); return; }
+      send.disabled = true;
+      const r = await postApi('/api/seller/low-rating-appeal', { message: t.slice(0, 1000) });
+      send.disabled = false;
+      if (r.ok) { closeSheet(); showToast('Appeal sent'); lowBanLoad(); }
+    });
+    b.appendChild(send);
+  });
+}
+async function admLowAction(c, action, btn){
+  if (action === 'manual_ban' && !window.confirm('Permanently ban this seller?')) return;
+  btn.disabled = true;
+  const r = await postApi('/api/admin/low-rating-cases/action', { seller_id: c.seller_id, action: action });
+  if (r.ok) { showToast(action === 'manual_ban' ? 'Seller banned' : (action === 'accept_appeal' ? 'Appeal accepted' : 'Appeal rejected')); admLowLoad(); }
+  else btn.disabled = false;
+}
+async function admLowLoad(){
+  const list = $('admlr-list'), empty = $('admlr-empty');
+  clearNode(list); empty.textContent = 'Nothing to review';
+  let r; try { r = await api('/api/admin/low-rating-cases', { headers: getAuthHeader() }); }
+  catch (e) { showToast('Network error. Try again.'); return; }
+  if (r.res.status === 403) { empty.style.display = 'block'; empty.textContent = 'Access Denied'; return; }
+  if (!r.res.ok) { empty.style.display = 'block'; empty.textContent = 'Could not load. Try again.'; return; }   // a failed fetch is never "Nothing to review"
+  const cases = Array.isArray(r.data.cases) ? r.data.cases : [];
+  empty.style.display = cases.length ? 'none' : 'block';
+  cases.forEach(function(c){
+    const card = el('div', 'card'); card.style.marginBottom = '12px';
+    if (c.banner) { const bn = el('div', 'card-title', c.banner); bn.style.marginBottom = '6px'; card.appendChild(bn); }
+    card.appendChild(el('div', 't', String(c.seller_name || 'Seller')));
+    card.appendChild(el('div', 'sub', 'Seller ID: ' + c.seller_id));
+    const meta = el('div'); meta.style.cssText = 'display:flex;gap:8px;align-items:center;margin:8px 0';
+    meta.appendChild(el('span', 'badge', 'Low ratings: ' + c.low_count));
+    meta.appendChild(el('span', 'badge b-ok', c.status_label || c.status));
+    card.appendChild(meta);
+    const ap = el('div', 'sub');
+    ap.style.cssText = 'white-space:pre-wrap;margin-bottom:8px';
+    ap.textContent = c.appeal_text ? ('Appeal (' + (c.appeal_status || 'pending') + '): ' + c.appeal_text) : 'Appeal: none';
+    card.appendChild(ap);
+    const det = document.createElement('details'); det.style.marginBottom = '10px';
+    det.appendChild(el('summary', null, 'Low-rated orders (' + (c.low_ratings || []).length + ')'));
+    (c.low_ratings || []).forEach(function(lr){
+      const row = el('div', 'sub'); row.style.cssText = 'padding:6px 0;white-space:pre-wrap';
+      row.textContent = 'Order ' + lr.order_id + ' · ' + lr.stars + ' stars · buyer ' + lr.buyer_id + '\n' + (lr.reason || '(no reason given)');
+      det.appendChild(row);
+    });
+    const hist = Array.isArray(c.appeal_history) ? c.appeal_history : [];
+    if (hist.length) {
+      const hh = el('div', 'sub'); hh.style.cssText = 'padding-top:8px;white-space:pre-wrap';
+      hh.textContent = 'Appeal history:\n' + hist.map(function(h){ return '- ' + (h.status || '') + ': ' + (h.text || ''); }).join('\n');
+      det.appendChild(hh);
+    }
+    card.appendChild(det);
+    const acts = el('div'); acts.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+    const pending = c.appeal_status === 'pending';
+    [['Accept Appeal', 'accept_appeal', pending, ''], ['Reject Appeal', 'reject_appeal', pending, 'secondary'], ['Manual Ban', 'manual_ban', !!c.ready_for_manual_ban, 'secondary']].forEach(function(a){
+      const b = el('button', 'btn sm' + (a[3] ? ' ' + a[3] : ''), a[0]); b.type = 'button'; b.disabled = !a[2];
+      b.addEventListener('click', function(){ admLowAction(c, a[1], b); });
+      acts.appendChild(b);
+    });
+    card.appendChild(acts);
+    list.appendChild(card);
+  });
+}
 async function b7LoadSell(){
   const grid = $('sell-listings'), empty = $('sell-empty');
+  lowBanLoad();   // low-rating temp ban banner + Appeal (never blocks the listings)
   let rows = [];
   try {
     const r = await api('/api/products?mine=1', { headers: getAuthHeader() });
@@ -5805,7 +6043,7 @@ function b7SettingsShow(){
   set('ss-phone', c.phone || 'Add number');
   set('ss-passcode', pcOn() ? 'On' : 'Off');
   set('ss-backup', c.backup_email || 'Add Email');
-  set('ss-theme', { system: 'System', dark: 'Dark', light: 'Light' }[themeMode()]);
+  set('ss-theme', { system: 'Auto', dark: 'Black', light: 'White' }[themeMode()]);
   set('ss-botmsg', c.bot_message_mode === 'custom' ? 'Custom' : 'Default');
   set('ss-autoreply', c.auto_reply_on ? 'On' : 'Off');
   const d = Number(b7Load('chat_expiry_days', 3)) || 3;
@@ -6050,8 +6288,8 @@ SD.twofa = { title: '2FA for Withdrawals', sub: 'Your passcode is asked again be
   b.appendChild(c);
   if (!pcOn()) b.appendChild(sdBtn('Turn on App Passcode', function(){ b7PasscodeStart('set'); }));
 } };
-SD.appearance = { title: 'Appearance', sub: 'System follows your phone and updates instantly, no restart needed.', build: function(b){
-  b.appendChild(sdSeg([['system', 'System'], ['dark', 'Dark'], ['light', 'Light']], themeMode(), function(v){
+SD.appearance = { title: 'Appearance', sub: 'Auto follows your Telegram theme and updates instantly, no restart needed.', build: function(b){
+  b.appendChild(sdSeg([['system', 'Auto'], ['dark', 'Black'], ['light', 'White']], themeMode(), function(v){
     setThemeMode(v);
     b7SettingsShow();
   }));
@@ -6199,7 +6437,7 @@ function b7ClearChats(){
     }
     keys.forEach(function(n){ localStorage.removeItem(n); });
   } catch (e) {}
-  chatState.product = null; chatState.messages = []; chatState.orderId = null; chatState.stage = 'ask';
+  chatState.product = null; chatState.messages = []; chatState.orderId = null; chatState.stage = 'ask'; chatState.refunded = false;
   chatResetRemote();
   try { renderChatMessages(); } catch (e) {}
   showToast('Chat history cleared');
@@ -7078,6 +7316,7 @@ function rateInline(p, oid){
     const n = Math.max(1, Math.min(5, parseInt(rated, 10) || 1));
     box.appendChild(el('div', null, 'You rated ' + n + ' out of 5' + (complaintSaved ? ' + complaint saved' : '')));
     box.appendChild(starsRow(n));
+    if (chatState.stage === 'paid' && !chatState.refunded) box.appendChild(rateDecision(id, n));   // money is still locked: buyer decides
   } else {
     const waiting = !!(chatState.waitingComplaint && String(chatState.waitingOrderId) === id);
     const lock = waiting || !!chatState.ratingBusy || !!chatState.refundPrompt;
