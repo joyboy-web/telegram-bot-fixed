@@ -59,7 +59,7 @@ import hashlib
 import logging
 from functools import wraps
 from datetime import datetime, timedelta, timezone
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, unquote
 
 import requests
 import bcrypt
@@ -85,6 +85,9 @@ BOT_TOKEN = (os.environ.get("BOT_TOKEN") or "").strip()
 PAYSTACK_BASE = os.environ.get("PAYSTACK_BASE", "https://api.paystack.co")
 WEBAPP_URL = os.environ.get("WEBAPP_URL", "").rstrip("/")
 MINI_APP_URL = "https://telegram-bot-fixed-uqmt.onrender.com"
+# Shared secret Telegram sends back in X-Telegram-Bot-Api-Secret-Token on every /webhook call.
+# Allowed characters: A-Z a-z 0-9 _ -  (1-256 chars). Without it /webhook refuses everything.
+TELEGRAM_WEBHOOK_SECRET = (os.environ.get("TELEGRAM_WEBHOOK_SECRET") or "").strip()
 
 logging.basicConfig(level=logging.INFO)
 
@@ -145,6 +148,15 @@ PIN_FAIL_LIMIT = 5
 PIN_LOCK_MINUTES = 15
 
 ESCROW_HOLD_HOURS = 48
+
+# Buyer decision reminder (additive). One push + in-chat notice when 24h remain before auto-release.
+# Optional column (run once in Supabase; without it the reminder is simply skipped, nothing breaks):
+#   alter table escrow_orders add column if not exists reminder_sent_at timestamptz;
+DECISION_REMINDER_HOURS = 24
+DECISION_REMINDER_TEXT = (
+    "You have 1 day left to Confirm Delivery or request a Refund for this order. "
+    "If you do nothing, the money will automatically go to the seller."
+)
 
 ALLOWED_COVER_EXT = {"jpg", "jpeg", "png", "webp"}
 ALLOWED_PRODUCT_EXT = {"zip", "pdf", "mp4", "docx"}
@@ -728,7 +740,10 @@ def _normalize_product(row):
     row["is_boosted"] = _boost_active(row)
     row.setdefault("code", None)
     if row.get("code"):
-        row["share_link"] = f"https://t.me/{BOT_USERNAME}?start=prod_{row['code']}"
+        bare = str(row["code"])
+        while bare.lower().startswith("prod_"):  # strip every prod_ prefix, add it once
+            bare = bare[5:]
+        row["share_link"] = _app_link(f"prod_{bare}") or f"https://t.me/{BOT_USERNAME}?start=prod_{bare}"
     return row
 
 
@@ -1667,7 +1682,7 @@ def auth_validate():
 
 PRODUCT_PUBLIC_COLUMNS = (
     "id,name,title,description,price,price_kobo,buyer_pays_kobo,"
-    "seller_gets_kobo,image_url,file_url,seller_id,owner_id,"
+    "seller_gets_kobo,image_url,seller_id,owner_id,"
     "created_at,category"
 
 )
@@ -1780,6 +1795,8 @@ def products_create(user):
     blocked = _banned_response(user)
     if blocked:
         return blocked
+    if _seller_low_rating_blocked(tid):  # low-rating temp ban: no new listings
+        return jsonify({"error": "Your seller account is temporarily banned. You can appeal from your account.", "code": "SELLER_TEMP_BANNED"}), 403
 
     name = (request.form.get("name") or "").strip()
     description = (request.form.get("description") or "").strip()
@@ -1942,7 +1959,11 @@ def products_create(user):
             merged = dict(created)
             merged.update(fresh)
             created = merged
-    return jsonify({"product": created if created else insert_payload}), 201
+    # file_url is private: only /api/download/<order_id> may hand the file out.
+    if isinstance(created, dict):
+        created.pop("file_url", None)
+    safe_payload = {k: v for k, v in insert_payload.items() if k != "file_url"}
+    return jsonify({"product": created if created else safe_payload}), 201
 
 
 # =============================================================================
@@ -2278,6 +2299,128 @@ def _paystack_post(path, payload):
     return ps_res.status_code, body
 
 
+_WITHDRAWAL_OPEN_STATUSES = ("pending", "processing", "otp", "queued", "received")
+
+
+def _verify_transfer(reference):
+    """
+    Asks Paystack for the real state of a transfer.
+    Returns (state, status): state is 'found', 'not_found' or 'unknown'
+    (timeout / network / 5xx); status is Paystack's lowercase status when found.
+    """
+    try:
+        res = requests.get(
+            f"{PAYSTACK_BASE}/transfer/verify/{reference}",
+            headers=PAYSTACK_HEADERS,
+            timeout=15,
+        )
+        try:
+            body = res.json()
+        except ValueError:
+            body = {}
+        if res.status_code == 404:
+            return "not_found", None
+        if res.status_code >= 400 or not body.get("status"):
+            return "unknown", None
+        return "found", str((body.get("data") or {}).get("status") or "").lower()
+    except Exception:
+        logging.warning("_verify_transfer: could not reach Paystack for %s", reference, exc_info=True)
+        return "unknown", None
+
+
+def _refund_failed_withdrawal(reference, new_status="failed", from_statuses=_WITHDRAWAL_OPEN_STATUSES):
+    """
+    Returns a failed / reversed withdrawal to the user's wallet EXACTLY ONCE.
+    The withdrawals row is claimed first (status compare-and-set), so a webhook
+    and a status check racing each other can never credit twice.
+    Returns the withdrawal row if this call refunded it, otherwise None.
+    """
+    reference = str(reference or "").strip()
+    if not reference:
+        return None
+    rows = supabase.table("withdrawals").select("*").eq("reference", reference).limit(1).execute().data or []
+    if not rows:
+        return None
+    w = rows[0]
+    prior = str(w.get("status") or "").lower()
+    if prior not in from_statuses:
+        return None
+    claim = (
+        supabase.table("withdrawals")
+        .update({"status": new_status})
+        .eq("reference", reference)
+        .eq("status", w.get("status"))
+        .execute()
+    )
+    if not claim.data:
+        return None
+
+    tid = int(w["user_id"])
+    amount = int(w.get("amount_kobo") or 0)
+    try:
+        _credit_balance(tid, amount)
+    except Exception:
+        logging.exception("_refund_failed_withdrawal: crediting failed for %s", reference)
+        try:
+            supabase.table("withdrawals").update({"status": w.get("status")}).eq("reference", reference).eq("status", new_status).execute()
+        except Exception:
+            logging.exception("_refund_failed_withdrawal: CRITICAL could not restore status for %s", reference)
+        raise
+    try:
+        supabase.table("wallet_transactions").insert({
+            "user_id": tid,
+            "type": "credit",
+            "amount_kobo": amount,
+            "reason": "withdrawal_refund",
+            "reference": f"{reference}-WDREF",
+        }).execute()
+    except Exception:
+        logging.exception("_refund_failed_withdrawal: user credited but transaction row failed for %s", reference)
+    return w
+
+
+def _reconcile_withdrawal(reference):
+    """
+    Checks a PENDING withdrawal with Paystack. Refunds ONLY if Paystack confirms the
+    transfer FAILED/REVERSED; marks it success if Paystack says so; otherwise leaves it
+    pending (including when Paystack cannot be reached or does not know the reference yet).
+    Returns the resulting status string.
+    """
+    state, status = _verify_transfer(reference)
+    if state != "found" or not status:
+        return "pending"
+    if status in _TRANSFER_FAILED_STATUSES:
+        _refund_failed_withdrawal(reference, "reversed" if status == "reversed" else "failed")
+        return "reversed" if status == "reversed" else "failed"
+    if status == "success":
+        try:
+            (
+                supabase.table("withdrawals").update({"status": "success"})
+                .eq("reference", reference).in_("status", list(_WITHDRAWAL_OPEN_STATUSES)).execute()
+            )
+        except Exception:
+            logging.warning("_reconcile_withdrawal: could not mark success for %s", reference, exc_info=True)
+        return "success"
+    return "pending"
+
+
+def _withdrawal_pending_response(tid, reference, amount_kobo):
+    """Outcome unknown: keep the withdrawal PENDING, check Paystack once, refund only on a confirmed failure."""
+    try:
+        supabase.table("withdrawals").update({"status": "pending"}).eq("reference", reference).execute()
+    except Exception:
+        logging.warning("wallet_withdraw: could not keep withdrawal pending for %s", reference, exc_info=True)
+    final = _reconcile_withdrawal(reference)
+    if final in ("failed", "reversed"):
+        return jsonify({"error": "Withdrawal failed. Your money has been returned to your wallet.", "code": "WITHDRAWAL_FAILED"}), 500
+    return jsonify({
+        "status": final,
+        "reference": reference,
+        "amount_kobo": amount_kobo,
+        "message": "Your withdrawal is being processed. We are confirming it with the bank.",
+    }), 202
+
+
 def _notify_withdrawal(telegram_id, amount_kobo, bank_name, account_number, reference, status):
     """
     Texts the user (Telegram Bot API) that a withdrawal was placed. Called only
@@ -2468,32 +2611,9 @@ def wallet_withdraw(user):
 
     # Debit + both rows exist. Now actually pay the user through Paystack.
     transfer_status = "pending"
-    try:
-        recipient_code = _get_recipient_code(tid, bank_code, account_number, account_name)
 
-        http_status, body = _paystack_post("/transfer", {
-            "source": "balance",
-            "amount": amount_kobo,
-            "recipient": recipient_code,
-            "reference": reference,
-            "reason": "PayLock withdrawal",
-        })
-        logging.info(
-            "wallet_withdraw: transfer http=%s status=%s reference=%s",
-            http_status, body.get("status"), reference,
-        )
-        if not body.get("status"):
-            raise RuntimeError(f"Paystack transfer failed: {body.get('message')}")
-
-        transfer_status = str((body.get("data") or {}).get("status") or "pending").lower()
-        if transfer_status in _TRANSFER_FAILED_STATUSES:
-            raise RuntimeError(f"Paystack transfer returned status={transfer_status}")
-    except Exception:
-        logging.exception(
-            "wallet_withdraw: Paystack payout failed, reverting for telegram_id=%s reference=%s",
-            tid, reference,
-        )
-        # A stale cached recipient must not be reused on the next attempt.
+    def _revert_withdrawal():
+        """Paystack definitively did NOT create a transfer: undo the debit and the rows."""
         _RECIPIENT_CACHE.pop((int(tid), bank_code, account_number), None)
         try:
             _restore_balance(tid, amount_kobo)
@@ -2507,6 +2627,46 @@ def wallet_withdraw(user):
             supabase.table("withdrawals").delete().eq("reference", reference).execute()
         except Exception:
             logging.exception("wallet_withdraw: could not remove orphan withdrawal %s", reference)
+
+    # Step 1: recipient. No transfer has been requested yet, so a failure here is safe to revert.
+    try:
+        recipient_code = _get_recipient_code(tid, bank_code, account_number, account_name)
+    except Exception:
+        logging.exception("wallet_withdraw: recipient step failed, reverting for telegram_id=%s reference=%s", tid, reference)
+        _revert_withdrawal()
+        return jsonify({"error": "Withdrawal could not be created. Your balance was not changed."}), 500
+
+    # Step 2: the transfer. A timeout / network error / 5xx means the outcome is UNKNOWN:
+    # Paystack may have created the transfer. NEVER refund on those. Keep it PENDING and ask Paystack.
+    try:
+        http_status, body = _paystack_post("/transfer", {
+            "source": "balance",
+            "amount": amount_kobo,
+            "recipient": recipient_code,
+            "reference": reference,
+            "reason": "PayLock withdrawal",
+        })
+    except Exception:
+        logging.exception("wallet_withdraw: transfer outcome unknown (timeout/network), keeping PENDING reference=%s", reference)
+        return _withdrawal_pending_response(tid, reference, amount_kobo)
+    logging.info(
+        "wallet_withdraw: transfer http=%s status=%s reference=%s",
+        http_status, body.get("status"), reference,
+    )
+    if http_status >= 500 or (not body.get("status") and http_status < 400):
+        logging.warning("wallet_withdraw: ambiguous Paystack answer http=%s, keeping PENDING reference=%s", http_status, reference)
+        return _withdrawal_pending_response(tid, reference, amount_kobo)
+    if not body.get("status"):
+        # 4xx with status=false: Paystack answered and refused to create the transfer.
+        logging.warning("wallet_withdraw: Paystack rejected transfer http=%s msg=%s reference=%s", http_status, body.get("message"), reference)
+        _revert_withdrawal()
+        return jsonify({"error": "Withdrawal could not be created. Your balance was not changed."}), 500
+
+    transfer_status = str((body.get("data") or {}).get("status") or "pending").lower()
+    if transfer_status in _TRANSFER_FAILED_STATUSES:
+        # Paystack itself reports the transfer as FAILED: confirmed, safe to revert.
+        logging.warning("wallet_withdraw: Paystack returned status=%s reference=%s", transfer_status, reference)
+        _revert_withdrawal()
         return jsonify({"error": "Withdrawal could not be created. Your balance was not changed."}), 500
 
     # Transfer accepted by Paystack: record its status. Never revert from here,
@@ -2538,7 +2698,24 @@ def wallet_withdrawals(user):
         .limit(100)
         .execute()
     )
-    return jsonify({"withdrawals": res.data or []}), 200
+    rows = res.data or []
+    # Pending withdrawals older than a minute: ask Paystack (max 3 per call). Never breaks the list.
+    checked = 0
+    now = datetime.now(timezone.utc)
+    for w in rows:
+        if checked >= 3:
+            break
+        if str(w.get("status") or "").lower() not in _WITHDRAWAL_OPEN_STATUSES:
+            continue
+        created = _parse_ts(w.get("created_at"))
+        if created and (now - created).total_seconds() < 60:
+            continue
+        checked += 1
+        try:
+            w["status"] = _reconcile_withdrawal(w.get("reference"))
+        except Exception:
+            logging.warning("wallet_withdrawals: status check failed for %s", w.get("reference"), exc_info=True)
+    return jsonify({"withdrawals": rows}), 200
 
 
 # =============================================================================
@@ -2596,6 +2773,9 @@ def wallet_buy(user, product_id):
             return jsonify({"error": "Could not verify the seller. Please try again."}), 500
     if not seller_rows or seller_rows[0].get("banned") or seller_rows[0].get("deleted_at"):
         return jsonify({"error": "Product is no longer available", "code": "PRODUCT_UNAVAILABLE"}), 410
+
+    if _seller_low_rating_blocked(seller_id_int):  # low-rating temp ban: no new orders
+        return jsonify({"error": "This seller is temporarily unavailable", "code": "SELLER_TEMP_BANNED"}), 403
 
     buyer_pays = int(product.get("buyer_pays_kobo") or 0)
     if buyer_pays <= 0:
@@ -2720,6 +2900,20 @@ def paystack_webhook():
         str((event.get("data") or {}).get("reference") or "").strip(),
         event.get("event"), event, "received",
     )
+
+    if event.get("event") in ("transfer.failed", "transfer.reversed"):
+        ref = str((event.get("data") or {}).get("reference") or "").strip()
+        reversed_ = event.get("event") == "transfer.reversed"
+        try:
+            # A reversal can arrive after the transfer was marked success, so it may claim from 'success' too.
+            allowed = _WITHDRAWAL_OPEN_STATUSES + (("success",) if reversed_ else ())
+            refunded = _refund_failed_withdrawal(ref, "reversed" if reversed_ else "failed", from_statuses=allowed)
+            _log_webhook(ref, event.get("event"), {"refunded": bool(refunded)}, "refunded" if refunded else "ignored")
+        except Exception:
+            logging.exception("paystack_webhook: %s handling failed for %s", event.get("event"), ref)
+            _log_webhook(ref, event.get("event"), {}, "error")
+            return jsonify({"error": "Processing failed"}), 500  # Paystack retries
+        return jsonify({"status": "received"}), 200
 
     if event.get("event") != "charge.success":
         return jsonify({"status": "received"}), 200
@@ -2896,6 +3090,302 @@ def account_delete(user):
 
     return jsonify({"deleted": True}), 200
 
+
+# =============================================================================
+# Low-rating seller ban ladder (added)
+#   LOW = 1 - 2.5 stars, counted once per order per buyer, high ratings never count.
+#   7 low  -> TEMP BAN (no new listings, no new orders; existing orders untouched) + admin alert
+#   15 low -> flagged "READY FOR MANUAL BAN"; NEVER auto-permanent. Seller stays temp banned.
+#   Accepting an appeal removes the ban but NEVER resets the count.
+# Needs this table (run once in the Supabase SQL editor):
+#
+#   create table if not exists seller_low_rating_cases (
+#     seller_id bigint primary key,
+#     status text not null default 'temp_banned',  -- temp_banned | awaiting_manual_ban | cleared | manual_banned
+#     low_count int not null default 0,
+#     temp_banned_at timestamptz,
+#     manual_flagged_at timestamptz,
+#     appeal_status text not null default 'none',   -- none | pending | accepted | rejected
+#     appeal_text text,
+#     appeal_at timestamptz,
+#     appeal_history jsonb not null default '[]'::jsonb,
+#     updated_at timestamptz
+#   );
+#   alter table seller_low_rating_cases enable row level security;  -- service_role only
+# =============================================================================
+
+LOW_RATING_MAX = 2.5          # 1 - 2.5 stars is LOW; 2.6 - 5 is HIGH
+LOW_TEMP_BAN_AT = 7
+LOW_MANUAL_FLAG_AT = 15
+LOW_CASES_TABLE = "seller_low_rating_cases"
+_LOW_BLOCK_STATUSES = ("temp_banned", "awaiting_manual_ban")
+_LOW_STATUS_LABEL = {
+    "temp_banned": "Temp Banned",
+    "awaiting_manual_ban": "Awaiting Manual Ban",
+    "cleared": "Appeal Accepted",
+    "manual_banned": "Manually Banned",
+}
+
+
+def _is_low_rating(stars):
+    try:
+        return 1 <= float(stars) <= LOW_RATING_MAX
+    except (TypeError, ValueError):
+        return False
+
+
+def _low_rating_rows(seller_id):
+    """Every LOW rating of this seller, one per (order, buyer), oldest first."""
+    def fetch(cols):
+        return _fetch_all(lambda a, b: (
+            supabase.table("ratings").select(cols)
+            .eq("seller_id", int(seller_id)).order("id").range(a, b)
+        ))
+    try:
+        rows = fetch("id,order_id,product_id,buyer_id,stars,complaint_text,created_at")
+    except Exception:  # ratings.created_at not migrated: same data without it
+        rows = fetch("id,order_id,product_id,buyer_id,stars,complaint_text")
+    seen, out = set(), []
+    for r in rows:
+        if not _is_low_rating(r.get("stars")):
+            continue
+        key = (str(r.get("order_id")), str(r.get("buyer_id")))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
+
+
+def _low_case_get(seller_id):
+    """The seller's case row, or None (also None when the table is not created yet)."""
+    try:
+        rows = supabase.table(LOW_CASES_TABLE).select("*").eq("seller_id", int(seller_id)).limit(1).execute().data or []
+        return rows[0] if rows else None
+    except Exception as exc:
+        if _is_schema_missing(exc):
+            logging.warning("_low_case_get: table %s is missing, low-rating bans are inactive", LOW_CASES_TABLE)
+        else:
+            logging.warning("_low_case_get: lookup failed for %s", seller_id, exc_info=True)
+        return None
+
+
+def _seller_low_rating_blocked(seller_id):
+    """True while the seller is on the low-rating temp ban (cannot list, cannot receive new orders)."""
+    try:
+        case = _low_case_get(seller_id)
+    except Exception:
+        return False
+    return bool(case and case.get("status") in _LOW_BLOCK_STATUSES)
+
+
+def _low_rating_evaluate(seller_id):
+    """Run after a LOW rating is saved. Triggers fire once each and never reset the count."""
+    seller_id = int(seller_id)
+    count = len(_low_rating_rows(seller_id))
+    case = _low_case_get(seller_id)
+    now = _now_iso()
+
+    if case is None:
+        if count < LOW_TEMP_BAN_AT:
+            return
+        try:
+            supabase.table(LOW_CASES_TABLE).insert({
+                "seller_id": seller_id, "status": "temp_banned", "low_count": count,
+                "temp_banned_at": now, "appeal_status": "none", "appeal_history": [], "updated_at": now,
+            }).execute()
+        except Exception as exc:
+            if _is_schema_missing(exc):
+                logging.warning("_low_rating_evaluate: table %s missing, seller %s NOT banned", LOW_CASES_TABLE, seller_id)
+                return
+            case = _low_case_get(seller_id)   # a parallel rating may have created it
+            if case is None:
+                raise
+        else:
+            _async(_tg_send, ADMIN_ID, (
+                "LOW-RATING TEMP BAN\n"
+                f"Seller: {_user_label(seller_id)}\nSeller ID: {seller_id}\n"
+                f"Total low ratings: {count}\nOpen Admin Panel > Seller Low Ratings."
+            ))
+            case = _low_case_get(seller_id)
+    else:
+        try:
+            supabase.table(LOW_CASES_TABLE).update({"low_count": count, "updated_at": now}).eq("seller_id", seller_id).execute()
+        except Exception:
+            logging.warning("_low_rating_evaluate: could not refresh count for %s", seller_id, exc_info=True)
+
+    if (
+        case and count >= LOW_MANUAL_FLAG_AT
+        and not case.get("manual_flagged_at")
+        and case.get("status") != "manual_banned"
+    ):
+        claim = (
+            supabase.table(LOW_CASES_TABLE)
+            .update({"status": "awaiting_manual_ban", "manual_flagged_at": now, "low_count": count, "updated_at": now})
+            .eq("seller_id", seller_id).is_("manual_flagged_at", "null").execute()
+        )
+        if claim.data:
+            _async(_tg_send, ADMIN_ID, (
+                f"READY FOR MANUAL BAN - {LOW_MANUAL_FLAG_AT} LOW RATINGS\n"
+                f"Seller: {_user_label(seller_id)}\nSeller ID: {seller_id}\n"
+                f"Total low ratings: {count}\nThe seller stays temp banned until you ban manually."
+            ))
+
+
+def _low_case_public(case, with_ratings=False):
+    seller_id = int(case["seller_id"])
+    out = {
+        "seller_id": seller_id,
+        "seller_name": _user_label(seller_id),
+        "status": case.get("status"),
+        "status_label": _LOW_STATUS_LABEL.get(case.get("status"), str(case.get("status"))),
+        "low_count": int(case.get("low_count") or 0),
+        "appeal_status": case.get("appeal_status") or "none",
+        "appeal_text": case.get("appeal_text"),
+        "appeal_at": case.get("appeal_at"),
+        "appeal_history": case.get("appeal_history") or [],
+        "temp_banned_at": case.get("temp_banned_at"),
+        "manual_flagged_at": case.get("manual_flagged_at"),
+        "ready_for_manual_ban": case.get("status") == "awaiting_manual_ban",
+        "banner": (f"READY FOR MANUAL BAN - {LOW_MANUAL_FLAG_AT} LOW RATINGS" if case.get("status") == "awaiting_manual_ban" else None),
+    }
+    if with_ratings:
+        lows = _low_rating_rows(seller_id)
+        out["low_count"] = len(lows)
+        out["low_ratings"] = [{
+            "order_id": r.get("order_id"), "product_id": r.get("product_id"), "buyer_id": r.get("buyer_id"),
+            "stars": r.get("stars"), "reason": r.get("complaint_text"), "created_at": r.get("created_at"),
+        } for r in lows]
+    return out
+
+
+@app.route("/api/seller/low-rating-status", methods=["GET"])
+@require_auth
+def seller_low_rating_status(user):
+    """What the seller sees in their account: banned or not, and whether they may appeal."""
+    case = _low_case_get(user["telegram_id"])
+    if not case or case.get("status") not in _LOW_BLOCK_STATUSES:
+        return jsonify({"blocked": False, "status": (case or {}).get("status")}), 200
+    return jsonify({
+        "blocked": True,
+        "status": case.get("status"),
+        "status_label": "Temp Banned",
+        "appeal_status": case.get("appeal_status") or "none",
+        "can_appeal": (case.get("appeal_status") or "none") != "pending",
+    }), 200
+
+
+@app.route("/api/seller/low-rating-appeal", methods=["POST"])
+@require_auth
+@limiter.limit("5 per hour")
+def seller_low_rating_appeal(user):
+    tid = int(user["telegram_id"])
+    data = request.get_json(silent=True) or {}
+    message = str(data.get("message") or "").strip()[:1000]
+    if not message:
+        return jsonify({"error": "message is required"}), 400
+    case = _low_case_get(tid)
+    if not case or case.get("status") not in _LOW_BLOCK_STATUSES:
+        return jsonify({"error": "Your seller account is not temporarily banned", "code": "NOT_BANNED"}), 400
+    if (case.get("appeal_status") or "none") == "pending":
+        return jsonify({"error": "You already have a pending appeal", "code": "APPEAL_PENDING"}), 409
+    now = _now_iso()
+    history = list(case.get("appeal_history") or [])
+    history.append({"text": message, "status": "pending", "at": now})
+    try:
+        claim = (
+            supabase.table(LOW_CASES_TABLE)
+            .update({"appeal_status": "pending", "appeal_text": message, "appeal_at": now, "appeal_history": history, "updated_at": now})
+            .eq("seller_id", tid).neq("appeal_status", "pending").execute()
+        )
+    except Exception as exc:
+        return _db_error(exc, "seller_low_rating_appeal: save failed")
+    if not claim.data:
+        return jsonify({"error": "You already have a pending appeal", "code": "APPEAL_PENDING"}), 409
+    _async(_tg_send, ADMIN_ID, f"LOW-RATING APPEAL\nSeller: {_user_label(tid)}\nSeller ID: {tid}\n{message[:500]}")
+    return jsonify({"ok": True}), 201
+
+
+@app.route("/api/admin/low-rating-cases", methods=["GET"])
+@require_auth
+@admin_only
+def admin_low_rating_cases(user):
+    status = (request.args.get("status") or "active").strip().lower()
+    try:
+        q = supabase.table(LOW_CASES_TABLE).select("*")
+        if status == "active":
+            q = q.in_("status", list(_LOW_BLOCK_STATUSES))
+        elif status != "all":
+            q = q.eq("status", status)
+        rows = q.limit(100).execute().data or []
+    except Exception as exc:
+        return _db_error(exc, "admin_low_rating_cases: lookup failed")
+    cases = []
+    for r in rows:
+        try:
+            cases.append(_low_case_public(r, with_ratings=True))
+        except Exception:
+            logging.warning("admin_low_rating_cases: could not build case %s", r.get("seller_id"), exc_info=True)
+    cases.sort(key=lambda c: (0 if c["status"] == "awaiting_manual_ban" else 1, 0 if c["appeal_status"] == "pending" else 1))
+    return jsonify({"cases": cases}), 200
+
+
+@app.route("/api/admin/low-rating-cases/action", methods=["POST"])
+@require_auth
+@admin_only
+@limiter.limit("30 per minute")
+def admin_low_rating_action(user):
+    data = request.get_json(silent=True) or {}
+    action = str(data.get("action") or "").strip().lower()
+    try:
+        seller_id = int(data.get("seller_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "seller_id is required"}), 400
+    if action not in ("accept_appeal", "reject_appeal", "manual_ban"):
+        return jsonify({"error": "action must be accept_appeal, reject_appeal or manual_ban"}), 400
+
+    case = _low_case_get(seller_id)
+    if not case:
+        return jsonify({"error": "Case not found"}), 404
+    now = _now_iso()
+    prior = case.get("status")
+
+    if action in ("accept_appeal", "reject_appeal"):
+        if (case.get("appeal_status") or "none") != "pending":
+            return jsonify({"error": "No pending appeal", "code": "NO_PENDING_APPEAL"}), 409
+        accepted = action == "accept_appeal"
+        history = list(case.get("appeal_history") or [])
+        if history and history[-1].get("status") == "pending":
+            history[-1] = dict(history[-1], status="accepted" if accepted else "rejected", decided_at=now)
+        fields = {"appeal_status": "accepted" if accepted else "rejected", "appeal_history": history, "updated_at": now}
+        if accepted:
+            fields["status"] = "cleared"      # ban removed; low_count is NOT touched
+        try:
+            claim = (
+                supabase.table(LOW_CASES_TABLE).update(fields)
+                .eq("seller_id", seller_id).eq("appeal_status", "pending").execute()
+            )
+        except Exception as exc:
+            return _db_error(exc, "admin_low_rating_action: update failed")
+        if not claim.data:
+            return jsonify({"error": "Appeal already handled", "code": "ALREADY_HANDLED"}), 409
+        return jsonify({"ok": True, "status": fields.get("status", prior)}), 200
+
+    # manual_ban: only once the seller was flagged at 15 low ratings
+    if prior != "awaiting_manual_ban":
+        return jsonify({"error": "Seller is not flagged for a manual ban", "code": "NOT_FLAGGED"}), 409
+    try:
+        claim = (
+            supabase.table(LOW_CASES_TABLE).update({"status": "manual_banned", "updated_at": now})
+            .eq("seller_id", seller_id).eq("status", "awaiting_manual_ban").execute()
+        )
+        if not claim.data:
+            return jsonify({"error": "Case changed, please retry"}), 409
+        _ban_user(seller_id, permanent=True)
+    except Exception as exc:
+        return _db_error(exc, "admin_low_rating_action: manual ban failed")
+    return jsonify({"ok": True, "status": "manual_banned"}), 200
+
 # =============================================================================
 # Ratings — Block E only, Rating Alone
 # =============================================================================
@@ -2928,11 +3418,12 @@ def rate_seller(user):
             complaint_text = None
 
     try:
-        existing = supabase.table("ratings").select("id,stars").eq("order_id", order_id).limit(1).execute()
+        existing = supabase.table("ratings").select("id,stars,complaint_text").eq("order_id", order_id).limit(1).execute()
         if existing.data:
             return jsonify({
                 "error": "already_rated", "already_rated": True,
                 "stars": existing.data[0].get("stars"),
+                "has_reason": bool(existing.data[0].get("complaint_text")),
             }), 409
     except Exception:
         pass
@@ -2969,25 +3460,107 @@ def rate_seller(user):
 
     _refresh_product_rating(order.get("product_id"))
 
-    # 3+ stars on a still-held order: release to the seller (same logic as /api/escrow/confirm).
-    # 1-2 stars: complaint saved, escrow stays held; the buyer then chooses refund or release.
-    released = False
-    if stars >= 3 and order_status == "held":
+    # A rating NEVER moves money. The escrow stays exactly as it was; the buyer then chooses
+    # Refund or Confirm Delivery (see /api/escrow/refund and /api/escrow/confirm).
+    # A LOW rating (1 - 2.5) counts once toward the seller's low-rating ban ladder.
+    if _is_low_rating(stars):
         try:
-            released = _release_escrow(order_id) is not None
+            _low_rating_evaluate(seller_id)
         except Exception:
-            logging.exception("rate_seller: auto-release failed for order %s", order_id)
+            logging.exception("rate_seller: low-rating check failed for seller %s", seller_id)
 
     return jsonify({
         "ok": True,
         "status": "success",
-        "released": released,
+        "released": False,
+        "low": _is_low_rating(stars),
         "rating": res.data[0] if res.data else {},
     }), 201
+
+
+@app.route("/api/rate/reason", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def rate_reason(user):
+    """Saves the buyer's 'Why did you give a low rating?' text on their own low rating (once)."""
+    tid = int(user["telegram_id"])
+    data = request.get_json(silent=True) or {}
+    order_id = str(data.get("order_id") or "").strip()
+    reason = str(data.get("reason") or "").strip()[:500]
+    if not order_id:
+        return jsonify({"error": "order_id required"}), 400
+    if not reason:
+        return jsonify({"error": "Please tell us why you gave a low rating"}), 400
+    try:
+        rows = supabase.table("ratings").select("id,stars,buyer_id,complaint_text").eq("order_id", order_id).limit(1).execute().data or []
+    except Exception as exc:
+        return _db_error(exc, "rate_reason: lookup failed")
+    if not rows:
+        return jsonify({"error": "Rate the order first"}), 404
+    rating = rows[0]
+    if int(rating.get("buyer_id") or 0) != tid:
+        return jsonify({"error": "Forbidden"}), 403
+    if not _is_low_rating(rating.get("stars")):
+        return jsonify({"error": "A reason is only needed for a low rating"}), 400
+    if rating.get("complaint_text"):
+        return jsonify({"ok": True, "already_saved": True}), 200
+    try:
+        (
+            supabase.table("ratings").update({"complaint_text": reason})
+            .eq("id", rating["id"]).execute()
+        )
+    except Exception as exc:
+        return _db_error(exc, "rate_reason: save failed")
+    return jsonify({"ok": True}), 200
 # =============================================================================
 # Escrow — list / confirm / dispute / refund
 # (these three routes were missing from the supplied file; the frontend calls them)
 # =============================================================================
+
+def _send_decision_reminders(orders, limit=25):
+    """
+    Once per order: when a HELD order has <= DECISION_REMINDER_HOURS left before release_at,
+    stamp escrow_orders.reminder_sent_at (compare-and-set, so concurrent calls cannot double send)
+    and push the existing Telegram notification to the buyer. Returns the set of order ids stamped.
+    Never raises. Missing column => logs and returns empty (no reminder, no spam).
+    """
+    done = set()
+    now = datetime.now(timezone.utc)
+    sent = 0
+    for o in orders:
+        if sent >= limit:
+            break
+        try:
+            if o.get("status") != "held" or o.get("reminder_sent_at"):
+                continue
+            due = _parse_ts(o.get("release_at"))
+            if not due or due <= now or (due - now).total_seconds() > DECISION_REMINDER_HOURS * 3600:
+                continue
+            claim = (
+                supabase.table("escrow_orders")
+                .update({"reminder_sent_at": _now_iso()})
+                .eq("id", o["id"]).eq("status", "held").is_("reminder_sent_at", "null")
+                .execute()
+            )
+            if not (claim.data or []):
+                continue  # someone else already claimed it, or it is no longer held
+            sent += 1
+            done.add(o["id"])
+            buyer_id = o.get("buyer_id")
+            if buyer_id:
+                try:
+                    row = _settings_get_row(buyer_id)
+                    if row.get("notify_order") is not False:
+                        _async(_tg_send, int(buyer_id), DECISION_REMINDER_TEXT)
+                except Exception:
+                    logging.warning("decision reminder: push skipped for order %s", o.get("id"), exc_info=True)
+        except Exception as exc:
+            if _is_schema_missing(exc):
+                logging.warning("decision reminder skipped: escrow_orders.reminder_sent_at missing")
+                return done
+            logging.warning("decision reminder failed for order %s", o.get("id"), exc_info=True)
+    return done
+
 
 @app.route("/api/escrow/list", methods=["GET"])
 @require_auth
@@ -3014,6 +3587,17 @@ def escrow_list(user):
                     o["status"] = "released"
             except Exception:
                 logging.exception("escrow_list: auto-release failed for order %s", o.get("id"))
+
+    # One-time buyer reminder when 24h remain. Runs for every order in this list, so the SELLER
+    # opening the app also triggers the BUYER's push (it is always sent to the order's buyer_id).
+    # Never breaks the list.
+    try:
+        for oid in _send_decision_reminders(orders):
+            for o in orders:
+                if o.get("id") == oid:
+                    o["reminder_sent_at"] = _now_iso()
+    except Exception:
+        logging.warning("escrow_list: decision reminder skipped", exc_info=True)
 
     # Pay any referral commission whose earlier credit failed. Never breaks the list.
     try:
@@ -3090,7 +3674,11 @@ def dispute_create(user):
 @require_auth
 @limiter.limit("10 per minute")
 def escrow_refund(user):
-    """Buyer's 'Yes, Refund Me' after a 1-2 star rating. Only valid for a held order the buyer rated low."""
+    """
+    Buyer chose 'Refund' after rating a still-held order (low OR high rating).
+    The rating itself never refunds: this route is the buyer's explicit choice.
+    One-time claim (held -> refunded) inside _refund_escrow, so it can never credit twice.
+    """
     tid = int(user["telegram_id"])
     data = request.get_json(silent=True) or {}
     order_id = str(data.get("order_id") or "").strip()
@@ -3106,11 +3694,13 @@ def escrow_refund(user):
         return jsonify({"error": "Order is not held", "code": "ORDER_NOT_HELD"}), 400
 
     try:
-        rated = supabase.table("ratings").select("stars").eq("order_id", order_id).limit(1).execute().data or []
+        rated = supabase.table("ratings").select("stars,complaint_text").eq("order_id", order_id).limit(1).execute().data or []
     except Exception as exc:
         return _db_error(exc, "escrow_refund: rating lookup failed")
-    if not rated or int(rated[0].get("stars") or 0) > 2:
-        return jsonify({"error": "A rating of 1-2 stars is required for an instant refund", "code": "RATING_REQUIRED"}), 400
+    if not rated:
+        return jsonify({"error": "Rate the order before choosing a refund", "code": "RATING_REQUIRED"}), 400
+    if _is_low_rating(rated[0].get("stars")) and not str(rated[0].get("complaint_text") or "").strip():
+        return jsonify({"error": "Tell us why you gave a low rating first", "code": "REASON_REQUIRED"}), 400
 
     try:
         refunded = _refund_escrow(order_id, from_statuses=("held",))
@@ -3118,7 +3708,66 @@ def escrow_refund(user):
         return jsonify({"error": "Could not refund. Please try again."}), 500
     if not refunded:
         return jsonify({"error": "Order changed, please retry"}), 409
-    return jsonify({"ok": True, "status": "success"}), 200
+    return jsonify({"ok": True, "status": "success", "product_removed": True}), 200
+
+
+def _storage_path_from_url(url):
+    """'.../object/public/product-files/<path>' -> '<path>' (None if it is not in the file bucket)."""
+    marker = f"/{PRODUCT_FILE_BUCKET}/"
+    url = str(url or "")
+    i = url.find(marker)
+    if i < 0:
+        return None
+    path = unquote(url[i + len(marker):].split("?", 1)[0]).strip("/")
+    return path or None
+
+
+@app.route("/api/download/<order_id>", methods=["GET"])
+@require_auth
+@limiter.limit("20 per minute")
+def download_product_file(user, order_id):
+    """
+    The ONLY way to get a paid product file. products.file_url is never sent to the app.
+    Allowed for the buyer of the order while the order is 'held' (paid, in escrow, delivered)
+    or 'released'. Refunded / disputed / any other order gets nothing.
+    """
+    tid = int(user["telegram_id"])
+    order = _escrow_get(str(order_id or "").strip())
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+    if int(order.get("buyer_id") or 0) != tid:
+        return jsonify({"error": "Forbidden"}), 403
+    if order.get("status") not in ("held", "released"):
+        return jsonify({"error": "This file is no longer available for this order", "code": "DOWNLOAD_LOCKED"}), 403
+
+    try:
+        prow = supabase.table("products").select("file_url").eq("id", order.get("product_id")).limit(1).execute().data or []
+    except Exception:
+        logging.exception("download_product_file: product lookup failed for order %s", order_id)
+        return jsonify({"error": "Could not load the file. Please try again."}), 500
+    path = _storage_path_from_url(prow[0].get("file_url")) if prow else None
+    if not path:
+        return jsonify({"error": "This product has no file", "code": "NO_FILE"}), 404
+
+    try:
+        blob = supabase.storage.from_(PRODUCT_FILE_BUCKET).download(path)
+    except Exception:
+        logging.exception("download_product_file: storage download failed for order %s", order_id)
+        return jsonify({"error": "Could not load the file. Please try again."}), 502
+
+    raw_name = path.rsplit("/", 1)[-1]
+    filename = raw_name.split("_", 1)[1] if "_" in raw_name else raw_name   # strip the uuid prefix
+    filename = secure_name(filename) or "download"
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    mime = {
+        "pdf": "application/pdf", "zip": "application/zip", "mp4": "video/mp4",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }.get(ext, "application/octet-stream")
+    resp = Response(blob, mimetype=mime)
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    resp.headers["Content-Length"] = str(len(blob))
+    resp.headers["Cache-Control"] = "private, no-store"
+    return resp
 
 
 # =============================================================================
@@ -5660,7 +6309,7 @@ async def _configure_telegram(url):
     bot_app = _get_bot_app()
     await bot_app.initialize()
     try:
-        ok = await bot_app.bot.set_webhook(url)
+        ok = await bot_app.bot.set_webhook(url, secret_token=TELEGRAM_WEBHOOK_SECRET or None)
         if ok:
             # Default scope (everyone): NO /admin.
             await bot_app.bot.set_my_commands(_PUBLIC_BOT_COMMANDS)
@@ -5676,6 +6325,14 @@ async def _configure_telegram(url):
 
 @app.route("/webhook", methods=["POST"])
 def telegram_webhook():
+    # Only Telegram knows the secret it was registered with (set_webhook secret_token).
+    # Fail closed: no secret configured, or a wrong / missing header, means the update is refused.
+    if not TELEGRAM_WEBHOOK_SECRET:
+        logging.error("telegram_webhook: TELEGRAM_WEBHOOK_SECRET is not set; refusing all updates")
+        return jsonify({"ok": False, "error": "Webhook not configured"}), 503
+    header = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not hmac.compare_digest(header.encode(), TELEGRAM_WEBHOOK_SECRET.encode()):
+        return jsonify({"ok": False, "error": "Forbidden"}), 403
     try:
         data = request.get_json(force=True, silent=True) or {}
         asyncio.run(_process_telegram_update(data))
@@ -5686,6 +6343,16 @@ def telegram_webhook():
 
 @app.route("/set-webhook", methods=["GET"])
 def set_webhook():
+    # Admin only. Either the signed-in admin (Telegram initData) or the operator who holds
+    # TELEGRAM_WEBHOOK_SECRET (open /set-webhook?key=<secret> once in a browser after deploy).
+    key = request.args.get("key") or ""
+    key_ok = bool(TELEGRAM_WEBHOOK_SECRET) and hmac.compare_digest(key.encode(), TELEGRAM_WEBHOOK_SECRET.encode())
+    if not key_ok:
+        caller = _auth_user_or_none()
+        if not caller or not _is_admin(caller):
+            return jsonify({"error": "Forbidden", "code": "ADMIN_ONLY"}), 403
+    if not TELEGRAM_WEBHOOK_SECRET:
+        return jsonify({"ok": False, "error": "TELEGRAM_WEBHOOK_SECRET not set"}), 500
     try:
         if not WEBAPP_URL:
             return jsonify({"ok": False, "error": "WEBAPP_URL not set"}), 500
