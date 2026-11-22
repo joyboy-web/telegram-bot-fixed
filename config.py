@@ -46,6 +46,7 @@ SUPABASE_URL = _env("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = _env("SUPABASE_SERVICE_KEY")
 PAYSTACK_SECRET_KEY = _env("PAYSTACK_SECRET_KEY")
 PAYSTACK_PUBLIC_KEY = _env("PAYSTACK_PUBLIC_KEY")
+TELEGRAM_WEBHOOK_SECRET = _env("TELEGRAM_WEBHOOK_SECRET")  # A-Z a-z 0-9 _ - ; /webhook refuses updates without it
 
 # Optional - Admins / URLs / Database
 ADMIN_IDS = _parse_admin_ids(_env("ADMIN_IDS"))
@@ -67,6 +68,7 @@ REQUIRED_VARS = (
     "SUPABASE_SERVICE_KEY",
     "PAYSTACK_SECRET_KEY",
     "PAYSTACK_PUBLIC_KEY",
+    "TELEGRAM_WEBHOOK_SECRET",
 )
 
 def missing_vars():
