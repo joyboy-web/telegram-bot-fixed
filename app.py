@@ -2196,9 +2196,18 @@ def wallet_set_pin(user):
 # Banks
 # =============================================================================
 
+_BANKS_CACHE = {}
+_BANKS_CACHE_TTL = 6 * 60 * 60
+
+
 @app.route("/api/banks", methods=["GET"])
 @require_auth
 def banks_list(user):
+    # In-memory cache (6h) so Paystack's bank list is fetched once, not per request.
+    _cached = _BANKS_CACHE.get("banks")
+    if _cached and (time.time() - _BANKS_CACHE.get("ts", 0)) < _BANKS_CACHE_TTL:
+        return jsonify({"banks": _cached}), 200
+
     banks = []
     next_cursor = None
     try:
@@ -2231,6 +2240,9 @@ def banks_list(user):
             return jsonify({"error": "Could not reach Paystack"}), 502
 
     banks.sort(key=lambda b: (b.get("name") or "").lower())
+    if banks:
+        _BANKS_CACHE["banks"] = banks
+        _BANKS_CACHE["ts"] = time.time()
     return jsonify({"banks": banks}), 200
 
 
@@ -2269,6 +2281,38 @@ def banks_resolve(user):
 
     info = body.get("data") or {}
     return jsonify({"account_name": info.get("account_name")}), 200
+
+
+@app.route("/api/resolve", methods=["GET"])
+@require_auth
+@limiter.limit("20 per minute")
+def banks_resolve_get(user):
+    account_number = str(request.args.get("account_number") or "").strip()
+    bank_code = str(request.args.get("bank_code") or "").strip()
+
+    if not re.fullmatch(r"\d{10}", account_number) or not bank_code:
+        return jsonify({"error": "A 10-digit account_number and bank_code are required"}), 400
+
+    try:
+        ps_res = requests.get(
+            f"{PAYSTACK_BASE}/bank/resolve",
+            headers=PAYSTACK_HEADERS,
+            params={"account_number": account_number, "bank_code": bank_code},
+            timeout=20,
+        )
+        body = ps_res.json()
+    except (requests.RequestException, ValueError):
+        logging.exception("banks_resolve_get: request to Paystack failed")
+        return jsonify({"error": "Could not reach Paystack"}), 502
+
+    if not body.get("status"):
+        return jsonify({"error": body.get("message") or "Could not resolve account"}), 400
+
+    info = body.get("data") or {}
+    return jsonify({
+        "account_name": info.get("account_name"),
+        "account_number": info.get("account_number") or account_number,
+    }), 200
 
 
 # =============================================================================
