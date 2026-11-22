@@ -169,6 +169,7 @@ _OPTIONAL_TABLES = (
     "ratings", "disputes", "product_reports", "appeals", "referrals", "referral_commissions",
     "webhook_logs", "extra_images", "support_tickets", "chat_messages", "chat_reads",
     "product_events", "user_settings",
+    "seller_low_rating_cases", "deleted_product_codes",
 )
 
 # (table, column, fallback table, fallback column) for the Batch 7 columns you asked for.
@@ -197,6 +198,7 @@ _APP_COLUMNS = (
     ("products", "is_hidden"), ("products", "boosted_until"),
     ("product_events", "product_id"), ("product_events", "user_id"), ("product_events", "created_at"),
     ("chat_reads", "order_id"), ("chat_reads", "user_id"), ("chat_reads", "last_read_at"),
+    ("escrow_orders", "reminder_sent_at"),
 )
 
 # Routes that must exist once app.py is imported (checked by path, no request is made).
@@ -267,6 +269,8 @@ def run_startup_checks():
                 problem("warn", "Paystack secret and public keys do not look like the same mode (test / live)")
         if not str(getattr(core, "BOT_TOKEN", "") or ""):
             problem("error", "BOT_TOKEN is missing (Telegram sign-in will fail)")
+        if not str(getattr(core, "TELEGRAM_WEBHOOK_SECRET", "") or ""):
+            problem("error", "TELEGRAM_WEBHOOK_SECRET is not set: /webhook refuses every Telegram update (bot is silent)")
         if not str(getattr(core, "WEBAPP_URL", "") or ""):
             problem("warn", "WEBAPP_URL is not set (/set-webhook and the Open PayLock button need it)")
 
