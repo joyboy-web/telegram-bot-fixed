@@ -503,6 +503,13 @@ body,.card,.pcard,.sheet,.tabbar,.input,.select,.textarea,.chip,.tab,.key,.back-
 .sup-them{align-self:flex-start;background:var(--chip);color:var(--ink);border-bottom-left-radius:4px}
 .sup-txt{white-space:pre-wrap}
 .sup-img{width:100%;border-radius:8px;display:block}
+.chat-img{max-width:240px;height:auto}
+.pvp{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;position:relative;overflow:hidden}
+.pvp img{pointer-events:none;-webkit-user-drag:none;user-drag:none;width:100%;display:block;border-radius:8px;margin-bottom:8px}
+.pvp.pvp-hide{filter:blur(24px)}
+.pvp-wm{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.pvp-wm span{position:absolute;white-space:nowrap;font-size:13px;font-weight:700;color:#888;opacity:.18;transform:rotate(-30deg);transform-origin:left top}
+@media print{.pvp{display:none!important}}
 .sup-q{border-left:4px solid var(--gold);border-radius:6px;padding:4px 8px;background:rgba(128,128,128,.15)}
 .sup-q.purple{border-left-color:var(--purple)}
 .sup-q-n{font-weight:700;font-size:12px}
@@ -613,15 +620,15 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
 </div>
 
 <!-- ============ APP LOCK (Batch 7: passcode keypad, password only, no biometrics) ============ -->
-<div class="lockscreen" id="applock" role="dialog" aria-label="Enter passcode">
+<div class="lockscreen" id="applock" role="dialog" aria-label="Enter PIN">
   <div class="lock-ic"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
-  <h2 id="al-title" style="font-size:22px;font-weight:800">Enter Passcode</h2>
-  <p class="muted small" id="al-sub">Enter your 4-digit passcode to open PayLock</p>
+  <h2 id="al-title" style="font-size:22px;font-weight:800">Enter PIN</h2>
+  <p class="muted small" id="al-sub">Enter your 4-digit PIN to open PayLock</p>
   <div class="pin-dots" id="al-dots"><span></span><span></span><span></span><span></span></div>
   <div class="pin-error" id="al-error"></div>
   <div class="pc-timer" id="al-timer" style="display:none"></div>
   <div class="keypad" id="al-keypad"></div>
-  <button class="link-btn" type="button" id="al-forgot">Forgot passcode?</button>
+  <button class="link-btn" type="button" id="al-forgot">Forgot PIN?</button>
 </div>
 
 <div id="offline-banner" role="alert"><span>No connection.</span><button type="button" id="offline-retry">Retry</button></div>
@@ -873,6 +880,8 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
         <button class="btn secondary sm" type="button" id="chat-keep-btn" style="display:none">Keep / Save</button>
       </div>
       <div class="chat-inputbar">
+        <button class="sup-ic" type="button" id="chat-attach" aria-label="Attach picture"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8.2-8.2"/></svg></button>
+        <input type="file" id="chat-file" accept="image/jpeg,image/png,image/webp" hidden>
         <input class="input" id="chat-input" type="text" maxlength="500" autocomplete="off" placeholder="Type a message">
         <button class="btn sm send-ic" type="button" id="chat-send" aria-label="Send"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
       </div>
@@ -1050,6 +1059,7 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
         <label for="wd-amount">Amount (₦, min 1000)</label>
         <input class="input" id="wd-amount" type="text" inputmode="numeric" placeholder="1000" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
       </div>
+      <div id="wd-error" class="small" style="display:none;color:var(--red);font-weight:700;margin:-4px 0 10px"></div>
       <button class="btn" type="button" id="wd-btn" disabled onclick="PayLock.requestWithdrawal()">Request withdrawal</button>
     </div>
 
@@ -1187,12 +1197,12 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
     <div class="sgroup">
       <button class="srow" type="button" data-sd="passcode">
         <span class="srow-ic"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
-        <span class="srow-mid"><span class="srow-t">App Passcode</span><span class="srow-s" id="ss-passcode">Off</span></span>
+        <span class="srow-mid"><span class="srow-t">App PIN Lock</span><span class="srow-s" id="ss-passcode">Off</span></span>
         <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
       </button>
-      <button class="srow" type="button" data-sd="change-passcode">
+      <button class="srow" type="button" data-sd="change-pin">
         <span class="srow-ic"><svg class="i" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
-        <span class="srow-mid"><span class="srow-t">Change Passcode</span><span class="srow-s">Your current passcode is required</span></span>
+        <span class="srow-mid"><span class="srow-t">Change App PIN</span><span class="srow-s">Your current PIN is required</span></span>
         <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
       </button>
       <button class="srow" type="button" data-sd="backup">
@@ -1207,7 +1217,7 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
       </button>
       <button class="srow" type="button" data-sd="twofa">
         <span class="srow-ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></span>
-        <span class="srow-mid"><span class="srow-t">2FA for Withdrawals</span><span class="srow-s" id="ss-2fa">Passcode asked again before every withdrawal</span></span>
+        <span class="srow-mid"><span class="srow-t">2FA for Withdrawals</span><span class="srow-s" id="ss-2fa">PIN asked before every withdrawal</span></span>
         <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
       </button>
       <button class="srow" type="button" data-sd="appearance">
@@ -1287,7 +1297,7 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
       </button>
       <button class="srow" type="button" data-sd="delete">
         <span class="srow-ic"><svg class="i" viewBox="0 0 24 24"><path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></span>
-        <span class="srow-mid"><span class="srow-t">Delete Account Permanently</span><span class="srow-s">Passcode and DELETE confirmation required</span></span>
+        <span class="srow-mid"><span class="srow-t">Delete Account Permanently</span><span class="srow-s">PIN and DELETE confirmation required</span></span>
         <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
       </button>
       <button class="srow" type="button" data-sd="clear-chat">
@@ -1328,17 +1338,6 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
     <h2 class="page-title" id="sd-title">Setting</h2>
     <p class="sd-note" id="sd-sub"></p>
     <div id="sd-body"></div>
-  </section>
-
-  <!-- ============ PASSCODE FULL PAGE (set / change flow) ============ -->
-  <section class="page" id="pg-passcode">
-    <button class="back-btn" type="button" onclick="PayLock.navBack('pg-settings')">‹ Back</button>
-    <h2 class="page-title" id="pc-title" style="text-align:center">Passcode</h2>
-    <p class="muted small" id="pc-sub" style="text-align:center"></p>
-    <div class="pin-dots" id="pc-dots"><span></span><span></span><span></span><span></span></div>
-    <div class="pin-error" id="pc-error"></div>
-    <div class="pc-timer" id="pc-timer" style="display:none;text-align:center"></div>
-    <div class="keypad" id="pc-keypad"></div>
   </section>
 
   <!-- ============ BOOSTING TERMS & BOOST (full document page, scroll to accept) ============ -->
@@ -1628,16 +1627,31 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
      BATCH 7 NEW OVERLAYS
      ===================================================================== -->
 
-<!-- Passcode verify sheet: one passcode for withdraw 2FA, delete, deactivate and "old PIN" checks -->
+<!-- PIN verify sheet (server-checked): app lock off, log out all devices, deactivate -->
 <div class="overlay" id="pcv-overlay">
   <div class="sheet">
-    <h3 id="pcv-title" style="text-align:center">Enter Passcode</h3>
-    <p class="sub" id="pcv-sub" style="text-align:center">Confirm with your passcode to continue.</p>
+    <h3 id="pcv-title" style="text-align:center">Enter PIN</h3>
+    <p class="sub" id="pcv-sub" style="text-align:center">Confirm with your PIN to continue.</p>
     <div class="pin-dots" id="pcv-dots"><span></span><span></span><span></span><span></span></div>
     <div class="pin-error" id="pcv-error"></div>
     <div class="pc-timer" id="pcv-timer" style="display:none;text-align:center"></div>
     <div class="keypad" id="pcv-keypad"></div>
     <button class="btn secondary" type="button" id="pcv-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Change PIN / Forgot PIN flow (server-checked; sits above the lock screen so Forgot PIN works from it) -->
+<div class="overlay" id="pf-overlay" style="z-index:3600">
+  <div class="sheet">
+    <h3 id="pf-title" style="text-align:center">Change PIN</h3>
+    <p class="sub" id="pf-sub" style="text-align:center"></p>
+    <div class="field" id="pf-input-row" style="display:none"><input class="input" id="pf-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code"></div>
+    <div class="pin-dots" id="pf-dots"><span></span><span></span><span></span><span></span></div>
+    <div class="pin-error" id="pf-error"></div>
+    <div class="pc-timer" id="pf-timer" style="display:none;text-align:center"></div>
+    <div class="keypad" id="pf-keypad"></div>
+    <button class="btn" type="button" id="pf-action" style="display:none"></button>
+    <button class="btn secondary" type="button" id="pf-cancel" style="margin-top:10px">Cancel</button>
   </div>
 </div>
 
@@ -2837,6 +2851,11 @@ async function downloadReceipt(){
 }
 
 /* ---------- Withdraw request ---------- */
+function setWdError(msg){
+  const e = $('wd-error');
+  e.textContent = msg || '';
+  e.style.display = msg ? 'block' : 'none';
+}
 async function requestWithdrawal(){
   const amt = parseInt($('wd-amount').value, 10) || 0;
   const acct = $('acct-number').value;
@@ -2854,6 +2873,16 @@ async function requestWithdrawal(){
   const btn = $('wd-btn');
   btn.disabled = true;
   try {
+    // Live balance from the backend (never a cached value). Insufficient -> red message, NO PIN prompt.
+    setWdError('');
+    const b = await api('/api/wallet/balance', { headers: getAuthHeader() });
+    if (!b.res.ok) { state.wd = null; setWdError('Could not check your balance. Try again.'); return; }
+    if (state.wd.amount_kobo > (parseInt(b.data.balance_kobo, 10) || 0)) {
+      state.wd = null;
+      setWdError('Insufficient balance');
+      loadBalance();
+      return;
+    }
     const r = await api('/api/wallet/pin-status', { headers: getAuthHeader() });
     if (!r.res.ok) { showToast(r.data.error || 'Could not check PIN status'); return; }
     if (r.data.has_pin) openPinModal('withdraw');
@@ -2881,10 +2910,10 @@ function buildKeypad(){
   });
 }
 function pinTexts(mode){
-  if (mode === 'set-new') return ['Create PIN', 'Choose a 4-digit PIN for withdrawals'];
+  if (mode === 'set-new') return ['Set your ONE PIN for everything', 'This PIN unlocks the app, authorizes withdrawals and protects your account'];
   if (mode === 'set-confirm') return ['Confirm PIN', 'Enter your PIN again'];
   if (mode === 'delete') return ['Enter PIN', 'Enter your PIN to permanently delete your account'];
-  return ['Enter PIN', 'Enter your 4-digit PIN to authorize this withdrawal'];
+  return ['Enter PIN', 'Enter your 4-digit withdrawal PIN (the PIN you created for withdrawals)'];
 }
 function renderPinHeader(){
   const t = pinTexts(pinModal.mode);
@@ -2968,9 +2997,12 @@ async function submitNewPin(pin){
     const r = await api('/api/wallet/set-pin', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ pin: pin, confirm_pin: pin }) });
     if (r.res.ok) {
       showToast('PIN set successfully');
+      state.hasPin = true;
       const after = pinModal.after;
       closePinModal();
       if (after === 'withdraw') setTimeout(function(){ openPinModal('withdraw'); }, 200);
+      else if (after === 'migrate') b7LegacyDone();
+      else if (after === 'applock') b7AppLockSet(true);
     } else if (r.data.code === 'PIN_ALREADY_SET') {
       showToast('PIN already set');
       closePinModal();
@@ -2993,12 +3025,15 @@ function handlePinError(res, data){
   const code = data && data.code;
   if (code === 'PIN_INVALID') {
     let msg = data.error || 'Incorrect PIN';
-    if (typeof data.attempts_left === 'number') msg += ' (' + data.attempts_left + ' attempts left)';
+    if (pinModal.mode === 'withdraw') {
+      msg = 'Incorrect PIN.' + (typeof data.attempts_left === 'number' ? ' ' + data.attempts_left + ' attempt' + (data.attempts_left === 1 ? '' : 's') + ' left' : '');
+    } else if (typeof data.attempts_left === 'number') msg += ' (' + data.attempts_left + ' attempts left)';
     setPinError(msg);
     pinModal.value = '';
     updateDots();
   } else if (code === 'RATE_LIMITED' || res.status === 429) {
-    setPinError(data.error || 'Too many attempts. Try again later.');
+    setPinError(pinModal.mode === 'withdraw' ? 'Too many attempts. Try again later' : (data.error || 'Too many attempts. Try again later.'));
+    if (pinModal.mode === 'withdraw') showToast('Too many attempts. Try again later');
     pinModal.locked = true;
     pinModal.value = '';
     updateDots();
@@ -3212,6 +3247,7 @@ function chatResetRemote(){
   chatState.remote = [];
   chatState.remoteSig = '';
   chatState.remoteOff = false;
+  chatState.released = false; chatState.pvUsed = 0;
 }
 
 function openChat(product){
@@ -3304,6 +3340,8 @@ function openOrderChat(o){
     chatState.messages.push({ role:'system', text: isSeller ? 'Chat with the buyer about this order.' : 'Chat with the seller about this order.' });
   }
   chatResetRemote();
+  chatState.released = (String(o.status) === 'released');
+  chatState.pvUsed = Number(o.preview_count) || 0;
   enterChatRoom();
   renderChatMessages();
   goPage('pg-chat');
@@ -3365,7 +3403,7 @@ function renderChatMessages(){
       d.textContent = m.text;
     }
     box.appendChild(d);
-    if (!gone && m.role === 'paylock' && chatState.orderId && !own && m.text === bm('file', 'Here is your file')) {
+    if (!gone && chatIsReleased() && m.role === 'paylock' && chatState.orderId && !own && m.text === bm('file', 'Here is your file')) {
       const dc = dlCard(p, chatState.orderId);
       if (dc) box.appendChild(dc);
       if (rateOn && !ratePlaced) { box.appendChild(rateInline(p, chatState.orderId)); ratePlaced = true; }   // directly under the delivered product
@@ -3382,7 +3420,9 @@ function renderChatMessages(){
       lb.textContent = (m.sender_role === 'seller') ? 'Seller' : 'Buyer';
       d.appendChild(lb);
     }
-    d.appendChild(document.createTextNode(String(m.text || '')));
+    const imgU = chatImgUrl(m.text);
+    if (imgU) { const im = document.createElement('img'); im.className = 'sup-img chat-img'; im.alt = 'Picture'; im.loading = 'lazy'; im.src = imgU; d.appendChild(im); }
+    else d.appendChild(document.createTextNode(String(m.text || '')));
     if (mine) {
       const st = String(m.status || (m._tmp ? 'sending' : 'sent')).toLowerCase();
       const mt = el('div'); mt.style.cssText = 'display:flex;justify-content:flex-end;margin-top:2px';
@@ -3508,6 +3548,7 @@ function chatPoll(){
 
     const o = list.filter(function(x){ return String(x.id) === String(watchedId); })[0];
     if(!o) return;
+    if(o.preview_count !== undefined) chatState.pvUsed = Number(o.preview_count) || 0;
 
     if(o.status === 'held' && o.reminder_sent_at && !chatState.reminder && String(o.buyer_id) === String(state.telegram_id)){
       chatState.reminder = true;
@@ -3516,6 +3557,7 @@ function chatPoll(){
 
     if(o.status === 'released'){
       chatState.stage = 'done';
+      chatState.released = true;
       chatPush('system', "Seller has been paid");
       renderChatMessages();
     } else if(o.status === 'disputed'){
@@ -3703,6 +3745,7 @@ async function chatOrderAction(btn, action, doneStatus, doneText){
     await action(oid, btn);
     const list = await chatFetchOrders();
     const o = list.filter(function(x){ return String(x.id) === String(oid); })[0];
+    if(o && o.status === 'released') chatState.released = true;
     if(o && o.status === doneStatus && chatState.stage !== 'done'){
       chatState.stage = 'done';
       chatPush('system', doneText);
@@ -3752,6 +3795,105 @@ async function sendChatMessage(){
     if(e.key === 'Enter'){ e.preventDefault(); sendChatMessage(); }
   });
 })();
+
+
+/* ===================== TASK 2: protected preview, chat pictures, receipt deep link ===================== */
+function chatIsReleased(){ return !!chatState.released; }
+function chatImgUrl(t){
+  const x = String(t || '');
+  return (x.indexOf('[img]https://') === 0) ? x.slice(5) : '';
+}
+async function chatSendImage(file){
+  const oid = chatState.orderId;
+  if (!oid || chatState.stage === 'ask' || chatState.remoteOff) { showToast('Pictures can be sent after the order starts'); return; }
+  if (!file) return;
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type || '')) { showToast('Picture must be JPG, PNG or WEBP'); return; }
+  if (file.size > 5 * 1024 * 1024) { showToast('Picture must be 5MB or less'); return; }
+  const fd = new FormData();
+  fd.append('order_id', String(oid));
+  fd.append('image', file);
+  try {
+    const r = await api('/api/chat/image', { method: 'POST', headers: getAuthHeader(), body: fd });
+    if (r.res.ok) { chatState.remoteSig = ''; chatLoadRemote(); return; }
+    showToast(r.res.status === 501 ? 'Pictures are not available yet' : (r.data.error || 'Picture not sent'));
+  } catch (e) { showToast('Network error. Try again.'); }
+}
+(function wireChatAttach(){
+  const a = $('chat-attach'), f = $('chat-file');
+  if (!a || !f) return;
+  a.addEventListener('click', function(){ f.value = ''; f.click(); });
+  f.addEventListener('change', function(){ const x = f.files && f.files[0]; f.value = ''; chatSendImage(x); });
+})();
+
+// Protected preview: server counts + enforces 3 previews and watermarks the image; the app only shows it.
+async function pvpProtected(p, oid){
+  let r;
+  try { r = await api('/api/preview/' + encodeURIComponent(oid), { method: 'POST', headers: getAuthHeader() }); }
+  catch (e) { showToast('Network error. Try again.'); return; }
+  const d = r.data || {};
+  if (typeof d.used === 'number') chatState.pvUsed = d.used;
+  if (!r.res.ok) {
+    if (d.code === 'PREVIEW_LIMIT') chatState.pvUsed = 3;
+    showToast(d.error || 'Preview is not available');
+    chatExtrasRender();
+    return;
+  }
+  chatExtrasRender();
+  if (!d.available) { showToast(d.message || 'No preview available for this file'); return; }
+  openSheet(function(b){
+    const box = el('div', 'pvp');
+    box.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+    box.addEventListener('dragstart', function(e){ e.preventDefault(); });
+    (Array.isArray(d.pages) ? d.pages : []).slice(0, 6).forEach(function(u){
+      if (typeof u !== 'string' || u.indexOf('data:image/') !== 0) return;
+      const im = document.createElement('img'); im.alt = ''; im.draggable = false; im.src = u; box.appendChild(im);
+    });
+    if (d.kind === 'video' && typeof d.video === 'string' && d.video.indexOf('data:video/') === 0) {
+      const v = document.createElement('video'); v.src = d.video; v.controls = true; v.muted = true; v.playsInline = true;
+      v.setAttribute('controlsList', 'nodownload noremoteplayback'); v.setAttribute('disablePictureInPicture', '');
+      v.style.cssText = 'width:100%;border-radius:8px'; v.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+      box.appendChild(v);
+    }
+    const wm = el('div', 'pvp-wm'); wm.setAttribute('aria-hidden', 'true');
+    const label = String(d.watermark || 'PayLock');
+    for (let y = 0; y < 14; y++) for (let x = 0; x < 3; x++) {
+      const sp = document.createElement('span'); sp.textContent = label;
+      sp.style.left = (x * 46 - 20 + (y % 2) * 12) + '%'; sp.style.top = (y * 9) + '%'; wm.appendChild(sp);
+    }
+    box.appendChild(wm);
+    b.appendChild(el('h3', null, 'Preview ' + (d.used || 1) + '/' + (d.max || 3)));
+    b.appendChild(box);
+    if (d.note) { const n = el('div', 'muted', String(d.note)); n.style.marginTop = '6px'; b.appendChild(n); }
+    const c = el('button', 'btn secondary', 'Close'); c.type = 'button'; c.style.marginTop = '10px';
+    c.addEventListener('click', closeSheet); b.appendChild(c);
+  });
+}
+// deterrents (not a guarantee): hide the preview when the app loses focus, block copy/print/save shortcuts on it
+(function pvpGuards(){
+  function box(){ return document.querySelector('.pvp'); }
+  function hide(on){ const b = box(); if (b) b.classList.toggle('pvp-hide', !!on); }
+  document.addEventListener('visibilitychange', function(){ hide(document.hidden); });
+  window.addEventListener('blur', function(){ hide(true); });
+  window.addEventListener('focus', function(){ hide(false); });
+  ['copy', 'cut'].forEach(function(t){ document.addEventListener(t, function(e){ if (box()) e.preventDefault(); }, true); });
+  document.addEventListener('selectstart', function(e){ if (e.target && e.target.closest && e.target.closest('.pvp')) e.preventDefault(); }, true);
+  document.addEventListener('keydown', function(e){
+    if (!box()) return;
+    const k = String(e.key || '').toLowerCase();
+    if (k === 'printscreen' || ((e.ctrlKey || e.metaKey) && (k === 'p' || k === 's' || k === 'c'))) { e.preventDefault(); hide(true); setTimeout(function(){ hide(false); }, 1500); }
+  }, true);
+})();
+
+// Receipt deep link (tx_<order id>): open Transaction History at that order's transaction
+async function openTxByOrder(oid){
+  try { await loadTransactions(); } catch (e) {}
+  const id = String(oid);
+  const t = (state.transactions || []).filter(function(x){
+    return String(x.order_id || x.escrow_order_id || x.order_ref || '') === id || String(x.reference || '').indexOf(id) >= 0;
+  })[0];
+  if (t) { openTxDetail(t); return; }
+  goPage('pg-tx');
+}
 
 /* ===================== MINOR FIXES 1-9 + BATCH 4 ===================== */
 const mk = { q: '', cat: 'All', sort: 'new', open: false };
@@ -4160,6 +4302,8 @@ function applyBuyFilter(){
   if (mk.sort === 'low') list.sort(function(a, b){ return (a.buyer_pays_kobo || 0) - (b.buyer_pays_kobo || 0); });
   else if (mk.sort === 'high') list.sort(function(a, b){ return (b.buyer_pays_kobo || 0) - (a.buyer_pays_kobo || 0); });
   else list.sort(function(a, b){ return (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0); });
+  const bst = list.filter(pBoosted).sort(function(a, b){ return boostUntilMs(b) - boostUntilMs(a); });   // boosted always on top, latest boost first
+  list = bst.concat(list.filter(function(p){ return !pBoosted(p); }));
   renderProductGrid('buy-grid', 'buy-empty', list);
 }
 
@@ -4536,17 +4680,26 @@ function chatExtrasRender(){
   const st = chatState.stage;
   const own = isOwnProduct(chatState.product);
   const gone = !!chatState.refunded && !own;
-  const paid = (st === 'paid' || st === 'done') && !own && !gone;
+  const paid = chatIsReleased() && !own && !gone;   // Download / Keep only after CONFIRM DELIVERY (server enforces it too)
   const d = $('download-in-chat'), k = $('chat-keep-btn'), rr = $('chat-refund-row'), pvb = $('chat-preview-btn');
   if (d) d.style.display = paid ? '' : 'none';
   if (k) k.style.display = paid ? '' : 'none';
-  if (pvb) pvb.style.display = gone ? 'none' : '';
+  if (pvb) {
+    const buyerHeld = (st === 'paid') && !own && !gone && !!chatState.orderId;
+    const used = Math.min(3, Number(chatState.pvUsed) || 0);
+    pvb.style.display = (own || gone || st === 'done') ? 'none' : '';
+    if (buyerHeld) {
+      pvb.textContent = 'Preview ' + used + '/3';
+      pvb.disabled = used >= 3;
+    }
+  }
   if (st !== 'paid') chatState.refundPrompt = false;
   if (rr) rr.style.display = (chatState.refundPrompt && st === 'paid') ? '' : 'none';
 }
 function openChatPreview(){
   const p = chatState.product;
   if (!p) return;
+  if (chatState.orderId && chatState.stage === 'paid' && !isOwnProduct(p) && !chatState.refunded) { pvpProtected(p, chatState.orderId); return; }
   openSheet(function(b){
     const imgs = pvImages(p);
     if (imgs.length) {
@@ -5167,55 +5320,15 @@ function b7PageHook(id){
   else if (id === 'pg-adm-lowrate') admLowLoad();
 }
 
-/* ===================== 13. PASSCODE ENGINE (one passcode for everything) ===================== */
-const PC_BLOCKS = [5, 15, 30];   // minutes: first block 5, then 15, then 30 (stays 30)
-function pcGet(){ return b7Load('pc', { on: false, hash: null, fails: 0, level: 0, until: 0 }); }
-function pcSet(s){ b7Save('pc', s); }
-function pcOn(){ const s = pcGet(); return !!(s.on && s.hash); }
-function pcClear(){ pcSet({ on: false, hash: null, fails: 0, level: 0, until: 0 }); }
-function pcRemaining(){ const s = pcGet(); return Math.max(0, (s.until || 0) - Date.now()); }
+/* ===================== 13. ONE PIN (server-side only: users.pin_hash, bcrypt) =====================
+   No PIN or PIN hash is ever stored or checked in the browser. Every check goes to the server. */
+const pinLock = { until: 0 };   // in-memory UI lock only; the server enforces the real lockout
+function pinLockRemaining(){ return Math.max(0, pinLock.until - Date.now()); }
 function pcFmt(ms){
   const t = Math.ceil(ms / 1000), m = Math.floor(t / 60), s = t % 60;
   return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
 }
-async function pcHash(pin){
-  const raw = 'paylock:' + b7Uid() + ':' + pin;
-  try {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
-    return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2, '0'); }).join('');
-  } catch (e) {
-    let h = 5381;
-    for (let i = 0; i < raw.length; i++) h = ((h << 5) + h + raw.charCodeAt(i)) | 0;
-    return 'f' + h;
-  }
-}
-// Wrong 1x "Try again", wrong 2x "1 attempt left", wrong 3x block 5 -> 15 -> 30 minutes
-async function pcCheck(pin){
-  const s = pcGet();
-  const rem = pcRemaining();
-  if (rem > 0) return { status: 'blocked', ms: rem };
-  const h = await pcHash(pin);
-  if (s.hash && h === s.hash) { s.fails = 0; s.level = 0; s.until = 0; pcSet(s); return { status: 'ok' }; }
-  s.fails = (s.fails || 0) + 1;
-  if (s.fails >= 3) {
-    const mins = PC_BLOCKS[Math.min(s.level || 0, PC_BLOCKS.length - 1)];
-    s.level = (s.level || 0) + 1;
-    s.fails = 0;
-    s.until = Date.now() + mins * 60000;
-    pcSet(s);
-    return { status: 'blocked', ms: mins * 60000 };
-  }
-  pcSet(s);
-  return { status: 'wrong', left: 3 - s.fails };
-}
-async function pcSetPin(pin){
-  const s = pcGet();
-  s.hash = await pcHash(pin);
-  s.on = true; s.fails = 0; s.level = 0; s.until = 0;
-  pcSet(s);
-  b7Soft('/api/passcode/set', { passcode_hash: s.hash });   // MISSING route: silently ignored until Prompt 2
-}
-// Generic 4-digit pad. cfg: dots, err, timer (ids), keypad (id), locked() -> ms, onDone(pin)
+// Generic 4-digit keypad UI (no PIN logic here). cfg: dots, err, timer (ids), keypad (id), locked() -> ms, onDone(pin)
 function pinPad(c){
   const P = { value: '', busy: false, tmr: null };
   const kp = $(c.keypad);
@@ -5256,7 +5369,7 @@ function pinPad(c){
       tEl.textContent = 'Try again in ' + pcFmt(rem);
       kp.style.opacity = '.35';
       kp.style.pointerEvents = 'none';
-      P.error('Too many attempts');
+      P.error('Too many attempts. Try again later');
     }
     tick();
     P.tmr = setInterval(tick, 500);
@@ -5274,39 +5387,121 @@ function pinPad(c){
   };
   return P;
 }
-// Verifies a PIN against the stored passcode and paints the right message on the pad. true = correct.
-async function pcAttempt(pad, pin){
-  const r = await pcCheck(pin);
-  if (r.status === 'ok') return true;
+// Does this user have a server PIN? true / false, or null when it could not be checked.
+async function pinHasServerPin(){
+  try {
+    const r = await api('/api/wallet/pin-status', { headers: getAuthHeader() });
+    if (r.res.ok) { state.hasPin = !!r.data.has_pin; return state.hasPin; }
+  } catch (e) { /* fall through */ }
+  return null;
+}
+// Verifies the PIN on the server and paints the right message on the pad. true = correct.
+async function pinVerify(pad, pin){
+  let r;
+  try {
+    r = await api('/api/wallet/verify-pin', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ pin: pin }) });
+  } catch (e) {
+    pad.reset(); pad.error('Could not verify PIN. Check your connection and try again.');
+    return false;
+  }
+  if (r.res.ok && r.data.verified === true) { pinLock.until = 0; return true; }
   pad.reset();
-  if (r.status === 'blocked') { pad.error(''); pad.showLock(r.ms); }
-  else pad.error(r.left === 1 ? '1 attempt left' : 'Try again');
+  const code = r.data && r.data.code;
+  if (code === 'PIN_INVALID' && typeof r.data.attempts_left === 'number') {
+    const n = r.data.attempts_left;
+    pad.error('Incorrect PIN. ' + n + ' attempt' + (n === 1 ? '' : 's') + ' left');
+  } else if (code === 'RATE_LIMITED' || r.res.status === 429) {
+    const ms = (Number(r.data && r.data.retry_after) || 60) * 1000;
+    pinLock.until = Date.now() + ms;
+    pad.error('');
+    pad.showLock(ms);
+  } else if (code === 'PIN_NOT_SET') {
+    pad.error('No PIN set yet. Set one in Settings.');
+  } else {
+    pad.error('Could not verify PIN. Try again.');
+  }
   return false;
 }
 
-/* ----- passcode verify sheet: withdraw 2FA, delete, deactivate, old-PIN checks. If passcode is OFF nothing is asked. ----- */
+/* ----- PIN verify sheet: turn app lock off, log out all devices, deactivate. Withdraw + delete send the PIN to their own endpoint. ----- */
 let pcvCb = null;
-function pcGuard(title, cb, sub){
-  if (!pcOn()) { cb(); return; }
-  $('pcv-title').textContent = title || 'Enter Passcode';
-  $('pcv-sub').textContent = sub || 'Confirm with your passcode to continue.';
+async function pcGuard(title, cb, sub){
+  const has = await pinHasServerPin();
+  if (has === false) { cb(); return; }   // no PIN exists yet: nothing to verify
+  if (has === null) { showToast('Could not check your PIN. Try again.'); return; }   // fail closed
+  $('pcv-title').textContent = title || 'Enter PIN';
+  $('pcv-sub').textContent = sub || 'Confirm with your PIN to continue.';
   pcvCb = cb;
   b7.pcvPad.reset();
   b7.pcvPad.error('');
   $('pcv-overlay').classList.add('open');
-  if (pcRemaining() > 0) b7.pcvPad.showLock(pcRemaining());
+  if (pinLockRemaining() > 0) b7.pcvPad.showLock(pinLockRemaining());
 }
 function pcvClose(){ $('pcv-overlay').classList.remove('open'); pcvCb = null; }
 
 /* ===================== 1. SPLASH + APP LOCK ===================== */
+function b7LegacyLocal(){ try { const r = localStorage.getItem(b7Key('pc')); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+function appLockOn(){ return !!b7Cfg().passcode_on; }
+// Decides, once per open: show the lock keypad, or the one-time "set your ONE PIN" migration, or nothing.
+async function b7LockDecision(){
+  const out = { lock: false, migrate: false };
+  let on = null;
+  try {
+    const sr = await b7Get('/api/settings');
+    if (sr.ok) { const d = sr.data.settings || sr.data || {}; on = d.passcode_on === true; const c = b7Cfg(); c.passcode_on = on; b7Save('settings', c); }
+  } catch (e) {}
+  if (on === null) on = appLockOn();
+  const has = await pinHasServerPin();
+  const legacy = b7LegacyLocal();
+  const hadLegacy = !!(legacy && (legacy.hash || legacy.on)) || (on && has === false);
+  if (has === true) {
+    if (legacy && legacy.on && !on) { on = true; b7Persist({ passcode_on: true }, true); }   // keep the lock they had
+    out.lock = on;
+    if (legacy) b7LegacyClear();             // old client passcode is ignored and deleted; the server PIN is the ONE PIN
+  } else if (has === false) {
+    out.migrate = hadLegacy;                 // only users who had the old passcode are asked, once
+    b7.legacyOn = !!((legacy && legacy.on) || on);
+  } else {
+    out.lock = on;                           // could not reach the server: keep the lock closed
+  }
+  return out;
+}
+function b7LegacyClear(){
+  try { localStorage.removeItem(b7Key('pc')); } catch (e) {}
+  b7Soft('/api/settings', { passcode_hash: null });   // drop any old client-made hash stored on the server
+}
+function b7LegacyDone(){
+  b7LegacyClear();
+  if (b7.legacyOn) b7AppLockSet(true, true);
+}
+async function b7AppLockSet(on, quiet){
+  const ok = await b7Persist({ passcode_on: on }, true);
+  if (!ok) {
+    const c = b7Cfg(); c.passcode_on = !on; b7Save('settings', c);
+    showToast('Could not save. Try again.');
+  } else if (!quiet) showToast(on ? 'PIN lock on' : 'PIN lock off');
+  b7SettingsShow(); sdRerender();
+}
+async function b7EnableAppLock(){
+  const has = await pinHasServerPin();
+  if (has === true) { b7AppLockSet(true); return; }
+  if (has === false) { openPinModal('set-new', { after: 'applock' }); return; }
+  showToast('Could not check your PIN. Try again.');
+}
 function b7Splash(){
   const s = $('splash');
   if (!s || !(tg && tg.initData)) { if (s) s.classList.add('hide'); return; }
+  const decision = Promise.race([
+    b7LockDecision(),
+    new Promise(function(res){ setTimeout(function(){ res({ lock: appLockOn(), migrate: false }); }, 4000); })
+  ]).catch(function(){ return { lock: appLockOn(), migrate: false }; });
   setTimeout(function(){
     s.classList.add('open');                       // lock clicks open
-    setTimeout(function(){
+    setTimeout(async function(){
+      const d = await decision;
       s.classList.add('hide');
-      if (pcOn()) b7ShowLock();                    // Passcode ON -> keypad, OFF -> Home (already underneath)
+      if (d.lock) b7ShowLock();                    // PIN lock ON -> keypad, OFF -> Home (already underneath)
+      else if (d.migrate) openPinModal('set-new', { after: 'migrate' });
     }, 450);
   }, 1500);
 }
@@ -5316,35 +5511,118 @@ function b7ShowLock(){
   l.classList.add('show');
   b7.alPad.reset();
   b7.alPad.error('');
-  if (pcRemaining() > 0) b7.alPad.showLock(pcRemaining());
+  if (pinLockRemaining() > 0) b7.alPad.showLock(pinLockRemaining());
 }
 function b7Unlock(){
   const l = $('applock');
   if (l) l.classList.remove('show');
   b7.alPad.reset();
 }
-// Forgot passcode: ONLY via log out all devices + Telegram re-login + new passcode. No email reset, no bypass.
-function b7Forgot(){
-  const xs = $('xs-overlay');
-  openSheet(function(b){
-    b.appendChild(el('h3', null, 'Forgot passcode?'));
-    b.appendChild(el('p', 'sub', 'Log out of all devices, sign in again through Telegram, then set a new passcode in Settings. There is no email reset.'));
-    const go = el('button', 'btn', 'Log out all devices');
-    go.type = 'button';
-    go.addEventListener('click', async function(){
-      const restore = setBusy(go, 'Logging out...');
-      const r = await postApi('/api/sessions/logout-all', {});
-      restore();
-      if (r.ok) { pcClear(); closeSheet(); b7Unlock(); showToast('Logged out. Set a new passcode in Settings.'); }
+// Forgot PIN: no client-side bypass. A 6-digit code goes to the user's PayLock bot chat, then a new PIN is set on the server.
+function b7Forgot(){ pfOpen('reset'); }
+
+/* ===================== CHANGE PIN / FORGOT PIN (server: /api/wallet/change-pin, /api/wallet/reset-pin) ===================== */
+const pf = { mode: '', step: '', old: '', first: '', code: '' };
+function pfShow(step){
+  pf.step = step;
+  const T = {
+    old: ['Enter current PIN', 'Confirm your current PIN to continue'],
+    send: ['Reset your PIN', 'We will send a 6-digit code to your PayLock bot chat in Telegram.'],
+    code: ['Enter the code', 'Type the 6-digit code from the PayLock bot chat.'],
+    'new': ['Choose a new PIN', 'Enter a new 4-digit PIN'],
+    confirm: ['Confirm new PIN', 'Enter the same PIN again']
+  }[step];
+  $('pf-title').textContent = T[0];
+  $('pf-sub').textContent = T[1];
+  const isPin = (step === 'old' || step === 'new' || step === 'confirm');
+  $('pf-dots').style.display = isPin ? '' : 'none';
+  $('pf-keypad').style.display = isPin ? '' : 'none';
+  $('pf-input-row').style.display = (step === 'code') ? '' : 'none';
+  $('pf-action').style.display = (step === 'send' || step === 'code') ? '' : 'none';
+  $('pf-action').textContent = (step === 'send') ? 'Send code' : 'Continue';
+  b7.pfPad.reset();
+  b7.pfPad.error('');
+}
+function pfOpen(mode){
+  pf.mode = mode; pf.old = ''; pf.first = ''; pf.code = '';
+  $('pf-code').value = '';
+  $('pf-overlay').classList.add('open');
+  pfShow(mode === 'change' ? 'old' : 'send');
+  if (mode === 'change' && pinLockRemaining() > 0) b7.pfPad.showLock(pinLockRemaining());
+}
+function pfClose(){
+  $('pf-overlay').classList.remove('open');
+  pf.old = ''; pf.first = ''; pf.code = '';
+  $('pf-code').value = '';
+  b7.pfPad.reset();
+}
+function pfLocked(ms){ pinLock.until = Date.now() + ms; b7.pfPad.error(''); b7.pfPad.showLock(ms); }
+async function pfPadDone(pin){
+  if (pf.step === 'old') {
+    if (await pinVerify(b7.pfPad, pin)) { pf.old = pin; pfShow('new'); }
+    return;
+  }
+  if (pf.step === 'new') { pf.first = pin; pfShow('confirm'); return; }
+  if (pf.step !== 'confirm') return;
+  if (pin !== pf.first) { pf.first = ''; pfShow('new'); b7.pfPad.error('PINs do not match. Try again'); return; }
+  const change = pf.mode === 'change';
+  let r;
+  try {
+    r = await api(change ? '/api/wallet/change-pin' : '/api/wallet/reset-pin', {
+      method: 'POST', headers: jsonHeaders(),
+      body: JSON.stringify(change ? { old_pin: pf.old, new_pin: pin } : { code: pf.code, new_pin: pin })
     });
-    const cancel = el('button', 'btn secondary', 'Cancel');
-    cancel.type = 'button';
-    cancel.style.marginTop = '10px';
-    cancel.addEventListener('click', closeSheet);
-    b.appendChild(go);
-    b.appendChild(cancel);
-  });
-  if (xs) xs.style.zIndex = '3600';
+  } catch (e) { pf.first = ''; pfShow('new'); b7.pfPad.error('Network error. Try again.'); return; }
+  const d = r.data || {};
+  if (r.res.ok) {
+    pfClose();
+    pinLock.until = 0;
+    state.hasPin = true;
+    showToast(change ? 'PIN changed' : 'PIN reset. Use your new PIN everywhere.');
+    if (!change) b7Unlock();
+    return;
+  }
+  if (r.res.status === 429 || d.code === 'RATE_LIMITED') {
+    pfShow(change ? 'old' : 'send');
+    pfLocked((Number(d.retry_after) || 60) * 1000);
+    return;
+  }
+  if (d.code === 'PIN_INVALID' && change) {
+    pfShow('old');
+    const n = d.attempts_left;
+    b7.pfPad.error('Incorrect PIN.' + (typeof n === 'number' ? ' ' + n + ' attempt' + (n === 1 ? '' : 's') + ' left' : ''));
+    return;
+  }
+  if (d.code === 'OTP_INVALID') {
+    pfShow('code');
+    const n = d.attempts_left;
+    b7.pfPad.error('Incorrect code.' + (typeof n === 'number' ? ' ' + n + ' attempt' + (n === 1 ? '' : 's') + ' left' : ''));
+    return;
+  }
+  pf.first = '';
+  pfShow('new');
+  b7.pfPad.error(d.error || 'Could not change PIN. Try again.');
+}
+async function pfAction(){
+  const btn = $('pf-action');
+  if (pf.step === 'send') {
+    btn.disabled = true;
+    try {
+      const r = await api('/api/wallet/reset-pin', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({}) });
+      if (r.res.ok) { pfShow('code'); return; }
+      const d = r.data || {};
+      if (r.res.status === 429 && !d.error) b7.pfPad.error('Too many requests. Try again later.');
+      else b7.pfPad.error(d.error || 'Could not send the code. Try again.');
+    } catch (e) { b7.pfPad.error('Network error. Try again.'); }
+    finally { btn.disabled = false; }
+    return;
+  }
+  if (pf.step === 'code') {
+    const v = $('pf-code').value.trim();
+    if (!/^\d{6}$/.test(v)) { b7.pfPad.error('Enter the 6-digit code'); return; }
+    pf.code = v;
+    pfShow('new');
+  }
 }
 
 /* ===================== 3. HOME: featured (daily), leaderboard preview ===================== */
@@ -5849,7 +6127,7 @@ function b7RenderChatList(){
     const nm = String(o.product_name || 'Order');
     rows.push({
       name: nm, av: { type: 'init', text: nm.charAt(0).toUpperCase(), id: (isSeller ? o.buyer_id : o.seller_id) }, ts: ts, unread: unread,
-      preview: o.last_message || ((isSeller ? 'You are selling' : 'You are buying') + ' · ' + String(o.status || '')),
+      preview: (String(o.last_message || '').indexOf('[img]') === 0 ? 'Photo' : o.last_message) || ((isSeller ? 'You are selling' : 'You are buying') + ' · ' + String(o.status || '')),
       open: function(){ b7Save('seen_' + o.id, String(o.last_message_at || '')); openOrderChat(o); }
     });
   });
@@ -5912,30 +6190,29 @@ handleDeepLink = async function(){
   const sp = getStartParam();
   const ms = /^store_([A-Za-z0-9_-]{1,40})$/.exec(sp || '');
   if (ms) { await openStore(ms[1]); return; }
+  const mTx = /^tx_([A-Za-z0-9_-]{1,60})$/.exec(sp || '');
+  if (mTx) { await openTxByOrder(mTx[1]); return; }
   const mr = /^(?:ref|inv)_(\d{1,15})$/.exec(sp || '');
   if (mr && String(mr[1]) !== String(state.telegram_id)) { try { localStorage.setItem('paylock_referrer', mr[1]); } catch (e) {} }
   return _handleDeepLink();
 };
 
-/* ===================== 13. PASSCODE AUTO-APPLY: withdraw 2FA + delete account ===================== */
-const _requestWithdrawal = requestWithdrawal;
-requestWithdrawal = function(){ pcGuard('Confirm withdrawal', function(){ _requestWithdrawal(); }, 'Enter your passcode to continue with this withdrawal.'); };
-const _startDeleteFlow = startDeleteFlow;
-startDeleteFlow = function(){
-  if ($('delete-input').value !== 'DELETE') return;
-  pcGuard('Delete account', function(){ _startDeleteFlow(); }, 'Enter your passcode to permanently delete your account.');
-};
+/* ===================== 13. WITHDRAW + DELETE: the server PIN is asked ONCE by their own flow ===================== */
+const _startDeleteFlow = startDeleteFlow;   // kept: Settings > Delete Account calls the original flow (PIN check + DELETE /api/account)
 
 /* ===================== WIRING: all Part 2 buttons ===================== */
 function b7WireUi(){
   // pads
-  b7.alPad = pinPad({ dots: 'al-dots', err: 'al-error', timer: 'al-timer', keypad: 'al-keypad', locked: pcRemaining,
-    onDone: async function(pin){ if (await pcAttempt(b7.alPad, pin)) b7Unlock(); } });
-  b7.pcvPad = pinPad({ dots: 'pcv-dots', err: 'pcv-error', timer: 'pcv-timer', keypad: 'pcv-keypad', locked: pcRemaining,
+  b7.alPad = pinPad({ dots: 'al-dots', err: 'al-error', timer: 'al-timer', keypad: 'al-keypad', locked: pinLockRemaining,
+    onDone: async function(pin){ if (await pinVerify(b7.alPad, pin)) b7Unlock(); } });
+  b7.pcvPad = pinPad({ dots: 'pcv-dots', err: 'pcv-error', timer: 'pcv-timer', keypad: 'pcv-keypad', locked: pinLockRemaining,
     onDone: async function(pin){
-      if (await pcAttempt(b7.pcvPad, pin)) { const cb = pcvCb; pcvClose(); b7.pcvPad.reset(); if (cb) cb(); }
+      if (await pinVerify(b7.pcvPad, pin)) { const cb = pcvCb; pcvClose(); b7.pcvPad.reset(); if (cb) cb(pin); }
     } });
   $('pcv-cancel').addEventListener('click', function(){ pcvClose(); b7.pcvPad.reset(); });
+  b7.pfPad = pinPad({ dots: 'pf-dots', err: 'pf-error', timer: 'pf-timer', keypad: 'pf-keypad', locked: pinLockRemaining, onDone: pfPadDone });
+  $('pf-action').addEventListener('click', pfAction);
+  $('pf-cancel').addEventListener('click', pfClose);
   $('al-forgot').addEventListener('click', b7Forgot);
   $('xs-overlay').addEventListener('click', function(){ if (!$('xs-overlay').classList.contains('open')) $('xs-overlay').style.zIndex = ''; });
 
@@ -6037,7 +6314,7 @@ async function b7SettingsSync(){
   if (!r.ok) return;
   const d = r.data.settings || r.data || {};
   const s = b7Cfg();
-  ['display_name', 'phone', 'backup_email', 'bot_message_mode', 'bot_custom_message', 'auto_reply_on', 'auto_reply_text', 'auto_close', 'notify_order', 'notify_message', 'notify_dispute'].forEach(function(k){
+  ['display_name', 'phone', 'backup_email', 'bot_message_mode', 'bot_custom_message', 'auto_reply_on', 'auto_reply_text', 'auto_close', 'notify_order', 'notify_message', 'notify_dispute', 'passcode_on'].forEach(function(k){
     if (d[k] !== undefined && d[k] !== null) s[k] = d[k];
   });
   b7Save('settings', s);
@@ -6050,7 +6327,6 @@ async function b7SettingsSync(){
     if (!lm) { try { localStorage.setItem(THEME_KEY, d.theme_mode); } catch (e) {} }   // this device's choice always wins; server value only seeds a fresh device
     loadTheme();
   }
-  if (d.passcode_hash && !pcGet().hash) pcSet({ on: d.passcode_on !== false, hash: String(d.passcode_hash), fails: 0, level: 0, until: 0 });
   b7SettingsShow();
 }
 
@@ -6062,7 +6338,7 @@ function b7SettingsShow(){
   set('ss-name', c.display_name || state.first_name || 'Not set');
   set('ss-lang', langName());
   set('ss-phone', c.phone || 'Add number');
-  set('ss-passcode', pcOn() ? 'On' : 'Off');
+  set('ss-passcode', appLockOn() ? 'On' : 'Off');
   set('ss-backup', c.backup_email || 'Add Email');
   set('ss-theme', { system: 'Auto', dark: 'Black', light: 'White' }[themeMode()]);
   set('ss-botmsg', c.bot_message_mode === 'custom' ? 'Custom' : 'Default');
@@ -6146,9 +6422,12 @@ function sdOpen(key){
   goPage('pg-sd');                        // goPage hook below renders the page
 }
 function sdDispatch(key){
-  if (key === 'change-passcode') {
-    if (!pcOn()) { showToast('Set a passcode first'); b7PasscodeStart('set'); }
-    else b7PasscodeStart('change');
+  if (key === 'change-pin') {
+    pinHasServerPin().then(function(has){
+      if (has === true) pfOpen('change');
+      else if (has === false) { showToast('Set your PIN first'); openPinModal('set-new', {}); }
+      else showToast('Could not check your PIN. Try again.');
+    });
     return;
   }
   sdOpen(key);
@@ -6240,23 +6519,17 @@ SD.language = { title: 'Language', sub: '', build: function(b){
 } };
 
 /* ---- B. SECURITY ---- */
-SD.passcode = { title: 'App Passcode', sub: 'Password only. One passcode locks the app, protects withdrawals and account actions.', build: function(b){
+SD.passcode = { title: 'App PIN Lock', sub: 'One PIN for everything: it unlocks the app, authorizes withdrawals and protects account actions.', build: function(b){
   const c = el('div', 'card');
   c.className = 'card pc-card';
-  c.appendChild(sdToggleRow('App Passcode', 'Ask for your passcode every time PayLock opens', pcOn(), function(v){
+  c.appendChild(sdToggleRow('App PIN Lock', 'Ask for your PIN every time PayLock opens', appLockOn(), function(v){
     sdRerender();                                   // keep the switch truthful until the action really succeeds
-    if (v) { b7PasscodeStart('set'); return; }
-    pcGuard('Turn off passcode', function(){
-      pcClear();
-      b7Soft('/api/passcode/off', {});
-      showToast('Passcode off');
-      b7SettingsShow(); sdRerender();
-    }, 'Enter your passcode to turn it off.');
+    if (v) { b7EnableAppLock(); return; }
+    pcGuard('Turn off PIN lock', function(){ b7AppLockSet(false); }, 'Enter your PIN to turn it off.');
   }));
   b.appendChild(c);
-  b.appendChild(sdBtn(pcOn() ? 'Change Passcode' : 'Set Passcode', function(){ b7PasscodeStart(pcOn() ? 'change' : 'set'); }, 'secondary'));
   b.appendChild(sdGap(10));
-  b.appendChild(el('p', 'small muted', 'Forgot your passcode? Use Log out all devices, sign in again through Telegram, then set a new one. There is no email reset.'));
+  b.appendChild(sdBtn('Forgot PIN?', function(){ pfOpen('reset'); }, 'secondary'));
 } };
 SD.backup = { title: 'Backup Account', sub: 'Email', build: function(b){
   const cur = b7Cfg().backup_email || '';
@@ -6288,26 +6561,25 @@ SD.backup = { title: 'Backup Account', sub: 'Email', build: function(b){
 } };
 SD.sessions = { title: 'Active Sessions', sub: 'Sign out of PayLock on every device.', build: function(b){
   const c = el('div', 'card');
-  c.appendChild(el('p', 'small muted', 'Use this if you lost a device or forgot your passcode. You will sign in again through Telegram.'));
+  c.appendChild(el('p', 'small muted', 'Use this if you lost a device. You will sign in again through Telegram.'));
   b.appendChild(c);
   const s = sdBtn('Log out all devices', function(){
-    pcGuard('Log out all devices', async function(){
+    pcGuard('Log out all devices', async function(pin){
       const done = setBusy(s, 'Logging out...');
-      const r = await postApi('/api/sessions/logout-all', {});     // MISSING route
+      const r = await postApi('/api/sessions/logout-all', pin ? { pin: pin } : {});     // server re-checks the PIN
       done();
       if (r.ok) showToast('Logged out of all devices');
-    }, 'Enter your passcode to log out all devices.');
+    }, 'Enter your PIN to log out all devices.');
   });
   b.appendChild(s);
 } };
-SD.twofa = { title: '2FA for Withdrawals', sub: 'Your passcode is asked again before every withdrawal.', build: function(b){
+SD.twofa = { title: '2FA for Withdrawals', sub: 'Your PIN is required before every withdrawal.', build: function(b){
   const c = el('div', 'card');
   const tw = el('div', 'twofa-txt');
-  tw.appendChild(el('div', null, 'Status: ' + (pcOn() ? 'ON' : 'OFF')));
-  tw.appendChild(el('div', 'small muted', pcOn() ? 'Passcode required before every withdrawal.' : 'Turn on App Passcode to require it before every withdrawal.'));
+  tw.appendChild(el('div', null, 'Status: ON'));
+  tw.appendChild(el('div', 'small muted', 'Withdrawals always need your PIN. If you have not set one yet, you will be asked to create it.'));
   c.appendChild(tw);
   b.appendChild(c);
-  if (!pcOn()) b.appendChild(sdBtn('Turn on App Passcode', function(){ b7PasscodeStart('set'); }));
 } };
 SD.appearance = { title: 'Appearance', sub: 'Auto follows your Telegram theme and updates instantly, no restart needed.', build: function(b){
   b.appendChild(sdSeg([['system', 'Auto'], ['dark', 'Black'], ['light', 'White']], themeMode(), function(v){
@@ -6425,12 +6697,12 @@ SD.deactivate = { title: 'Deactivate Account', sub: 'Temporary. Your listings ar
   c.appendChild(el('p', 'small muted', 'Your wallet and orders are kept. Sign in again any time to reactivate.'));
   b.appendChild(c);
   const s = sdBtn('Deactivate Account', function(){
-    pcGuard('Deactivate account', async function(){
+    pcGuard('Deactivate account', async function(pin){
       const done = setBusy(s, 'Working...');
-      const r = await postApi('/api/account/deactivate', {});      // MISSING route
+      const r = await postApi('/api/account/deactivate', pin ? { pin: pin } : {});      // server re-checks the PIN
       done();
       if (r.ok) { showToast('Account deactivated'); setTimeout(closeApp, 1200); }
-    }, 'Enter your passcode to deactivate your account.');
+    }, 'Enter your PIN to deactivate your account.');
   });
   b.appendChild(s);
 } };
@@ -6440,10 +6712,8 @@ SD.delete = { title: 'Delete Account Permanently', sub: 'This cannot be undone. 
   b.appendChild(sdField('Type DELETE to confirm', i));
   const s = sdBtn('Delete Account', function(){
     if (i.value !== 'DELETE') { showToast('Type DELETE to confirm'); return; }
-    pcGuard('Delete account', function(){
-      $('delete-input').value = 'DELETE';
-      _startDeleteFlow();            // original flow: PIN check + DELETE /api/account
-    }, 'Enter your passcode to permanently delete your account.');
+    $('delete-input').value = 'DELETE';
+    _startDeleteFlow();              // original flow: server PIN check (once) + DELETE /api/account
   });
   s.disabled = true;
   i.addEventListener('input', function(){ s.disabled = i.value !== 'DELETE'; });
@@ -6466,43 +6736,6 @@ function b7ClearChats(){
 SD['clear-chat'] = { title: 'Clear Chat History', sub: 'Removes chats saved on this device. Orders and payments are not affected.', build: function(b){
   b.appendChild(sdBtn('Clear Chat History', b7ClearChats));
 } };
-
-/* ===================== 13. PASSCODE PAGE: set / change (old PIN is mandatory) ===================== */
-const pcf = { mode: 'set', step: 'new', first: '' };
-function pcfHeader(){
-  const T = {
-    old: ['Enter Old Passcode', 'Confirm your current passcode to continue'],
-    'new': [pcf.mode === 'set' ? 'Create Passcode' : 'New Passcode', 'Enter a new 4-digit passcode'],
-    confirm: ['Confirm Passcode', 'Enter the same passcode again']
-  }[pcf.step];
-  $('pc-title').textContent = T[0];
-  $('pc-sub').textContent = T[1];
-}
-function b7PasscodeStart(mode){
-  pcf.mode = mode; pcf.step = (mode === 'change') ? 'old' : 'new'; pcf.first = '';
-  pcfHeader();
-  goPage('pg-passcode');
-  b7.pcPad.reset(); b7.pcPad.error('');
-  if (pcf.step === 'old' && pcRemaining() > 0) b7.pcPad.showLock(pcRemaining());
-}
-async function pcfDone(pin){
-  const pad = b7.pcPad;
-  if (pcf.step === 'old') {                    // wrong old PIN uses the same 1x / 2x / block logic as login
-    if (await pcAttempt(pad, pin)) { pcf.step = 'new'; pad.reset(); pad.error(''); pcfHeader(); }
-    return;
-  }
-  if (pcf.step === 'new') { pcf.first = pin; pcf.step = 'confirm'; pad.reset(); pcfHeader(); return; }
-  if (pin !== pcf.first) {
-    pcf.step = 'new'; pcf.first = ''; pad.reset(); pcfHeader();
-    pad.error('Pins do not match, try again');
-    return;
-  }
-  await pcSetPin(pin);                         // new hash replaces the old one: old PIN stops working everywhere at once
-  pad.reset();
-  showToast(pcf.mode === 'set' ? 'Passcode Set' : 'Passcode Changed');
-  b7SettingsShow();
-  navBack('pg-settings');
-}
 
 /* ===================== VISIBILITY: Boosting Terms (scroll to accept, then Boost unlocks) ===================== */
 function b7BoostAccepted(){
@@ -6632,8 +6865,6 @@ function openWhDetail(l){
 
 /* ===================== PART 3 WIRING ===================== */
 function b7Init3(){
-  b7.pcPad = pinPad({ dots: 'pc-dots', err: 'pc-error', timer: 'pc-timer', keypad: 'pc-keypad',
-    locked: function(){ return pcf.step === 'old' ? pcRemaining() : 0; }, onDone: pcfDone });
   // every Settings row with data-sd opens its full page
   document.addEventListener('click', function(ev){
     const r = ev.target && ev.target.closest ? ev.target.closest('[data-sd]') : null;
