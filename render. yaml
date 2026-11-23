@@ -1,32 +1,36 @@
 services:
-    - type: web
+  - type: web
     name: paylock
     runtime: python
     plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn main:app
-    healthCheckPath: /
+    healthCheckPath: /api/health
     autoDeploy: true
     envVars:
-            - key: PYTHON_VERSION
+      - key: PYTHON_VERSION
         value: 3.11.9
-            - key: GUNICORN_CMD_ARGS
+      - key: GUNICORN_CMD_ARGS
         value: --timeout 120
-            - key: BOT_TOKEN
+      - key: WEBAPP_URL
+        value: https://telegram-bot-fixed-uqmt.onrender.com
+      - key: APP_SHORT_NAME
+        value: paylockapp
+      - key: BOT_TOKEN
         sync: false
-            - key: BOT_USERNAME
+      - key: BOT_USERNAME
         sync: false
-            - key: ADMIN_ID
+      - key: ADMIN_ID
         sync: false
-            - key: ADMIN_IDS
+      - key: ADMIN_IDS
         sync: false
-            - key: WEBAPP_URL
+      - key: TELEGRAM_WEBHOOK_SECRET
         sync: false
-            - key: SUPABASE_URL
+      - key: SUPABASE_URL
         sync: false
-            - key: SUPABASE_SERVICE_KEY
+      - key: SUPABASE_SERVICE_KEY
         sync: false
-            - key: PAYSTACK_SECRET_KEY
+      - key: PAYSTACK_SECRET_KEY
         sync: false
-            - key: PAYSTACK_PUBLIC_KEY
+      - key: PAYSTACK_PUBLIC_KEY
         sync: false
