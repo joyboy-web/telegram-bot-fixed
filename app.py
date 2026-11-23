@@ -56,6 +56,11 @@ import secrets
 import threading
 import hmac
 import hashlib
+import base64
+import shutil
+import subprocess
+import tempfile
+import zipfile
 import logging
 from functools import wraps
 from datetime import datetime, timedelta, timezone
@@ -252,6 +257,96 @@ def _lock_seconds_remaining(locked_until):
     except ValueError:
         pass
     return 0
+
+
+def _pin_failure_response(tid, u, error="Incorrect PIN", code="PIN_INVALID"):
+    """
+    Counts one wrong attempt (PIN or reset code) on users.pin_fail_count and locks at
+    PIN_FAIL_LIMIT for PIN_LOCK_MINUTES. Returns the ready (response, status) tuple.
+    """
+    fails = int(u.get("pin_fail_count") or 0) + 1
+    if fails >= PIN_FAIL_LIMIT:
+        locked_until = (datetime.now(timezone.utc) + timedelta(minutes=PIN_LOCK_MINUTES)).isoformat()
+        supabase.table("users").update({
+            "pin_fail_count": 0,
+            "pin_locked_until": locked_until,
+        }).eq("telegram_id", tid).execute()
+        return jsonify({
+            "error": "Too many wrong PIN attempts. Try again later.",
+            "code": "RATE_LIMITED",
+            "retry_after": PIN_LOCK_MINUTES * 60,
+        }), 429
+    supabase.table("users").update({"pin_fail_count": fails}).eq("telegram_id", tid).execute()
+    return jsonify({
+        "error": error,
+        "code": code,
+        "attempts_left": PIN_FAIL_LIMIT - fails,
+    }), 401
+
+
+def _check_pin_and_track(tid, u, pin):
+    """
+    THE one PIN check (bcrypt vs users.pin_hash) with failure counting + lockout.
+    Used by /api/wallet/verify-pin (app entry), withdraw, delete, change-pin,
+    deactivate and log-out-all.
+    `u` is the users row (needs pin_hash, pin_fail_count, pin_locked_until).
+    Returns None when the PIN is correct, otherwise a ready (response, status) tuple.
+    """
+    pin_hash = u.get("pin_hash")
+    try:
+        pin_ok = bcrypt.checkpw(pin.encode(), str(pin_hash).encode())
+    except ValueError:
+        pin_ok = False
+
+    if not pin_ok:
+        return _pin_failure_response(tid, u)
+
+    if int(u.get("pin_fail_count") or 0) != 0 or u.get("pin_locked_until"):
+        supabase.table("users").update({
+            "pin_fail_count": 0,
+            "pin_locked_until": None,
+        }).eq("telegram_id", tid).execute()
+    return None
+
+
+def _require_pin_if_set(tid, data):
+    """
+    Server-side PIN gate for sensitive account actions (deactivate, log out all devices).
+    Returns None when allowed (correct PIN, or the user has no PIN at all), otherwise a
+    ready (response, status) tuple. Same bcrypt check + lockout as every other PIN use.
+    """
+    res = (
+        supabase.table("users")
+        .select("pin_hash,pin_fail_count,pin_locked_until")
+        .eq("telegram_id", tid)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    if not rows:
+        return jsonify({"error": "User not found"}), 404
+    u = rows[0]
+    if not u.get("pin_hash"):
+        return None
+    pin = str(data.get("pin") or "")
+    if not re.fullmatch(r"\d{4}", pin):
+        return jsonify({"error": "A 4-digit PIN is required", "code": "PIN_REQUIRED"}), 400
+    remaining = _lock_seconds_remaining(u.get("pin_locked_until"))
+    if remaining > 0:
+        return jsonify({
+            "error": "Too many wrong PIN attempts. Try again later.",
+            "code": "RATE_LIMITED",
+            "retry_after": remaining,
+        }), 429
+    return _check_pin_and_track(tid, u, pin)
+
+
+def _notify_pin_changed(tid, how):
+    """Best-effort Telegram message so an unexpected PIN change is noticed. Never raises, never contains the PIN."""
+    try:
+        _async(_tg_send, tid, f"Your PayLock PIN was {how}. If this was not you, contact support right away.")
+    except Exception:
+        logging.warning("_notify_pin_changed: could not queue message", exc_info=True)
 
 
 def extract_init_data():
@@ -1243,6 +1338,10 @@ def _release_escrow(order_id, from_statuses=("held",)):
     except Exception:
         logging.exception("_release_escrow: referral commission step failed for order %s", order_id)
     order["status"] = "released"
+    try:
+        _async(_deliver_after_release, dict(order))   # bot sends the CLEAN file + receipt link; never blocks a release
+    except Exception:
+        logging.warning("_release_escrow: delivery step skipped for order %s", order_id, exc_info=True)
     return order
 
 
@@ -1743,7 +1842,12 @@ def products_list():
                 backfilled += 1
         products = [_normalize_product(r) for r in rows]
         # boosted first, then most sales; created_at desc is kept for ties (stable sort)
-        products.sort(key=lambda p: (0 if p["is_boosted"] else 1, -p["sales_count"]))
+        def _boost_key(p):
+            if not p["is_boosted"]:
+                return (1, 0, -p["sales_count"])
+            until = _parse_ts(p.get("boosted_until"))
+            return (0, -(until.timestamp() if until else 0), -p["sales_count"])   # newest boost first
+        products.sort(key=_boost_key)
         _attach_event_counts(products)  # adds views / clicks to each product
         return jsonify({"products": products}), 200
     except Exception:
@@ -2192,6 +2296,191 @@ def wallet_set_pin(user):
     return jsonify({"status": "success", "success": True, "has_pin": True}), 200
 
 
+@app.route("/api/wallet/verify-pin", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def wallet_verify_pin(user):
+    """App entry / app lock check. Same PIN, same bcrypt check, same lockout as withdrawals."""
+    tid = user["telegram_id"]
+    data = request.get_json(silent=True) or {}
+    pin = str(data.get("pin") or "")
+    if not re.fullmatch(r"\d{4}", pin):
+        return jsonify({"error": "A 4-digit PIN is required", "code": "PIN_INVALID"}), 400
+
+    res = (
+        supabase.table("users")
+        .select("pin_hash,pin_fail_count,pin_locked_until")
+        .eq("telegram_id", tid)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    if not rows:
+        return jsonify({"error": "User not found"}), 404
+    u = rows[0]
+
+    if not u.get("pin_hash"):
+        return jsonify({"error": "No PIN set", "code": "PIN_NOT_SET"}), 403
+
+    remaining = _lock_seconds_remaining(u.get("pin_locked_until"))
+    if remaining > 0:
+        return jsonify({
+            "error": "Too many wrong PIN attempts. Try again later.",
+            "code": "RATE_LIMITED",
+            "retry_after": remaining,
+        }), 429
+
+    pin_fail = _check_pin_and_track(tid, u, pin)
+    if pin_fail is not None:
+        return pin_fail
+    return jsonify({"status": "success", "success": True, "verified": True}), 200
+
+
+@app.route("/api/wallet/change-pin", methods=["POST"])
+@require_auth
+@limiter.limit("5 per minute")
+def wallet_change_pin(user):
+    """Change the ONE PIN. Needs the current PIN (same check + lockout as everywhere else)."""
+    tid = user["telegram_id"]
+    data = request.get_json(silent=True) or {}
+    old_pin = str(data.get("old_pin") or "")
+    new_pin = str(data.get("new_pin") or "")
+
+    if not re.fullmatch(r"\d{4}", old_pin):
+        return jsonify({"error": "A 4-digit PIN is required", "code": "PIN_INVALID"}), 400
+    if not re.fullmatch(r"\d{4}", new_pin):
+        return jsonify({"error": "New PIN must be exactly 4 digits", "code": "PIN_FORMAT"}), 400
+    if new_pin == old_pin:
+        return jsonify({"error": "New PIN must be different from your current PIN", "code": "PIN_SAME"}), 400
+
+    res = (
+        supabase.table("users")
+        .select("pin_hash,pin_fail_count,pin_locked_until")
+        .eq("telegram_id", tid)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    if not rows:
+        return jsonify({"error": "User not found"}), 404
+    u = rows[0]
+
+    if not u.get("pin_hash"):
+        return jsonify({"error": "No PIN set", "code": "PIN_NOT_SET"}), 403
+
+    remaining = _lock_seconds_remaining(u.get("pin_locked_until"))
+    if remaining > 0:
+        return jsonify({
+            "error": "Too many wrong PIN attempts. Try again later.",
+            "code": "RATE_LIMITED",
+            "retry_after": remaining,
+        }), 429
+
+    pin_fail = _check_pin_and_track(tid, u, old_pin)
+    if pin_fail is not None:
+        return pin_fail
+
+    new_hash = bcrypt.hashpw(new_pin.encode(), bcrypt.gensalt()).decode()
+    supabase.table("users").update({
+        "pin_hash": new_hash,
+        "pin_fail_count": 0,
+        "pin_locked_until": None,
+    }).eq("telegram_id", tid).execute()
+
+    _notify_pin_changed(tid, "changed")
+    return jsonify({"status": "success", "success": True}), 200
+
+
+# Forgot-PIN reset code: a 6-digit code derived with HMAC from a server secret, the user id,
+# the CURRENT pin_hash and a 10-minute window. Nothing is stored, it is delivered only through
+# the PayLock bot chat, it expires, and it stops working the moment the PIN changes (single use).
+RESET_OTP_WINDOW_SECONDS = 600
+
+
+def _reset_otp_code(tid, pin_hash, window):
+    key = hashlib.sha256(("paylock-pin-reset|" + str(BOT_TOKEN)).encode()).digest()
+    digest = hmac.new(key, f"{tid}|{pin_hash}|{window}".encode(), hashlib.sha256).digest()
+    return f"{int.from_bytes(digest[:8], 'big') % 1000000:06d}"
+
+
+@app.route("/api/wallet/reset-pin", methods=["POST"])
+@require_auth
+@limiter.limit("10 per hour")
+def wallet_reset_pin(user):
+    """
+    Forgot PIN. ONE route, two steps:
+      1) body {}                      -> sends a 6-digit code to the user's PayLock bot chat
+      2) body {code, new_pin}         -> verifies the code, then sets the new PIN
+    Wrong codes count on the same 5-try / 15-minute lockout as wrong PINs.
+    """
+    tid = user["telegram_id"]
+    data = request.get_json(silent=True) or {}
+    code = str(data.get("code") or "").strip()
+
+    res = (
+        supabase.table("users")
+        .select("pin_hash,pin_fail_count,pin_locked_until")
+        .eq("telegram_id", tid)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    if not rows:
+        return jsonify({"error": "User not found"}), 404
+    u = rows[0]
+    pin_hash = u.get("pin_hash")
+
+    if not pin_hash:
+        return jsonify({"error": "No PIN set", "code": "PIN_NOT_SET"}), 403
+
+    remaining = _lock_seconds_remaining(u.get("pin_locked_until"))
+    if remaining > 0:
+        return jsonify({
+            "error": "Too many wrong attempts. Try again later.",
+            "code": "RATE_LIMITED",
+            "retry_after": remaining,
+        }), 429
+
+    window = int(time.time() // RESET_OTP_WINDOW_SECONDS)
+
+    if not code:
+        otp = _reset_otp_code(tid, pin_hash, window)
+        sent = _tg_send(
+            tid,
+            f"Your PayLock PIN reset code is {otp}. It expires in 10 to 20 minutes. "
+            "Never share it with anyone. If you did not ask for this, ignore this message: your PIN has not changed.",
+        )
+        if not sent:
+            return jsonify({
+                "error": "Could not send the code. Open the PayLock bot in Telegram, tap Start, then try again.",
+                "code": "OTP_SEND_FAILED",
+            }), 502
+        return jsonify({"status": "success", "success": True, "sent": True}), 200
+
+    new_pin = str(data.get("new_pin") or "")
+    if not re.fullmatch(r"\d{6}", code):
+        return jsonify({"error": "Enter the 6-digit code", "code": "OTP_INVALID"}), 400
+    if not re.fullmatch(r"\d{4}", new_pin):
+        return jsonify({"error": "New PIN must be exactly 4 digits", "code": "PIN_FORMAT"}), 400
+
+    code_ok = False
+    for w in (window, window - 1):
+        if hmac.compare_digest(code, _reset_otp_code(tid, pin_hash, w)):
+            code_ok = True
+    if not code_ok:
+        return _pin_failure_response(tid, u, error="Incorrect code", code="OTP_INVALID")
+
+    new_hash = bcrypt.hashpw(new_pin.encode(), bcrypt.gensalt()).decode()
+    supabase.table("users").update({
+        "pin_hash": new_hash,
+        "pin_fail_count": 0,
+        "pin_locked_until": None,
+    }).eq("telegram_id", tid).execute()
+
+    _notify_pin_changed(tid, "reset")
+    return jsonify({"status": "success", "success": True}), 200
+
+
 # =============================================================================
 # Banks
 # =============================================================================
@@ -2567,36 +2856,9 @@ def wallet_withdraw(user):
             "retry_after": remaining,
         }), 429
 
-    try:
-        pin_ok = bcrypt.checkpw(pin.encode(), str(pin_hash).encode())
-    except ValueError:
-        pin_ok = False
-
-    if not pin_ok:
-        fails = int(u.get("pin_fail_count") or 0) + 1
-        if fails >= PIN_FAIL_LIMIT:
-            locked_until = (datetime.now(timezone.utc) + timedelta(minutes=PIN_LOCK_MINUTES)).isoformat()
-            supabase.table("users").update({
-                "pin_fail_count": 0,
-                "pin_locked_until": locked_until,
-            }).eq("telegram_id", tid).execute()
-            return jsonify({
-                "error": "Too many wrong PIN attempts. Try again later.",
-                "code": "RATE_LIMITED",
-                "retry_after": PIN_LOCK_MINUTES * 60,
-            }), 429
-        supabase.table("users").update({"pin_fail_count": fails}).eq("telegram_id", tid).execute()
-        return jsonify({
-            "error": "Incorrect PIN",
-            "code": "PIN_INVALID",
-            "attempts_left": PIN_FAIL_LIMIT - fails,
-        }), 401
-
-    if int(u.get("pin_fail_count") or 0) != 0 or u.get("pin_locked_until"):
-        supabase.table("users").update({
-            "pin_fail_count": 0,
-            "pin_locked_until": None,
-        }).eq("telegram_id", tid).execute()
+    pin_fail = _check_pin_and_track(tid, u, pin)
+    if pin_fail is not None:
+        return pin_fail
 
     balance = int(u.get("balance_kobo") or 0)
     if amount_kobo > balance:
@@ -3079,35 +3341,9 @@ def account_delete(user):
         if not re.fullmatch(r"\d{4}", pin):
             return jsonify({"error": "A 4-digit PIN is required", "code": "PIN_REQUIRED"}), 400
 
-        try:
-            pin_ok = bcrypt.checkpw(pin.encode(), str(pin_hash).encode())
-        except ValueError:
-            pin_ok = False
-
-        if not pin_ok:
-            fails = int(u.get("pin_fail_count") or 0) + 1
-            if fails >= PIN_FAIL_LIMIT:
-                locked_until = (datetime.now(timezone.utc) + timedelta(minutes=PIN_LOCK_MINUTES)).isoformat()
-                supabase.table("users").update({
-                    "pin_fail_count": 0,
-                    "pin_locked_until": locked_until,
-                }).eq("telegram_id", tid).execute()
-                return jsonify({
-                    "error": "Too many wrong PIN attempts. Try again later.",
-                    "code": "RATE_LIMITED",
-                    "retry_after": PIN_LOCK_MINUTES * 60,
-                }), 429
-            supabase.table("users").update({"pin_fail_count": fails}).eq("telegram_id", tid).execute()
-            return jsonify({
-                "error": "Incorrect PIN",
-                "code": "PIN_INVALID",
-                "attempts_left": PIN_FAIL_LIMIT - fails,
-            }), 401
-
-        supabase.table("users").update({
-            "pin_fail_count": 0,
-            "pin_locked_until": None,
-        }).eq("telegram_id", tid).execute()
+        pin_fail = _check_pin_and_track(tid, u, pin)
+        if pin_fail is not None:
+            return pin_fail
     else:
         if data.get("confirm") is not True:
             return jsonify({"error": "Confirmation required", "code": "CONFIRM_REQUIRED"}), 400
@@ -3772,17 +4008,23 @@ def _storage_path_from_url(url):
 def download_product_file(user, order_id):
     """
     The ONLY way to get a paid product file. products.file_url is never sent to the app.
-    Allowed for the buyer of the order while the order is 'held' (paid, in escrow, delivered)
-    or 'released'. Refunded / disputed / any other order gets nothing.
+    Allowed for the buyer of the order ONLY once delivery is confirmed (status 'released').
+    Held (in escrow), disputed (under review), refunded and any other state get a 403.
     """
     tid = int(user["telegram_id"])
     order = _escrow_get(str(order_id or "").strip())
     if not order:
         return jsonify({"error": "Order not found"}), 404
     if int(order.get("buyer_id") or 0) != tid:
+        logging.warning("download blocked: not the buyer (order=%s user=%s)", order_id, tid)
         return jsonify({"error": "Forbidden"}), 403
-    if order.get("status") not in ("held", "released"):
-        return jsonify({"error": "This file is no longer available for this order", "code": "DOWNLOAD_LOCKED"}), 403
+    if order.get("status") != "released":
+        # Not confirmed yet (held / disputed) or refunded: no file. The buyer uses the watermarked Preview instead.
+        logging.warning("download blocked: order=%s user=%s status=%s", order_id, tid, order.get("status"))
+        return jsonify({
+            "error": "Your file unlocks after you confirm delivery. Use Preview to check it first.",
+            "code": "DOWNLOAD_LOCKED",
+        }), 403
 
     try:
         prow = supabase.table("products").select("file_url").eq("id", order.get("product_id")).limit(1).execute().data or []
@@ -3862,24 +4104,404 @@ def receipt_pdf(user, order_id):
     reference = str(order.get("reference") or order.get("id"))
 
     rows = [
+        ("Order ID", str(order.get("id"))),
         ("Reference", reference),
         ("Product", product_name),
         ("Product price", naira(price)),
         ("Buyer fee share", naira(buyer_pays - price)),
         ("Seller fee share", naira(price - seller_gets)),
-        ("Platform fee (in fees)", naira(order.get("platform_fee_kobo") or PLATFORM_FEE_KOBO)),
+        ("Escrow fee", naira(order.get("platform_fee_kobo") or PLATFORM_FEE_KOBO)),
         ("Buyer paid", naira(buyer_pays)),
         ("Seller received", naira(seller_gets)),
         ("Buyer", _user_label(buyer_id)),
         ("Seller", _user_label(seller_id)),
         ("Date", when.strftime("%Y-%m-%d %H:%M UTC") if when else "-"),
-        ("Status", str(order.get("status") or "-").capitalize()),
+        ("Status", "Confirmed" if order.get("status") == "released" else str(order.get("status") or "-").capitalize()),
     ]
     pdf = _build_simple_pdf("PayLock Receipt", rows)
     return Response(pdf, mimetype="application/pdf", headers={
         "Content-Disposition": f'attachment; filename="paylock-receipt-{secure_name(reference)}.pdf"',
         "Cache-Control": "no-store",
     })
+
+
+# =============================================================================
+# Protected preview (before Confirm Delivery) + clean delivery (after it)
+# =============================================================================
+# The buyer can look at a LOW-RES, PARTIAL, WATERMARKED preview of the paid file at most PREVIEW_MAX times
+# while the order is in escrow. The real file is only handed out by /api/download/<order_id> once the order
+# is 'released' (delivery confirmed). Nothing here ever changes or stores the original file.
+#
+# Needs these escrow_orders columns (see the SQL in the handover notes):
+#     preview_count int not null default 0,  preview_ref text
+# Without them the preview FAILS CLOSED (503) and the download stays locked.
+#
+# Optional libraries (imported lazily, the app boots without them): Pillow (all previews), PyMuPDF (PDF pages),
+# ffmpeg on PATH (video clip). A file type that cannot be rendered returns "no visual preview" and costs nothing.
+
+PREVIEW_MAX = 3
+PREVIEW_MAX_SIDE = 720                      # px, longest side: low resolution on purpose
+PREVIEW_MAX_SOURCE_BYTES = 150 * 1024 * 1024
+PREVIEW_MAX_PAYLOAD_BYTES = 6 * 1024 * 1024
+PREVIEW_VIDEO_SECONDS = 12
+PREVIEW_WM_OPACITY = 0.18                   # 15-20% light grey, diagonal, repeated
+
+
+def _wm_text(order):
+    """@buyer_username | Order #id | PayLock  (unique per buyer and order, so a leak is traceable)."""
+    buyer_id = order.get("buyer_id")
+    who = None
+    try:
+        rows = supabase.table("users").select("username").eq("telegram_id", int(buyer_id)).limit(1).execute().data or []
+        if rows and rows[0].get("username"):
+            who = "@" + re.sub(r"[^A-Za-z0-9_]", "", str(rows[0]["username"]))
+    except Exception:
+        logging.warning("_wm_text: username lookup failed", exc_info=True)
+    who = who or f"user{buyer_id}"
+    return f"{who} | Order #{str(order.get('id'))[:12]} | PayLock"
+
+
+def _wm_font(size):
+    from PIL import ImageFont
+    for name in ("DejaVuSans.ttf", "LiberationSans-Regular.ttf", "Arial.ttf"):
+        try:
+            return ImageFont.truetype(name, size)
+        except Exception:
+            continue
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def _wm_alpha(size, text):
+    """'L' mask the size of the preview: the watermark text tiled diagonally at PREVIEW_WM_OPACITY."""
+    from PIL import Image, ImageDraw
+    w, h = size
+    fs = max(13, int(min(w, h) / 24))
+    font = _wm_font(fs)
+    l, t, r, b = ImageDraw.Draw(Image.new("L", (1, 1))).textbbox((0, 0), text, font=font)
+    pad = int(fs * 0.8)
+    tile = Image.new("L", ((r - l) + pad * 2, (b - t) + pad * 2), 0)
+    ImageDraw.Draw(tile).text((pad - l, pad - t), text, font=font, fill=255)
+    tile = tile.rotate(28, expand=True, resample=Image.BICUBIC)
+    faint = tile.point(lambda a: int(a * PREVIEW_WM_OPACITY))
+    hard = tile.point(lambda a: 255 if a else 0)
+    mask = Image.new("L", (w, h), 0)
+    sx, sy = max(1, int(tile.width * 0.92)), max(1, int(tile.height * 0.92))
+    row = 0
+    for y in range(-tile.height, h + tile.height, sy):
+        off = (sx // 2) if row % 2 else 0
+        for x in range(-tile.width + off, w + tile.width, sx):
+            mask.paste(faint, (x, y), hard)
+        row += 1
+    return mask
+
+
+def _wm_apply(img, text):
+    """Low-res + watermarked RGB copy. The stored original is never touched."""
+    from PIL import Image
+    img = img.convert("RGB")
+    img.thumbnail((PREVIEW_MAX_SIDE, PREVIEW_MAX_SIDE))
+    grey = Image.new("RGB", img.size, (128, 128, 128))
+    return Image.composite(grey, img, _wm_alpha(img.size, text))
+
+
+def _jpeg_data_uri(img):
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=55, optimize=True)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _text_page(title, lines):
+    """Renders text as a page IMAGE (so it cannot be selected or copied)."""
+    import textwrap
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (794, 1000), (255, 255, 255))
+    d = ImageDraw.Draw(img)
+    d.text((40, 34), title[:90], font=_wm_font(22), fill=(20, 20, 20))
+    y, font = 80, _wm_font(17)
+    for raw in lines:
+        for ln in (textwrap.wrap(raw, 78) or [""]):
+            if y > 950:
+                return img
+            d.text((40, y), ln, font=font, fill=(45, 45, 45))
+            y += 25
+        y += 6
+    return img
+
+
+def _preview_pdf(blob, wm):
+    try:
+        import fitz  # PyMuPDF
+    except Exception:
+        return None, "PDF previews need PyMuPDF on the server"
+    from PIL import Image
+    doc = fitz.open(stream=blob, filetype="pdf")
+    if getattr(doc, "needs_pass", False) or doc.page_count < 1:
+        return None, "This PDF cannot be previewed"
+    take = max(1, min(3, int(math.ceil(doc.page_count * 0.25))))      # partial: first quarter, at most 3 pages
+    pages = []
+    for i in range(take):
+        pix = doc.load_page(i).get_pixmap(matrix=fitz.Matrix(0.9, 0.9))
+        pages.append(_jpeg_data_uri(_wm_apply(Image.frombytes("RGB", (pix.width, pix.height), pix.samples), wm)))
+    return {"kind": "images", "pages": pages, "note": f"Showing {take} of {doc.page_count} pages"}, None
+
+
+def _preview_docx(blob, wm):
+    import html as _html
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        info = z.getinfo("word/document.xml")
+        if info.file_size > 8 * 1024 * 1024:
+            return None, "This document is too large to preview"
+        xml = z.read("word/document.xml").decode("utf-8", "ignore")
+    paras = []
+    for ptxt in re.findall(r"<w:p[ >].*?</w:p>", xml, flags=re.S):
+        t = _html.unescape("".join(re.findall(r"<w:t[^>]*>(.*?)</w:t>", ptxt, flags=re.S))).strip()
+        if t:
+            paras.append(t)
+        if len(paras) >= 40:
+            break
+    if not paras:
+        return None, "No readable text to preview"
+    return {"kind": "images", "pages": [_jpeg_data_uri(_wm_apply(_text_page("Document preview (first part)", paras), wm))],
+            "note": "Showing the first part only"}, None
+
+
+def _preview_zip(blob, wm):
+    from PIL import Image
+    z = zipfile.ZipFile(io.BytesIO(blob))
+    infos = [i for i in z.infolist() if not i.is_dir() and "__MACOSX" not in i.filename]
+    if not infos:
+        return None, "This archive is empty"
+    lines = [re.sub(r"[^\x20-\x7E]", "?", i.filename)[:70] + f"   ({i.file_size // 1024 + 1} KB)" for i in infos[:40]]
+    if len(infos) > 40:
+        lines.append(f"... and {len(infos) - 40} more files")
+    pages = [_jpeg_data_uri(_wm_apply(_text_page(f"ZIP contents: {len(infos)} files", lines), wm))]
+    for i in infos:
+        if i.filename.rsplit(".", 1)[-1].lower() in ("png", "jpg", "jpeg", "webp") and i.file_size <= 4 * 1024 * 1024:
+            try:
+                pages.append(_jpeg_data_uri(_wm_apply(Image.open(io.BytesIO(z.read(i))), wm)))
+            except Exception:
+                logging.warning("_preview_zip: image entry skipped", exc_info=True)
+            break
+    return {"kind": "images", "pages": pages, "note": "File list and one sample image only"}, None
+
+
+def _preview_video(blob, wm):
+    ff = shutil.which("ffmpeg")
+    if not ff:
+        return None, "Video previews need ffmpeg on the server"
+    from PIL import Image
+    W, H = 480, 270
+    with tempfile.TemporaryDirectory() as td:
+        src, ovp, out = (os.path.join(td, n) for n in ("in.mp4", "wm.png", "out.mp4"))
+        with open(src, "wb") as fh:
+            fh.write(blob)
+        ov = Image.new("RGBA", (W, H), (128, 128, 128, 0))
+        ov.putalpha(_wm_alpha((W, H), wm))
+        ov.save(ovp, "PNG")
+        cmd = [
+            ff, "-y", "-v", "error", "-t", str(PREVIEW_VIDEO_SECONDS), "-i", src, "-i", ovp,
+            "-filter_complex",
+            f"[0:v]scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2[v];[v][1:v]overlay=0:0[o]",
+            "-map", "[o]", "-map", "0:a?", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "34", "-r", "15",
+            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "32k", "-ac", "1", "-movflags", "+faststart", out,
+        ]
+        try:
+            subprocess.run(cmd, check=True, timeout=45, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            with open(out, "rb") as fh:
+                clip = fh.read()
+        except Exception:
+            logging.warning("_preview_video: ffmpeg failed", exc_info=True)
+            return None, "This video cannot be previewed"
+    if not clip or len(clip) > PREVIEW_MAX_PAYLOAD_BYTES:
+        return None, "This video cannot be previewed"
+    return {"kind": "video", "video": "data:video/mp4;base64," + base64.b64encode(clip).decode("ascii"),
+            "note": f"First {PREVIEW_VIDEO_SECONDS} seconds, low quality"}, None
+
+
+def _render_preview(ext, blob, wm):
+    """-> (payload, None) or (None, reason). Never raises."""
+    try:
+        import PIL  # noqa: F401
+    except Exception:
+        return None, "Previews are not available right now"
+    try:
+        if ext == "pdf":
+            return _preview_pdf(blob, wm)
+        if ext == "docx":
+            return _preview_docx(blob, wm)
+        if ext == "zip":
+            return _preview_zip(blob, wm)
+        if ext in ("mp4", "mov", "webm", "m4v"):
+            return _preview_video(blob, wm)
+        if ext in ("png", "jpg", "jpeg", "webp"):
+            from PIL import Image
+            return {"kind": "images", "pages": [_jpeg_data_uri(_wm_apply(Image.open(io.BytesIO(blob)), wm))], "note": "Low resolution"}, None
+    except Exception:
+        logging.warning("_render_preview: failed for .%s", ext, exc_info=True)
+    return None, "No visual preview for this file type"
+
+
+def _preview_ref(path):
+    """Short hash of the storage path. The path itself is never stored on the order (escrow_list returns whole rows)."""
+    return hashlib.sha256(str(path).encode()).hexdigest()[:16]
+
+
+@app.route("/api/preview/<order_id>", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def preview_product_file(user, order_id):
+    """
+    One call = one preview (max PREVIEW_MAX per order while it is in escrow). Buyer only, status 'held' only.
+    The count is saved in the database and enforced here, not in the app.
+    """
+    tid = int(user["telegram_id"])
+    order = _escrow_get(str(order_id or "").strip())
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+    if int(order.get("buyer_id") or 0) != tid:
+        logging.warning("preview blocked: not the buyer (order=%s user=%s)", order_id, tid)
+        return jsonify({"error": "Forbidden"}), 403
+    status = order.get("status")
+    if status != "held":
+        logging.warning("preview blocked: order=%s user=%s status=%s", order_id, tid, status)
+        msg = "Delivery is confirmed. Download your file instead." if status == "released" else "Preview is not available for this order."
+        return jsonify({"error": msg, "code": "PREVIEW_LOCKED"}), 403
+    if "preview_count" not in order and _ensure_escrow_columns():      # columns missing: create them once, then re-read
+        order = _escrow_get(str(order_id or "").strip()) or order
+    if "preview_count" not in order:
+        logging.error("preview: escrow_orders.preview_count / preview_ref columns are missing - set DATABASE_URL so they are created automatically")
+        return jsonify({"error": "Preview is not available right now.", "code": "PREVIEW_UNAVAILABLE"}), 503
+
+    try:
+        prow = supabase.table("products").select("file_url").eq("id", order.get("product_id")).limit(1).execute().data or []
+    except Exception:
+        logging.exception("preview: product lookup failed for order %s", order_id)
+        return jsonify({"error": "Could not load the preview. Please try again."}), 500
+    path = _storage_path_from_url(prow[0].get("file_url")) if prow else None
+    if not path:
+        return jsonify({"ok": True, "available": False, "used": int(order.get("preview_count") or 0), "max": PREVIEW_MAX,
+                        "message": "This product has no file to preview. Read the description or chat with the seller."}), 200
+
+    ref = _preview_ref(path)
+    stored = int(order.get("preview_count") or 0)
+    stored_ref = order.get("preview_ref")
+    used = 0 if (stored_ref and stored_ref != ref) else stored      # seller uploaded a new version: count starts again
+    if used >= PREVIEW_MAX:
+        logging.warning("preview blocked: limit reached (order=%s user=%s)", order_id, tid)
+        return jsonify({"error": "You have used all previews. Please confirm delivery or request refund.",
+                        "code": "PREVIEW_LIMIT", "used": used, "max": PREVIEW_MAX}), 403
+
+    try:
+        blob = supabase.storage.from_(PRODUCT_FILE_BUCKET).download(path)
+    except Exception:
+        logging.exception("preview: storage download failed for order %s", order_id)
+        return jsonify({"error": "Could not load the preview. Please try again."}), 502
+    if not blob or len(blob) > PREVIEW_MAX_SOURCE_BYTES:
+        return jsonify({"ok": True, "available": False, "used": used, "max": PREVIEW_MAX,
+                        "message": "This file is too large for a preview. Chat with the seller if you have questions."}), 200
+
+    ext = path.rsplit(".", 1)[-1].lower() if "." in path else ""
+    payload, reason = _render_preview(ext, blob, _wm_text(order))
+    if payload is None:       # nothing was shown, so no preview is used up
+        return jsonify({"ok": True, "available": False, "used": used, "max": PREVIEW_MAX, "message": reason}), 200
+
+    # Claim the preview atomically (only if the stored count is still what we read), so parallel calls cannot beat the limit.
+    try:
+        q = supabase.table("escrow_orders").update({"preview_count": used + 1, "preview_ref": ref}).eq("id", order["id"]).eq("status", "held")
+        q = q.eq("preview_count", stored) if order.get("preview_count") is not None else q.is_("preview_count", "null")
+        claimed = bool(q.execute().data)
+    except Exception:
+        logging.exception("preview: could not save the preview count for order %s", order_id)
+        return jsonify({"error": "Preview is not available right now.", "code": "PREVIEW_UNAVAILABLE"}), 503
+    if not claimed:
+        return jsonify({"error": "Please try again.", "code": "PREVIEW_BUSY"}), 409
+
+    payload.update({"ok": True, "available": True, "used": used + 1, "max": PREVIEW_MAX, "watermark": _wm_text(order)})
+    resp = jsonify(payload)
+    resp.headers["Cache-Control"] = "private, no-store"
+    return resp, 200
+
+
+def _tg_send_document(chat_id, filename, blob, caption):
+    """Bot API sendDocument (Telegram bots can upload up to 50 MB). True only if Telegram accepted it. Never raises."""
+    try:
+        if not BOT_TOKEN or not chat_id:
+            return False
+        res = requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument",
+            data={"chat_id": int(chat_id), "caption": str(caption)[:1000]},
+            files={"document": (filename, blob)},
+            timeout=120,
+        )
+        return bool(res.ok)
+    except Exception:
+        logging.warning("_tg_send_document: failed for chat_id=%s", chat_id, exc_info=True)
+        return False
+
+
+def _tg_send_link(chat_id, text, button_text, link):
+    """sendMessage with one button. link=None falls back to opening the Mini App. Never raises."""
+    try:
+        if not BOT_TOKEN or not chat_id:
+            return False
+        button = {"text": button_text, "url": link} if link else {"text": button_text, "web_app": {"url": MINI_APP_URL}}
+        res = requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={"chat_id": int(chat_id), "text": str(text)[:4000], "reply_markup": {"inline_keyboard": [[button]]}},
+            timeout=8,
+        )
+        return bool(res.ok)
+    except Exception:
+        logging.warning("_tg_send_link: failed for chat_id=%s", chat_id, exc_info=True)
+        return False
+
+
+def _deliver_after_release(order):
+    """
+    Runs in the background right after delivery is confirmed (order 'released').
+    1) the bot sends the CLEAN original file (no watermark, downloadable)
+    2) the bot sends the transaction receipt link (opens that transaction in Transaction History)
+    Refunded / disputed orders never get here, and the status is re-checked first. Never raises.
+    """
+    try:
+        oid = str(order.get("id"))
+        fresh = _escrow_get(oid)
+        if not fresh or fresh.get("status") != "released":
+            return
+        buyer = int(fresh.get("buyer_id"))
+        name, path = "your product", None
+        try:
+            pr = supabase.table("products").select("name,title,file_url").eq("id", fresh.get("product_id")).limit(1).execute().data or []
+            if pr:
+                name = pr[0].get("name") or pr[0].get("title") or name
+                path = _storage_path_from_url(pr[0].get("file_url"))
+        except Exception:
+            logging.warning("_deliver_after_release: product lookup failed for order %s", oid, exc_info=True)
+
+        if path:
+            sent = False
+            try:
+                blob = supabase.storage.from_(PRODUCT_FILE_BUCKET).download(path)
+                if blob and len(blob) <= 49 * 1024 * 1024:
+                    raw = path.rsplit("/", 1)[-1]
+                    fname = secure_name(raw.split("_", 1)[1] if "_" in raw else raw) or "download"
+                    sent = _tg_send_document(buyer, fname, blob, f"Delivery confirmed. Here is your file for {name}.")
+            except Exception:
+                logging.warning("_deliver_after_release: file send failed for order %s", oid, exc_info=True)
+            if not sent:
+                _tg_send_link(buyer, f"Delivery confirmed for {name}. Open PayLock to download your file.", "Open PayLock", _app_link())
+
+        _tg_send_link(
+            buyer,
+            f"Transaction receipt\nOrder #{oid[:12]}\n{name}\nStatus: Confirmed\nTap below to view it and download the PDF.",
+            "View receipt",
+            _app_link(f"tx_{re.sub(r'[^A-Za-z0-9_-]', '', oid)[:60]}"),
+        )
+    except Exception:
+        logging.warning("_deliver_after_release: skipped", exc_info=True)
 
 
 # =============================================================================
@@ -4793,6 +5415,8 @@ def chat_send(user):
         return jsonify({"error": "text is required"}), 400
     if len(text) > CHAT_TEXT_MAX:
         return jsonify({"error": f"text must be {CHAT_TEXT_MAX} characters or less"}), 400
+    if text.startswith("[img]"):   # pictures only come from /api/chat/image (no hot-linking arbitrary URLs)
+        return jsonify({"error": "Use the picture button to send a picture"}), 400
 
     client_id = re.sub(r"[^A-Za-z0-9_-]", "", str(data.get("client_id") or ""))[:64] or None
     payload = {
@@ -4865,6 +5489,62 @@ def chat_list(user, order_id):
             r["status"] = "read" if (other_read and sent and other_read >= sent) else "sent"
     _chat_mark_read(order.get("id"), tid)  # opening the chat marks it read (never raises)
     return jsonify({"messages": rows}), 200
+
+
+@app.route("/api/chat/image", methods=["POST"])
+@require_auth
+@limiter.limit("10 per minute")
+def chat_send_image(user):
+    """Picture for the buyer <-> seller chat (JPG / PNG / WEBP, 5 MB). Saved as a normal chat message: '[img]<url>'."""
+    order, err = _chat_order_for(user, request.form.get("order_id"))
+    if err:
+        return err
+    tid = int(user["telegram_id"])
+    f = request.files.get("image")
+    if not f or not f.filename:
+        return jsonify({"error": "image is required"}), 400
+    if not _allowed_file(f.filename, ALLOWED_COVER_EXT):
+        return jsonify({"error": "Picture must be JPG, PNG or WEBP"}), 400
+    blob = f.read(MAX_COVER_BYTES + 1)
+    if not blob:
+        return jsonify({"error": "Picture is empty"}), 400
+    if len(blob) > MAX_COVER_BYTES:
+        return jsonify({"error": "Picture must be 5MB or less"}), 400
+    ext, content_type = _sniff_image(blob)
+    if not ext:
+        return jsonify({"error": "File is not a valid JPG, PNG or WEBP image"}), 400
+    try:      # re-encode: drops EXIF (GPS) metadata and anything hidden in the file; skipped only if Pillow is absent
+        from PIL import Image
+        im = Image.open(io.BytesIO(blob))
+        im.load()
+        buf = io.BytesIO()
+        if ext == "png":
+            im.save(buf, "PNG")
+        elif ext == "webp":
+            im.save(buf, "WEBP", quality=88)
+        else:
+            im.convert("RGB").save(buf, "JPEG", quality=88)
+        blob = buf.getvalue()
+    except ImportError:
+        pass
+    except Exception:
+        return jsonify({"error": "File is not a valid image"}), 400
+
+    try:
+        path = f"chat/{order.get('id')}/{uuid.uuid4().hex}.{ext}"
+        supabase.storage.from_(COVER_BUCKET).upload(path=path, file=blob, file_options={"content-type": content_type})
+        url = supabase.storage.from_(COVER_BUCKET).get_public_url(path)
+    except Exception:
+        logging.exception("chat_send_image: upload failed for order %s", order.get("id"))
+        return jsonify({"error": "Picture upload failed"}), 500
+
+    payload = {"order_id": str(order.get("id")), "sender_id": tid, "text": "[img]" + str(url), "created_at": _now_iso()}
+    try:
+        rows = supabase.table("chat_messages").insert(payload).execute().data or []
+    except Exception as exc:
+        return _db_error(exc, "chat_send_image: save failed")
+    _async(_notify_chat_recipient, order, tid, "Sent you a picture")
+    return jsonify({"ok": True, "message": rows[0] if rows else {"text": payload["text"]}}), 201
 
 
 # =============================================================================
@@ -4994,9 +5674,7 @@ SETTINGS_DEFAULTS = {
     "passcode_on": False,
     "photo_url": None,
 }
-# Passcode lock: 3 wrong = 5 min, next 3 wrong = 15 min, next 3 wrong = 30 min (stays 30).
-PASSCODE_ATTEMPTS_PER_ROUND = 3
-PASSCODE_BLOCK_MINUTES = {1: 5, 2: 15, 3: 30}
+# (the old client passcode lock ladder was removed: the ONE PIN uses users.pin_* with PIN_FAIL_LIMIT / PIN_LOCK_MINUTES)
 
 
 def _as_bool(value):
@@ -5031,7 +5709,7 @@ def _settings_upsert(telegram_id, fields):
 
 
 def _settings_public(row):
-    """Only the contract keys (never the passcode counters / session fields), defaults filled in."""
+    """Only the contract keys (never any PIN / session fields), defaults filled in."""
     out = {}
     for key, default in SETTINGS_DEFAULTS.items():
         value = row.get(key)
@@ -5136,50 +5814,11 @@ def _clean_settings(data):
         if key in data and _as_bool(data.get(key)) is True:
             fields[key] = True
 
+    # Legacy cleanup only: the old client passcode hash can be CLEARED, never written.
     if "passcode_hash" in data:
-        raw = data.get("passcode_hash")
-        if raw in (None, ""):
-            fields["passcode_hash"] = None
-        else:
-            v = str(raw).strip()
-            if not re.fullmatch(r"\S{1,256}", v):
-                return None, "Invalid passcode_hash"
-            fields["passcode_hash"] = v
+        fields["passcode_hash"] = None
 
     return fields, None
-
-
-def _passcode_blocked_response(remaining):
-    return jsonify({
-        "error": "Too many wrong passcode attempts. Try again later.",
-        "code": "RATE_LIMITED",
-        "retry_after": int(remaining),
-    }), 429
-
-
-def _passcode_register_failure(telegram_id, row):
-    """
-    Wrong 1 -> 'Try again' (2 left), wrong 2 -> '1 attempt left', wrong 3 -> block 5 min.
-    Next 3 wrong -> 15 min, next 3 wrong -> 30 min (stays at 30).
-    """
-    fails = int(row.get("passcode_fail_count") or 0) + 1
-    level = int(row.get("passcode_block_level") or 0)
-    if fails >= PASSCODE_ATTEMPTS_PER_ROUND:
-        level = min(level + 1, max(PASSCODE_BLOCK_MINUTES))
-        minutes = PASSCODE_BLOCK_MINUTES[level]
-        until = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()
-        _settings_upsert(telegram_id, {
-            "passcode_fail_count": 0,
-            "passcode_block_level": level,
-            "passcode_block_until": until,
-        })
-        return _passcode_blocked_response(minutes * 60)
-    _settings_upsert(telegram_id, {"passcode_fail_count": fails})
-    return jsonify({
-        "error": "Try again" if fails == 1 else "1 attempt left",
-        "code": "PASSCODE_INVALID",
-        "attempts_left": PASSCODE_ATTEMPTS_PER_ROUND - fails,
-    }), 401
 
 
 def _session_revoked(user, init_data):
@@ -5240,14 +5879,6 @@ def settings_save(user):
 
     try:
         row = _settings_get_row(tid)
-        # A server-side passcode block cannot be bypassed by switching the passcode off here.
-        wants_off = fields.get("passcode_on") is False or (
-            "passcode_hash" in fields and fields["passcode_hash"] is None
-        )
-        if wants_off:
-            remaining = _lock_seconds_remaining(row.get("passcode_block_until"))
-            if remaining > 0:
-                return _passcode_blocked_response(remaining)
         _settings_upsert(tid, fields)
     except Exception as exc:
         return _db_error(exc, "settings_save: save failed")
@@ -5309,77 +5940,15 @@ def profile_photo(user):
     return jsonify({"ok": True, "photo_url": url}), 200
 
 
-# ---- /api/passcode/set + /api/passcode/off (best-effort sync) ----------------
-
-@app.route("/api/passcode/set", methods=["POST"])
-@require_auth
-@limiter.limit("10 per minute")
-def passcode_set(user):
-    tid = int(user["telegram_id"])
-    data = request.get_json(silent=True) or {}
-    new_hash = str(data.get("passcode_hash") or data.get("hash") or "").strip()
-    if not re.fullmatch(r"\S{1,256}", new_hash):
-        return jsonify({"error": "passcode_hash is required"}), 400
-    try:
-        row = _settings_get_row(tid)
-        remaining = _lock_seconds_remaining(row.get("passcode_block_until"))
-        if remaining > 0:
-            return _passcode_blocked_response(remaining)
-        _settings_upsert(tid, {
-            "passcode_hash": new_hash,
-            "passcode_on": True,
-            "passcode_fail_count": 0,
-            "passcode_block_level": 0,
-            "passcode_block_until": None,
-        })
-    except Exception as exc:
-        return _db_error(exc, "passcode_set: failed")
-    return jsonify({"ok": True, "passcode_on": True}), 200
-
-
-@app.route("/api/passcode/off", methods=["POST"])
-@require_auth
-@limiter.limit("10 per minute")
-def passcode_off(user):
-    """
-    Body (all optional): passcode_hash (verified against the stored hash when both
-    exist) and failed=true (the app reports a wrong local attempt). A wrong attempt
-    advances the 3 / 3 / 3 lock ladder; a correct or unverifiable request switches
-    the passcode off and resets the counters.
-    """
-    tid = int(user["telegram_id"])
-    data = request.get_json(silent=True) or {}
-    provided = str(data.get("passcode_hash") or data.get("hash") or "").strip()
-    reported_failure = _as_bool(data.get("failed")) is True
-    try:
-        row = _settings_get_row(tid)
-        remaining = _lock_seconds_remaining(row.get("passcode_block_until"))
-        if remaining > 0:
-            return _passcode_blocked_response(remaining)
-
-        stored = str(row.get("passcode_hash") or "")
-        mismatch = bool(stored and provided and not hmac.compare_digest(provided, stored))
-        if reported_failure or mismatch:
-            return _passcode_register_failure(tid, row)
-
-        _settings_upsert(tid, {
-            "passcode_on": False,
-            "passcode_hash": None,
-            "passcode_fail_count": 0,
-            "passcode_block_level": 0,
-            "passcode_block_until": None,
-        })
-    except Exception as exc:
-        return _db_error(exc, "passcode_off: failed")
-    return jsonify({"ok": True, "passcode_on": False}), 200
-
-
 # ---- /api/sessions/logout-all ------------------------------------------------
 
 @app.route("/api/sessions/logout-all", methods=["POST"])
 @require_auth
 @limiter.limit("5 per minute")
 def sessions_logout_all(user):
+    gate = _require_pin_if_set(user["telegram_id"], request.get_json(silent=True) or {})
+    if gate is not None:
+        return gate
     revoked_at = _now_iso()
     try:
         _settings_upsert(user["telegram_id"], {"sessions_revoked_at": revoked_at})
@@ -5401,6 +5970,9 @@ def account_deactivate(user):
     Wallet, escrow orders, withdrawals and login are untouched; no money moves.
     """
     tid = int(user["telegram_id"])
+    gate = _require_pin_if_set(tid, request.get_json(silent=True) or {})
+    if gate is not None:
+        return gate
     try:
         row = _settings_get_row(tid)
     except Exception as exc:
@@ -6406,6 +6978,62 @@ def set_webhook():
     except Exception as e:
         logging.exception("set_webhook failed")
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# =============================================================================
+# Auto-migration (additive): creates the escrow_orders columns the preview + reminder features need.
+# Supabase's REST API cannot run DDL, so this needs a direct Postgres connection string in ONE env var:
+#   DATABASE_URL  (Supabase > Project Settings > Database > Connection string; the "Session pooler" URI works)
+# Safe to run on every start: "add column if not exists". Never raises, never logs the connection string.
+# Without DATABASE_URL (or without psycopg2 / psycopg installed) it does nothing and the preview stays fail-closed.
+# =============================================================================
+_MIGRATE_SQL = (
+    "alter table escrow_orders add column if not exists preview_count int not null default 0",
+    "alter table escrow_orders add column if not exists preview_ref text",
+    "alter table escrow_orders add column if not exists reminder_sent_at timestamptz",
+    "notify pgrst, 'reload schema'",
+)
+_migrate_state = {"done": False, "last": 0.0}
+_migrate_lock = threading.Lock()
+
+
+def _ensure_escrow_columns():
+    """True if the migration ran. Idempotent; retried at most once a minute until it succeeds."""
+    dsn = (os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_DB_URL") or "").strip()
+    if not dsn:
+        return False
+    with _migrate_lock:
+        if _migrate_state["done"]:
+            return True
+        if time.time() - _migrate_state["last"] < 60:
+            return False
+        _migrate_state["last"] = time.time()
+        try:
+            try:
+                import psycopg2 as _pg
+            except ImportError:
+                import psycopg as _pg
+            conn = _pg.connect(dsn, connect_timeout=10)
+            try:
+                conn.autocommit = True
+                cur = conn.cursor()
+                for stmt in _MIGRATE_SQL:
+                    cur.execute(stmt)
+                cur.close()
+            finally:
+                conn.close()
+            _migrate_state["done"] = True
+            logging.info("escrow_orders columns checked/created (preview_count, preview_ref, reminder_sent_at)")
+            return True
+        except Exception as exc:
+            logging.warning("escrow_orders auto-migration skipped: %s", type(exc).__name__)
+            return False
+
+
+try:
+    threading.Thread(target=_ensure_escrow_columns, daemon=True).start()
+except Exception:
+    pass
 
 
 if __name__ == "__main__":
