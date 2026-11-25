@@ -6771,6 +6771,36 @@ def _no_store_for_listings(resp):
     return resp
 
 
+@app.after_request
+def _security_headers(resp):
+    """Security headers on every response. Headers only: the body, status and Content-Length are never touched."""
+    h = resp.headers
+    # CSP: 'unsafe-inline' is required because index.html uses inline JS / CSS. Telegram and Paystack are allowed.
+    # Added beyond the plain list so the app still loads: bare telegram.org (the *. wildcard does not match it),
+    # checkout.paystack.com (the payment iframe, a .com domain), Google Fonts files, and data: video for previews.
+    h["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://telegram.org https://*.telegram.org https://*.paystack.co https://*.paystack.com; "
+        "style-src 'self' 'unsafe-inline' https:; "
+        "img-src 'self' data: https: blob:; "
+        "font-src 'self' data: https:; "
+        "media-src 'self' data: blob: https:; "
+        "frame-src 'self' https://*.paystack.co https://*.paystack.com; "
+        "connect-src 'self' https://telegram.org https://*.telegram.org https://*.paystack.co https://*.paystack.com https://*.supabase.co wss: https:; "
+        "frame-ancestors https://*.telegram.org https://web.telegram.org https://*.telegram.me; "
+        "form-action 'self'; base-uri 'self'"
+    )
+    h["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"   # no preload on the first deploy
+    h["X-Content-Type-Options"] = "nosniff"
+    h["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    h["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
+    h["Cross-Origin-Resource-Policy"] = "same-origin"
+    # X-Frame-Options is deliberately NOT set: DENY or SAMEORIGIN would stop Telegram from framing this Mini App.
+    # Framing is controlled by CSP frame-ancestors above (Telegram only).
+    h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return resp
+
+
 # =============================================================================
 # Telegram bot (webhook mode) — thin handlers, no business logic
 # =============================================================================
