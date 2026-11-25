@@ -582,6 +582,16 @@ def _wallet_funding_already_credited(reference):
     return bool(res.data)
 
 
+def _funding_amount_ok(tx, pdata, paid_kobo):
+    """True only if Paystack charged NGN and exactly the amount saved when the payment was initialised."""
+    try:
+        expected = int(tx.get("amount_kobo") or 0)
+    except (TypeError, ValueError):
+        expected = 0
+    currency = str((pdata or {}).get("currency") or "NGN").upper()
+    return expected > 0 and int(paid_kobo) == expected and currency == "NGN"
+
+
 def _credit_wallet_funding(tx, paid_kobo):
     """
     Credits a verified Paystack payment to the wallet exactly once.
@@ -2201,6 +2211,10 @@ def wallet_verify_transaction(user):
         paid_kobo = 0
     if paid_kobo <= 0:
         return jsonify({"status": "failed", "error": "Invalid payment amount"}), 400
+    if not _funding_amount_ok(tx, pdata, paid_kobo):      # amount / currency differs from what was initialised: never credit
+        logging.warning("wallet_verify_transaction: amount mismatch for %s", reference)
+        _log_webhook(reference, "verify-transaction", {"error": "amount mismatch"}, "failed")
+        return jsonify({"status": "failed", "error": "Payment amount does not match. Contact support."}), 400
 
     new_balance = _credit_wallet_funding(tx, paid_kobo)
     if new_balance is None:
@@ -3250,6 +3264,10 @@ def paystack_webhook():
         except (TypeError, ValueError):
             paid_kobo = 0
         if paid_kobo <= 0:
+            return jsonify({"status": "received"}), 200
+        if not _funding_amount_ok(tx, pdata, paid_kobo):   # amount / currency differs from what was initialised: never credit
+            logging.warning("paystack_webhook: amount mismatch for %s", reference)
+            _log_webhook(reference, "charge.success", {"error": "amount mismatch"}, "failed")
             return jsonify({"status": "received"}), 200
 
         new_balance = _credit_wallet_funding(tx, paid_kobo)
