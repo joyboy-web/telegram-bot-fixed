@@ -5237,6 +5237,55 @@ def support_create(user):
     return jsonify({"ok": True, "ticket": ticket}), 201
 
 
+@app.route("/api/support/attachment", methods=["POST"])
+@require_auth
+@limiter.limit("10 per hour")
+def support_attachment(user):
+    """Picture for Support Chat (JPG / PNG / WEBP, 5 MB). Saved as a normal ticket whose message is '[img]<url>'."""
+    tid = int(user["telegram_id"])
+    f = request.files.get("image")
+    if not f or not f.filename:
+        return jsonify({"error": "image is required"}), 400
+    if not _allowed_file(f.filename, ALLOWED_COVER_EXT):
+        return jsonify({"error": "Picture must be JPG, PNG or WEBP"}), 400
+    blob = f.read(MAX_COVER_BYTES + 1)
+    if not blob:
+        return jsonify({"error": "Picture is empty"}), 400
+    if len(blob) > MAX_COVER_BYTES:
+        return jsonify({"error": "Picture must be 5MB or less"}), 400
+    ext, content_type = _sniff_image(blob)
+    if not ext:
+        return jsonify({"error": "File is not a valid JPG, PNG or WEBP image"}), 400
+    try:      # re-encode: drops EXIF (GPS) data and anything hidden in the file; skipped only if Pillow is absent
+        from PIL import Image
+        im = Image.open(io.BytesIO(blob))
+        im.load()
+        buf = io.BytesIO()
+        if ext == "png":
+            im.save(buf, "PNG")
+        elif ext == "webp":
+            im.save(buf, "WEBP", quality=88)
+        else:
+            im.convert("RGB").save(buf, "JPEG", quality=88)
+        blob = buf.getvalue()
+    except ImportError:
+        pass
+    except Exception:
+        return jsonify({"error": "File is not a valid image"}), 400
+    try:
+        path = f"support/{tid}/{uuid.uuid4().hex}.{ext}"
+        supabase.storage.from_(COVER_BUCKET).upload(path=path, file=blob, file_options={"content-type": content_type})
+        url = supabase.storage.from_(COVER_BUCKET).get_public_url(path)
+    except Exception:
+        logging.exception("support_attachment: upload failed for user %s", tid)
+        return jsonify({"error": "Picture upload failed"}), 500
+    try:
+        ticket = _create_support_ticket(tid, "[img]" + str(url))
+    except Exception as exc:
+        return _db_error(exc, "support_attachment: save failed")
+    return jsonify({"ok": True, "ticket": ticket}), 201
+
+
 @app.route("/api/support", methods=["GET"])
 @require_auth
 def support_list(user):
@@ -6997,6 +7046,13 @@ def set_webhook():
         logging.exception("set_webhook failed")
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
+# Optional speed helpers (speed_assistant.py). If the file is missing or fails, the app runs exactly the same.
+try:
+    import speed_assistant as _speed
+    _speed.install(app)
+except Exception:
+    _speed = None
 
 # =============================================================================
 # Auto-migration (additive): creates the escrow_orders columns the preview + reminder features need.
