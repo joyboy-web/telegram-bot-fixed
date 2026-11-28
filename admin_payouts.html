@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Payouts - PayLock Admin</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#000;--card:#111;--line:#262626;--ink:#fff;--muted:#9a9a9a;--gold:#f5b942;--green:#22c55e;--red:#ef4444;--blue:#60a5fa}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;padding:14px 16px 40px;max-width:720px;margin:0 auto}
+a.back{color:var(--muted);text-decoration:none;font-weight:600}
+h1{font-size:22px;margin:10px 0 12px}
+h2{font-size:16px;margin:26px 0 8px;color:var(--muted)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 14px;font-weight:600;cursor:pointer}
+.chip.on{background:var(--gold);color:#000;border-color:var(--gold)}
+input[type=search],input[type=text],input[type=url]{width:100%;background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:11px 12px;font-size:15px}
+.row{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}
+.top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.k{color:var(--muted);font-size:12px}
+.v{font-weight:600;word-break:break-all}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.badge{border-radius:999px;padding:3px 10px;font-size:12px;font-weight:800}
+.b-PENDING{background:#3b2f10;color:var(--gold)}.b-QUEUED{background:#10243b;color:var(--blue)}
+.b-DELAYED{background:#3b1010;color:var(--red)}.b-REJECTED{background:#2a2a2a;color:var(--muted)}
+button.rej{margin-top:8px;width:100%;background:#2a1212;color:var(--red);border:0;border-radius:12px;padding:10px;font-weight:800;font-size:14px;cursor:pointer}.b-SENT{background:#0f2e1a;color:var(--green)}
+button.act{margin-top:10px;width:100%;background:var(--gold);color:#000;border:0;border-radius:12px;padding:12px;font-weight:800;font-size:15px;cursor:pointer}
+button.act:disabled{background:#1b3a27;color:var(--green);cursor:default}
+.empty,.note{color:var(--muted);text-align:center;padding:18px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:flex-end;justify-content:center;z-index:10}
+.modal.show{display:flex}
+.sheet{background:#161616;border-radius:18px 18px 0 0;padding:18px;width:100%;max-width:720px}
+.sheet label{display:block;margin:12px 0 5px;font-weight:700}
+.btns{display:flex;gap:10px;margin-top:16px}
+.btns button{flex:1;border:0;border-radius:12px;padding:12px;font-weight:800;font-size:15px;cursor:pointer}
+.ok{background:var(--gold);color:#000}.no{background:#2a2a2a;color:#fff}
+.err{color:var(--red);margin-top:8px;min-height:18px}
+.guard{border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:10px;background:#0b0b0b}
+.guard .gt{font-weight:800;font-size:14px;margin-bottom:6px}
+.gbanner{border-radius:10px;padding:9px 10px;font-weight:800;font-size:13px;margin:8px 0}
+.g-GREEN{background:#0f2e1a;color:var(--green)}.g-YELLOW{background:#3b2f10;color:var(--gold)}.g-RED{background:#3b1010;color:var(--red)}.g-WAIT{background:#1a1a1a;color:var(--muted)}
+.yn{border-radius:999px;padding:3px 10px;font-size:12px;font-weight:800}.yn-Y{background:#0f2e1a;color:var(--green)}.yn-N{background:#3b1010;color:var(--red)}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:8px;border:1px solid var(--line);border-radius:10px}
+.scroll table{border-collapse:collapse;min-width:620px;width:100%;font-size:12px}
+.scroll th,.scroll td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+.scroll th{color:var(--muted);font-weight:700}
+.gbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.gbtns button,.upl button,button.dl{border:0;border-radius:10px;padding:10px 12px;font-weight:800;font-size:13px;cursor:pointer;background:#2a2a2a;color:#fff}
+.gbtns button.rj{background:#2a1212;color:var(--red)}
+.upl{border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:10px}
+.upl input[type=file]{width:100%;color:var(--muted);margin:6px 0}
+.upl input[type=text]{margin:4px 0}
+.upl button{width:100%;margin-top:8px}.upl button.go{background:var(--gold);color:#000}
+.upl button:disabled,.gbtns button:disabled{opacity:.45;cursor:not-allowed}
+.umsg{margin-top:8px;font-size:13px;word-break:break-word}.umsg.bad{color:var(--red)}.umsg.good{color:var(--green)}
+button.dl{width:100%;margin-top:8px}
+</style>
+</head>
+<body>
+<a class="back" href="/">‹ Back to PayLock</a>
+<h1>Payouts</h1>
+<div class="chips" id="chips"></div>
+<input type="search" id="q" placeholder="Search Order ID or Seller name" autocomplete="off">
+<div id="list"></div>
+<h2>Sent payouts (audit log)</h2>
+<div id="audit"></div>
+
+<div class="modal" id="modal"><div class="sheet">
+  <div style="font-weight:800;font-size:17px">Mark As Done</div>
+  <div class="k" id="m-title"></div>
+  <label for="m-ref">Payout Ref (e.g. Moniepoint / Opay ref)</label>
+  <input type="text" id="m-ref" maxlength="60" autocomplete="off">
+  <label for="m-url">Receipt / Screenshot URL (optional)</label>
+  <input type="url" id="m-url" maxlength="500" placeholder="https://" autocomplete="off">
+  <div class="err" id="m-err"></div>
+  <div class="btns"><button class="no" id="m-cancel" type="button">Cancel</button><button class="ok" id="m-ok" type="button">Confirm</button></div>
+</div></div>
+
+<script>
+(function(){
+  var tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
+  var initData = (tg && tg.initData) || '';
+  var FILTERS = ['ALL','PENDING','DELAYED','SENT','REJECTED'];
+  var state = { filter: 'PENDING', q: '', rows: [], sent: [], busy: {} };
+  var $ = function(id){ return document.getElementById(id); };
+  function el(tag, cls, text){ var n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; }
+  function hdr(extra){ var h = { 'Authorization': 'tma ' + initData, 'X-Telegram-Init-Data': initData }; for (var k in (extra||{})) h[k] = extra[k]; return h; }
+  function naira(n){ return '₦' + Number(n || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 }); }
+  function fmt(ts){ if (!ts) return '-'; var d = new Date(ts); return isNaN(d) ? '-' : d.toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }); }
+  function countdown(ts){
+    if (!ts) return '-'; var ms = new Date(ts).getTime() - Date.now(); if (isNaN(ms)) return '-';
+    var late = ms < 0; ms = Math.abs(ms); var h = Math.floor(ms / 3600000), m = Math.floor(ms % 3600000 / 60000);
+    return (late ? 'overdue ' : 'in ') + (h ? h + 'h ' : '') + m + 'm';
+  }
+  function cell(k, v){ var d = el('div'); d.appendChild(el('div', 'k', k)); d.appendChild(el('div', 'v', v)); return d; }
+
+  function chips(){
+    var box = $('chips'); box.textContent = '';
+    FILTERS.forEach(function(f){
+      var b = el('button', 'chip' + (state.filter === f ? ' on' : ''), f); b.type = 'button';
+      b.addEventListener('click', function(){ state.filter = f; chips(); load(); });
+      box.appendChild(b);
+    });
+  }
+
+  // ---------- Pre-Send Guard + receipt upload (additive) ----------
+  var guardQ = Promise.resolve();
+  state.guard = {};
+  function money(k){ return naira(Number(k || 0) / 100); }
+  function fetchGuard(oid, force){
+    var g = state.guard[oid];
+    if (!force && g && g.d && Date.now() - g.t < 50000) return Promise.resolve(g.d);
+    var p = guardQ.then(function(){
+      return fetch('/admin/payout/' + encodeURIComponent(oid) + '/pre-send-check', { headers: hdr() })
+        .then(function(res){ return res.json().then(function(d){ if (!res.ok) throw new Error(d.error || 'check failed'); return d; }); });
+    });
+    guardQ = p.catch(function(){});
+    return p.then(function(d){ state.guard[oid] = { t: Date.now(), d: d }; return d; });
+  }
+  function drawGuard(body, d, ctl, r){
+    body.textContent = '';
+    if (!d) { body.appendChild(el('div', 'gbanner g-RED', 'DO NOT SEND - the check could not run. Tap Refresh Check.')); return; }
+    var msg = { GREEN: 'Safe to send - No spend after request - Available covers request',
+                YELLOW: 'Warning - Seller spent after request but still has enough - Check log before sending',
+                RED: 'DO NOT SEND - Seller already used money - See log below' }[d.warning_level] || '';
+    body.appendChild(el('div', 'gbanner g-' + d.warning_level, msg));
+    if (d.warning_level === 'RED' && d.block_reason) body.appendChild(el('div', 'gbanner g-RED', d.block_reason));
+    var g = el('div', 'grid');
+    g.appendChild(cell('Requested', money(d.requested_amount_kobo))); g.appendChild(cell('Wallet balance', money(d.wallet_balance_kobo)));
+    g.appendChild(cell('Hold', money(d.hold_amount_kobo))); g.appendChild(cell('Available', money(d.available_balance_kobo)));
+    var yn = el('div'); yn.appendChild(el('div', 'k', 'Can send')); yn.appendChild(el('span', 'yn ' + (d.can_send ? 'yn-Y' : 'yn-N'), d.can_send ? 'YES' : 'NO'));
+    g.appendChild(yn); body.appendChild(g);
+    var wrap = el('div', 'scroll'), t = el('table'), th = el('tr');
+    ['Date', 'Type', 'Amount', 'Description', 'Status', 'Ref', 'Balance After'].forEach(function(h){ th.appendChild(el('th', '', h)); });
+    t.appendChild(th);
+    var rows = d.transactions || [];
+    if (!rows.length) { var e = el('tr'), td = el('td', '', 'No transactions yet'); td.colSpan = 7; e.appendChild(td); t.appendChild(e); }
+    rows.forEach(function(x){
+      var tr = el('tr');
+      [fmt(x.date), x.type, money(x.amount_kobo), x.description, x.status, x.reference || '-', x.balance_after == null ? '-' : money(x.balance_after)]
+        .forEach(function(v){ tr.appendChild(el('td', '', String(v))); });
+      t.appendChild(tr);
+    });
+    wrap.appendChild(t); body.appendChild(wrap);
+  }
+  function guardBox(c, r, markBtn, ctl){
+    var box = el('div', 'guard'); box.appendChild(el('div', 'gt', 'Pre-Send Check - Check Before You Send Money'));
+    var body = el('div'); box.appendChild(body);
+    var bt = el('div', 'gbtns'), rf = el('button', '', 'Refresh Check'); rf.type = 'button';
+    var rj = el('button', 'rj', 'Reject Request'); rj.type = 'button'; rj.style.display = 'none';
+    rj.addEventListener('click', function(){ rejectReq(r); });
+    bt.appendChild(rf); bt.appendChild(rj); box.appendChild(bt);
+    c.insertBefore(box, markBtn);
+    function apply(d){
+      drawGuard(body, d, ctl, r);
+      var ok = !!(d && d.can_send);
+      markBtn.disabled = !ok; if (ctl.send) ctl.send.disabled = !ok;
+      rj.style.display = (d && d.warning_level === 'RED' && d.status === 'PENDING') || !d ? '' : 'none';
+      rf.disabled = false;
+    }
+    function run(force){
+      markBtn.disabled = true; if (ctl.send) ctl.send.disabled = true; rf.disabled = true;
+      body.textContent = ''; body.appendChild(el('div', 'gbanner g-WAIT', 'Checking the seller\'s log...'));
+      fetchGuard(r.order_id, force).then(apply, function(){ apply(null); });
+    }
+    rf.addEventListener('click', function(){ run(true); });
+    run(false);
+  }
+  function downloadReceipt(oid, msgEl){
+    fetch('/api/payouts/' + encodeURIComponent(oid) + '/receipt', { headers: hdr() }).then(function(res){
+      if (!res.ok) throw new Error(res.status === 404 ? 'No receipt uploaded yet' : 'Could not download');
+      var cd = res.headers.get('Content-Disposition') || '', m = /filename="([^"]+)"/.exec(cd);
+      return res.blob().then(function(b){
+        var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = m ? m[1] : 'payout_receipt';
+        document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+      });
+    }).catch(function(e){ msgEl.className = 'umsg bad'; msgEl.textContent = e.message || 'Could not download'; });
+  }
+  function uploadBox(c, r, ctl){
+    var u = el('div', 'upl'); u.appendChild(el('div', 'gt', 'Upload Bank Receipt'));
+    var f = el('input'); f.type = 'file'; f.accept = 'image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf';
+    var ref = el('input'); ref.type = 'text'; ref.maxLength = 60; ref.placeholder = 'Bank reference (optional)'; ref.autocomplete = 'off';
+    var note = el('input'); note.type = 'text'; note.maxLength = 200; note.placeholder = 'Note (optional)'; note.autocomplete = 'off';
+    var msg = el('div', 'umsg');
+    u.appendChild(f); u.appendChild(ref); u.appendChild(note);
+    var send = null;
+    if (r.status !== 'SENT') { send = el('button', 'go', 'Upload Receipt & Mark As Sent'); send.type = 'button'; send.disabled = true; u.appendChild(send); ctl.send = send; }
+    var only = el('button', '', r.status === 'SENT' ? 'Replace Receipt' : 'Upload Receipt Only - Keep PENDING'); only.type = 'button'; u.appendChild(only);
+    var dl = el('button', 'dl', 'Download Receipt'); dl.type = 'button'; dl.addEventListener('click', function(){ downloadReceipt(r.order_id, msg); });
+    u.appendChild(dl); u.appendChild(msg);
+    function go(mode){
+      var oid = r.order_id, file = f.files && f.files[0];
+      msg.className = 'umsg';
+      if (!file) { msg.className = 'umsg bad'; msg.textContent = 'Choose a receipt file first.'; return; }
+      if (!/\.(jpe?g|png|webp|pdf)$/i.test(file.name)) { msg.className = 'umsg bad'; msg.textContent = 'Only JPG, PNG, WEBP or PDF.'; return; }
+      if (file.size > 10 * 1024 * 1024) { msg.className = 'umsg bad'; msg.textContent = 'File is too large (max 10MB).'; return; }
+      if (mode === 'send' && !confirm('Mark this payout as SENT? The seller wallet will be debited now.')) return;
+      var key = 'up-' + oid; if (state.busy[key]) return; state.busy[key] = true;
+      if (send) send.disabled = true; only.disabled = true; msg.textContent = 'Uploading...';
+      var fd = new FormData(); fd.append('file', file); fd.append('mode', mode); fd.append('bank_ref', ref.value.trim()); fd.append('note', note.value.trim());
+      fetch('/admin/payout/' + encodeURIComponent(oid) + '/upload-receipt', { method: 'POST', headers: hdr(), body: fd })
+        .then(function(res){ return res.json().catch(function(){ return {}; }).then(function(d){ return { ok: res.ok, d: d }; }); })
+        .then(function(x){
+          if (x.ok && x.d.success) {
+            msg.className = 'umsg good';
+            msg.textContent = (x.d.status === 'SENT' ? 'Marked SENT. ' : 'Receipt saved, still ' + x.d.status + '. ') + (x.d.tg_sent ? 'Telegram receipt sent.' : 'Telegram not sent' + (x.d.tg_error ? ' (' + x.d.tg_error + ')' : '') + '.');
+            delete state.guard[oid]; setTimeout(load, 1200);
+          } else { msg.className = 'umsg bad'; msg.textContent = (x.d && x.d.error) || 'Upload failed.'; }
+        }, function(){ msg.className = 'umsg bad'; msg.textContent = 'Network error. Try again.'; })
+        .then(function(){ delete state.busy[key]; only.disabled = false; if (send) { var g = state.guard[oid]; send.disabled = !(g && g.d && g.d.can_send); } });
+    }
+    if (send) send.addEventListener('click', function(){ go('send'); });
+    only.addEventListener('click', function(){ go('only'); });
+    c.appendChild(u);
+  }
+  function render(){
+    var box = $('list'); box.textContent = '';
+    if (!state.rows.length) { box.appendChild(el('div', 'empty', 'No payouts here.')); }
+    state.rows.forEach(function(r){
+      var c = el('div', 'row'); c.id = 'r-' + r.order_id;
+      var top = el('div', 'top'); top.appendChild(el('div', 'v', 'Order ' + r.order_id));
+      top.appendChild(el('span', 'badge b-' + r.status, r.status)); c.appendChild(top);
+      var g = el('div', 'grid');
+      g.appendChild(cell('Type', r.product)); g.appendChild(cell('Seller', r.seller_name || '-'));
+      g.appendChild(cell('Bank', (r.bank_name || '-') + ' · ' + (r.account_number || '-'))); g.appendChild(cell('Account name', r.account_name || '-'));
+      g.appendChild(cell('Amount', naira(r.amount))); g.appendChild(cell('Requested', fmt(r.buyer_confirmed_at)));
+      g.appendChild(cell('Payout due', r.status === 'SENT' ? fmt(r.payout_due_at) : fmt(r.payout_due_at) + ' (' + countdown(r.payout_due_at) + ')'));
+      if (r.status === 'SENT') g.appendChild(cell('Payout Ref', r.payout_ref || '-'));
+      c.appendChild(g);
+      var b = el('button', 'act', r.status === 'SENT' ? 'Already Sent' : 'Mark As Done'); b.type = 'button';
+      b.disabled = r.status === 'SENT' || r.status === 'REJECTED'; if (r.status === 'REJECTED') b.textContent = 'Rejected';
+      if (!b.disabled) b.addEventListener('click', function(){ openModal(r); });
+      c.appendChild(b);
+      if (!b.disabled) { var x = el('button', 'rej', 'Reject (release hold)'); x.type = 'button'; x.addEventListener('click', function(){ rejectReq(r); }); c.appendChild(x); }
+      var ctl = {};
+      if (r.status !== 'SENT' && r.status !== 'REJECTED') guardBox(c, r, b, ctl);     // Pre-Send Guard sits ABOVE Mark As Done; it keeps the button disabled until the check passes
+      if (r.status !== 'REJECTED') uploadBox(c, r, ctl);
+      box.appendChild(c);
+    });
+    var a = $('audit'); a.textContent = '';
+    if (!state.sent.length) a.appendChild(el('div', 'empty', 'Nothing sent yet.'));
+    state.sent.forEach(function(r){
+      var c = el('div', 'row'); var g = el('div', 'grid');
+      g.appendChild(cell('Order', r.order_id)); g.appendChild(cell('Seller', r.seller_name || '-'));
+      g.appendChild(cell('Amount', naira(r.amount))); g.appendChild(cell('Ref', r.payout_ref || '-'));
+      g.appendChild(cell('Marked by (admin id)', r.admin_marked_by || '-')); g.appendChild(cell('Time', fmt(r.marked_at)));
+      c.appendChild(g); a.appendChild(c);
+    });
+  }
+  async function load(){
+    if (!initData) { $('list').textContent = ''; $('list').appendChild(el('div', 'note', 'Open this page from PayLock > Settings > Admin Panel > Payouts, inside Telegram.')); return; }
+    try {
+      var url = '/api/admin/payouts?status=' + (state.filter === 'ALL' ? '' : state.filter) + '&q=' + encodeURIComponent(state.q);
+      var res = await fetch(url, { headers: hdr() });
+      if (res.status === 403) { $('list').textContent = ''; $('list').appendChild(el('div', 'note', 'Admins only.')); return; }
+      var d = await res.json();
+      state.rows = d.payouts || []; state.sent = d.sent_log || []; render();
+    } catch (e) { $('list').textContent = ''; $('list').appendChild(el('div', 'note', 'Network error. Pull down to retry.')); }
+  }
+
+  async function rejectReq(r){
+    if (!confirm('Reject this payout request? The seller\'s hold is released and nothing is debited.')) return;
+    try {
+      var res = await fetch('/api/admin/payouts/' + encodeURIComponent(r.order_id) + '/reject', { method: 'POST', headers: hdr() });
+      var d = await res.json().catch(function(){ return {}; });
+      if (!res.ok) alert(d.error || 'Could not reject');
+    } catch (e) { alert('Network error'); }
+    load();
+  }
+  var cur = null;
+  function openModal(r){ cur = r; $('m-title').textContent = 'Order ' + r.order_id + ' · ' + naira(r.amount) + ' · ' + (r.seller_name || ''); $('m-ref').value = ''; $('m-url').value = ''; $('m-err').textContent = ''; $('m-ok').disabled = false; $('modal').classList.add('show'); }
+  function closeModal(){ $('modal').classList.remove('show'); cur = null; }
+  $('m-cancel').addEventListener('click', closeModal);
+  $('m-ok').addEventListener('click', async function(){
+    if (!cur || state.busy[cur.order_id]) return;            // blocks double click / double submit
+    var ref = $('m-ref').value.trim(), url = $('m-url').value.trim();
+    if (ref.length < 3) { $('m-err').textContent = 'Enter the payout reference.'; return; }
+    state.busy[cur.order_id] = true; $('m-ok').disabled = true;
+    var oid = cur.order_id;
+    try {
+      var res = await fetch('/api/admin/payouts/' + encodeURIComponent(oid) + '/done', {
+        method: 'POST', headers: hdr({ 'Content-Type': 'application/json' }), body: JSON.stringify({ payout_ref: ref, receipt_url: url }) });
+      var d = await res.json().catch(function(){ return {}; });
+      if (res.ok || (res.status === 409 && d.code === 'ALREADY_SENT')) {
+        // flip only this row to SENT, instantly, without touching the others
+        state.rows.forEach(function(r){ if (r.order_id === oid) { r.status = 'SENT'; if (res.ok) { r.payout_ref = ref; r.marked_at = d.payout && d.payout.marked_at; } } });
+        if (state.filter !== 'ALL' && state.filter !== 'SENT') state.rows = state.rows.filter(function(r){ return r.order_id !== oid; });
+        closeModal(); render(); if (!res.ok) alert('Already paid out'); load();
+      } else if (res.status === 409 && d.code === 'PROCESSING') {
+        $('m-err').textContent = d.error; $('m-ok').disabled = false; load();
+      } else { $('m-err').textContent = d.error || 'Could not save. Try again.'; $('m-ok').disabled = false; }
+    } catch (e) { $('m-err').textContent = 'Network error. Try again.'; $('m-ok').disabled = false; }
+    finally { delete state.busy[oid]; }
+  });
+  var t; $('q').addEventListener('input', function(){ clearTimeout(t); t = setTimeout(function(){ state.q = $('q').value.trim(); load(); }, 300); });
+  chips(); load(); setInterval(function(){ if (!$('modal').classList.contains('show')) load(); }, 60000);
+})();
+</script>
+</body>
+</html>
