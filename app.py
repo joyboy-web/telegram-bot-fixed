@@ -2824,6 +2824,19 @@ def _get_recipient_code(tid, bank_code, account_number, account_name):
     return code
 
 
+def _manual_payout_hold_kobo(telegram_id):
+    """Money held for a bank payout the seller requested and an admin has not paid yet (withdrawal_requests, status PENDING)."""
+    try:
+        rows = (
+            supabase.table("withdrawal_requests").select("amount_kobo")
+            .eq("seller_id", str(telegram_id)).eq("status", "PENDING").execute().data or []
+        )
+        return sum(int(r.get("amount_kobo") or 0) for r in rows)
+    except Exception:
+        logging.warning("_manual_payout_hold_kobo: hold lookup skipped", exc_info=True)   # table not created yet / database hiccup
+        return 0
+
+
 @app.route("/api/wallet/withdraw", methods=["POST"])
 @require_auth
 @limiter.limit("10 per minute")
@@ -2877,6 +2890,8 @@ def wallet_withdraw(user):
     balance = int(u.get("balance_kobo") or 0)
     if amount_kobo > balance:
         return jsonify({"error": "Insufficient balance", "code": "INSUFFICIENT_BALANCE"}), 400
+    if amount_kobo > balance - _manual_payout_hold_kobo(tid):      # pending bank payout holds part of the wallet
+        return jsonify({"error": "Amount held for bank payout", "code": "AMOUNT_HELD"}), 400
 
     # Debit (guarded so a concurrent balance change cannot be overwritten).
     debit = (
@@ -7083,6 +7098,14 @@ try:
     _speed.install(app)
 except Exception:
     _speed = None
+
+# Optional Payout Patch (payout_routes.py + payout_check.py + payout_notify.py). If a file is missing, the app runs exactly the same.
+try:
+    import payout_routes as _payout_routes
+    import sys as _sys
+    _payout_routes.register(app, _sys.modules[__name__])
+except Exception:
+    logging.warning("payout patch not loaded", exc_info=True)
 
 # =============================================================================
 # Auto-migration (additive): creates the escrow_orders columns the preview + reminder features need.
