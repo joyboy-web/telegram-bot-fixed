@@ -1068,6 +1068,7 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
       </div>
       <div id="wd-error" class="small" style="display:none;color:var(--red);font-weight:700;margin:-4px 0 10px"></div>
       <button class="btn" type="button" id="wd-btn" disabled onclick="PayLock.requestWithdrawal()">Request withdrawal</button>
+      <button class="btn secondary" type="button" id="wd-manual-btn" style="margin-top:10px">Request bank payout (admin pays you)</button>
     </div>
 
     <div class="card" style="padding:4px 16px">
@@ -1423,6 +1424,11 @@ html.chat-lock,body.chat-lock{overflow:hidden;overscroll-behavior:none}
       <button class="srow" type="button" id="adm-lowrate-row" data-go="pg-adm-lowrate">
         <span class="srow-ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18.5 21 12 16.8 5.5 21l2-7.5L2 9h7z"/></svg></span>
         <span class="srow-mid"><span class="srow-t">Seller Low Ratings</span><span class="srow-s">Temp bans, appeals and manual bans</span></span>
+        <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+      <button class="srow" type="button" id="adm-payouts-row" onclick="location.href='/admin/payouts'">
+        <span class="srow-ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+        <span class="srow-mid"><span class="srow-t">Payouts</span><span class="srow-s">Pending seller payouts and Mark As Done</span></span>
         <svg class="i srow-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
       </button>
     </div>
@@ -3901,6 +3907,95 @@ async function openTxByOrder(oid){
   if (t) { openTxDetail(t); return; }
   goPage('pg-tx');
 }
+
+/* ===================== PAYOUT PATCH (Option A): seller requests a manual bank payout ===================== */
+(function payoutRequest(){
+  const btn = $('wd-manual-btn');
+  if (!btn) return;
+  btn.addEventListener('click', function(){
+    openSheet(function(b){
+      b.appendChild(el('h3', null, 'Request bank payout'));
+      b.appendChild(el('div', 'muted', 'An admin sends the money to your bank, then your wallet is debited. Your wallet must hold the amount when the admin confirms.'));
+      const mk = function(label, type, ph, max){
+        b.appendChild(el('label', 'muted', label));
+        const i = document.createElement('input'); i.className = 'input'; i.type = type; i.placeholder = ph || ''; i.maxLength = max || 80; i.autocomplete = 'off';
+        if (type === 'password' || label === 'Amount (₦)' || label === 'Account number') i.inputMode = 'numeric';
+        b.appendChild(i); return i;
+      };
+      const amt = mk('Amount (₦)', 'text', '1000', 9), bank = mk('Bank name', 'text', 'e.g. Moniepoint', 60);
+      const acct = mk('Account number', 'text', '10 digits', 10), name = mk('Account name', 'text', '', 80), pin = mk('Your 4-digit PIN', 'password', '', 4);
+      const go = el('button', 'btn', 'Send request'); go.type = 'button'; go.style.marginTop = '12px'; b.appendChild(go);
+      go.addEventListener('click', async function(){
+        const n = parseInt(amt.value.replace(/[^0-9]/g, ''), 10) || 0;
+        if (n < 1000) { showToast('Minimum withdrawal is ₦1,000'); return; }
+        if (!/^\d{10}$/.test(acct.value)) { showToast('Enter a 10-digit account number'); return; }
+        if (!bank.value.trim() || !name.value.trim()) { showToast('Enter the bank and account name'); return; }
+        if (!/^\d{4}$/.test(pin.value)) { showToast('Enter your 4-digit PIN'); return; }
+        go.disabled = true;
+        try {
+          const r = await api('/api/payouts/request', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({
+            amount_kobo: n * 100, bank_name: bank.value.trim(), account_number: acct.value, account_name: name.value.trim(), pin: pin.value }) });
+          pin.value = '';
+          if (r.res.ok) { closeSheet(); showToast('Request sent. An admin will pay you.'); }
+          else showToast(r.data.error || 'Request failed');
+        } catch (e) { showToast('Network error. Try again.'); }
+        finally { go.disabled = false; }
+      });
+    });
+  });
+})();
+
+/* ===================== PAYOUT PATCH: read-only payout lines in Transaction History ===================== */
+(function payoutHistory(){
+  const list = $('tx-list');
+  if (!list || typeof MutationObserver === 'undefined') return;
+  let cache = null, cacheAt = 0, busy = false, timer = null;
+  const obs = new MutationObserver(function(){ clearTimeout(timer); timer = setTimeout(ensure, 60); });
+  async function fetchMine(){
+    if (cache && Date.now() - cacheAt < 3000) return cache;
+    try {
+      const r = await api('/api/payouts/mine', { headers: getAuthHeader() });
+      cache = (r.res.ok && Array.isArray(r.data.payouts)) ? r.data.payouts : [];
+    } catch (e) { cache = []; }
+    cacheAt = Date.now();
+    return cache;
+  }
+  async function ensure(){
+    if (busy || list.querySelector('#payout-block')) return;
+    busy = true;
+    try {
+      const sent = (await fetchMine()).filter(function(p){ return p.status === 'SENT'; }).slice(0, 5);
+      if (!sent.length || list.querySelector('#payout-block')) return;
+      const box = el('div', 'item'); box.id = 'payout-block';
+      const mid = el('div', 'mid');
+      sent.forEach(function(p){
+        mid.appendChild(el('div', 't', p.role === 'seller'
+          ? 'Payout SENT - Ref: ' + (p.payout_ref || '-') + ' - Date: ' + fmtDate(p.marked_at)
+          : 'Seller Payout SENT'));
+        mid.appendChild(el('div', 's', 'Order ' + p.order_id));
+        if (p.role === 'seller' && p.has_receipt) {            // receipt the admin uploaded for this payout (owner-only download)
+          const dl = el('button', 'btn sm secondary', 'Download receipt'); dl.type = 'button';
+          dl.addEventListener('click', async function(ev){
+            ev.stopPropagation(); dl.disabled = true;
+            try {
+              const res = await fetch('/api/payouts/' + encodeURIComponent(p.order_id) + '/receipt', { headers: getAuthHeader() });
+              if (!res.ok) throw new Error('none');
+              const cd = res.headers.get('Content-Disposition') || '', m = /filename="([^"]+)"/.exec(cd);
+              saveBlob(await res.blob(), m ? m[1] : 'payout_receipt');
+            } catch (e) { showToast('Receipt not available yet'); }
+            dl.disabled = false;
+          });
+          mid.appendChild(dl);
+        }
+      });
+      box.appendChild(mid);
+      obs.disconnect();
+      list.insertBefore(box, list.firstChild);
+      obs.observe(list, { childList: true });
+    } finally { busy = false; }
+  }
+  obs.observe(list, { childList: true });
+})();
 
 /* ===================== MINOR FIXES 1-9 + BATCH 4 ===================== */
 const mk = { q: '', cat: 'All', sort: 'new', open: false };
